@@ -24,6 +24,7 @@ This document is the **system of record** for project planning and issue trackin
 - Do not skip sequence numbers. Dependencies are implicit in the ordering.
 - If an issue is blocked, note the blocker in the issue file and move on to the next unblocked issue, leaving a comment in this index under the "Notes" column.
 - Keep issue files self-contained: each must include enough context for any agent to pick it up cold.
+- **All tests must pass** before requesting review on a PR. Run `dotnet test MattGPT.slnx` and confirm there are no failures.
 
 ---
 
