@@ -316,6 +316,50 @@ app.MapPost("/chat", async (ChatRequest request, RagService ragService, Cancella
 })
 .WithName("Chat");
 
+// Streaming RAG chat endpoint — returns Server-Sent Events with incremental tokens.
+app.MapPost("/chat/stream", async (ChatRequest request, RagService ragService, HttpContext httpContext, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Message))
+    {
+        httpContext.Response.StatusCode = 400;
+        await httpContext.Response.WriteAsync("'message' is required.", ct);
+        return;
+    }
+
+    httpContext.Response.ContentType = "text/event-stream";
+    httpContext.Response.Headers.CacheControl = "no-cache";
+    httpContext.Response.Headers.Connection = "keep-alive";
+
+    await foreach (var chunk in ragService.ChatStreamAsync(request.Message, ct))
+    {
+        if (chunk.Text is not null)
+        {
+            // Text token — send as a "token" event.
+            var escapedText = System.Text.Json.JsonSerializer.Serialize(chunk.Text);
+            await httpContext.Response.WriteAsync($"event: token\ndata: {escapedText}\n\n", ct);
+            await httpContext.Response.Body.FlushAsync(ct);
+        }
+        else if (chunk.Sources is not null)
+        {
+            // Final frame — send sources as a "sources" event.
+            var sourcesJson = System.Text.Json.JsonSerializer.Serialize(chunk.Sources.Select(s => new
+            {
+                conversationId = s.ConversationId,
+                title = s.Title,
+                summary = s.Summary,
+                score = s.Score,
+            }));
+            await httpContext.Response.WriteAsync($"event: sources\ndata: {sourcesJson}\n\n", ct);
+            await httpContext.Response.Body.FlushAsync(ct);
+        }
+    }
+
+    // Signal end of stream.
+    await httpContext.Response.WriteAsync("event: done\ndata: [DONE]\n\n", ct);
+    await httpContext.Response.Body.FlushAsync(ct);
+})
+.WithName("ChatStream");
+
 app.MapDefaultEndpoints();
 
 app.Run();

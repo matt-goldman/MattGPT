@@ -28,8 +28,12 @@ public static class Extensions
 
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
-            // Turn on resilience by default
-            http.AddStandardResilienceHandler();
+            // Standard resilience is disabled — its default timeouts (30 s total,
+            // 2 s per attempt) are far too aggressive for LLM inference calls that
+            // can legitimately take minutes. Overriding the values via configuration
+            // does not reliably work across Aspire versions, so we leave it off and
+            // rely on per-client Timeout settings where needed.
+            // http.AddStandardResilienceHandler();
 
             // Turn on service discovery by default
             http.AddServiceDiscovery();
