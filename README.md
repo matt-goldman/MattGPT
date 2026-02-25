@@ -22,13 +22,13 @@ The offline version will be completed first, and will include (all running local
 
 ## Future Enhancements
 
-    - Support for additional vector databases (e.g., Pinecone, Weaviate) and LLM endpoints (e.g., Hugging Face, Cohere)
-    - Advanced parsing and processing of the ChatGPT conversation history to extract more nuanced information, such as sentiment analysis, topic modeling, etc.
-    - Integration with other tools and platforms to allow users to easily import their ChatGPT conversation history from various sources (e.g., Google Drive, Dropbox, etc.)
-    - Enhanced UI/UX for a more seamless and intuitive user experience when uploading, processing, and utilizing the ChatGPT conversation history as RAG memory.
-    - Import of other files (like generated images, PDFs, etc.) that may have been shared in the ChatGPT conversations, and storing them in a way that they can also be used as RAG memory for LLMs.
-    - Integration into existing LLM tooling, like LMStudio, OpenWebUI, etc., to allow users to easily utilize their ChatGPT conversation history as RAG memory within their existing workflows and tools.
-    - Automatic reconstruction of projects and conversations in other LLMs based on the imported ChatGPT conversation history, allowing users to seamlessly transition their work and interactions from ChatGPT to other LLMs without losing context or information.
+- Support for additional vector databases (e.g., Pinecone, Weaviate) and LLM endpoints (e.g., Hugging Face, Cohere) and production connectivity through configuration.
+- Advanced parsing and processing of the ChatGPT conversation history to extract more nuanced information, such as sentiment analysis, topic modeling, etc.
+- Integration with other tools and platforms to allow users to easily import their ChatGPT conversation history from various sources (e.g., Google Drive, Dropbox, etc.)
+- Enhanced UI/UX for a more seamless and intuitive user experience when uploading, processing, and utilizing the ChatGPT conversation history as RAG memory.
+- Import of other files (like generated images, PDFs, etc.) that may have been shared in the ChatGPT conversations, and storing them in a way that they can also be used as RAG memory for LLMs.
+- Integration into existing LLM tooling, like LMStudio, OpenWebUI, etc., to allow users to easily utilize their ChatGPT conversation history as RAG memory within their existing workflows and tools.
+- Automatic reconstruction of projects and conversations in other LLMs based on the imported ChatGPT conversation history, allowing users to seamlessly transition their work and interactions from ChatGPT to other LLMs without losing context or information.
 
 ## Documentation Requirements
 
