@@ -69,6 +69,32 @@
                     </p>
                 </div>
             }
+            else if (_status == UploadStatus.Embedding)
+            {
+                <div class="flex flex-col items-center py-8 space-y-4">
+                    <LumexSpinner Color="@ThemeColor.Secondary" Size="@Size.Large" />
+                    <p class="text-default-600 font-medium">@_statusMessage</p>
+                    <p class="text-sm text-default-500">
+                        Conversations embedded: <span class="font-semibold">@_embeddedConversations</span> / @_processedConversations
+                        @if (_embeddingErrors > 0)
+                        {
+                            <span class="text-danger ml-2">(@_embeddingErrors errors)</span>
+                        }
+                    </p>
+                    <div class="w-full bg-default-100 rounded-full h-2">
+                        @{
+                            var embeddingPercent = _processedConversations > 0
+                                ? (int)(100.0 * _embeddedConversations / _processedConversations)
+                                : 0;
+                        }
+                        <div class="bg-secondary h-2 rounded-full transition-all duration-300"
+                             style="width: @(embeddingPercent)%"></div>
+                    </div>
+                    <p class="text-xs text-default-400">
+                        Conversations will be available for RAG search once embedding completes.
+                    </p>
+                </div>
+            }
             else if (_status == UploadStatus.Complete)
             {
                 <div class="flex flex-col items-center py-8 space-y-4">
@@ -82,6 +108,12 @@
                             @_errorCount conversation(s) could not be parsed and were skipped.
                         </LumexAlert>
                     }
+                    @if (!string.IsNullOrEmpty(_errorMessage))
+                    {
+                        <LumexAlert Color="@ThemeColor.Warning" Title="Embedding issue">
+                            @_errorMessage
+                        </LumexAlert>
+                    }
                     <LumexButton Color="@ThemeColor.Default" Variant="@Variant.Outlined" OnClick="Reset">
                         Upload another file
                     </LumexButton>
@@ -92,7 +124,7 @@
 </div>
 
 @code {
-    private enum UploadStatus { Idle, Uploading, Processing, Complete, Error }
+    private enum UploadStatus { Idle, Uploading, Processing, Embedding, Complete, Error }
 
     private IBrowserFile? _selectedFile;
     private UploadStatus _status = UploadStatus.Idle;
@@ -101,6 +133,8 @@
     private int _uploadProgress = 0;
     private int _processedConversations = 0;
     private int _errorCount = 0;
+    private int _embeddedConversations = 0;
+    private int _embeddingErrors = 0;
     private string? _jobId;
 
     private const long MaxFileSize = 209_715_200; // 200 MB
@@ -198,20 +232,41 @@
 
                 _processedConversations = jobStatus.ProcessedConversations;
                 _errorCount = jobStatus.ErrorCount;
+                _embeddedConversations = jobStatus.EmbeddedConversations;
+                _embeddingErrors = jobStatus.EmbeddingErrors;
 
-                if (jobStatus.Status == "Complete")
-                {
-                    _status = UploadStatus.Complete;
-                    _statusMessage = $"Import complete. {_processedConversations} conversation(s) processed.";
-                    StateHasChanged();
-                    return;
-                }
-                else if (jobStatus.Status == "Failed")
+                if (jobStatus.Status == "Failed")
                 {
                     _status = UploadStatus.Error;
                     _errorMessage = jobStatus.ErrorMessage ?? "Processing failed for an unknown reason.";
                     StateHasChanged();
                     return;
+                }
+
+                if (jobStatus.Status == "Complete")
+                {
+                    // Import done — check embedding phase.
+                    switch (jobStatus.EmbeddingStatus)
+                    {
+                        case "NotStarted":
+                        case "InProgress":
+                            _status = UploadStatus.Embedding;
+                            _statusMessage = "Generating embeddings for search…";
+                            break;
+                        case "Complete":
+                            _status = UploadStatus.Complete;
+                            _statusMessage = $"Done! {_processedConversations} conversation(s) imported and {_embeddedConversations} embedded.";
+                            StateHasChanged();
+                            return;
+                        case "Failed":
+                            // Import succeeded but embedding failed — still show completion
+                            // with a warning rather than blocking the user.
+                            _status = UploadStatus.Complete;
+                            _statusMessage = $"Import complete. {_processedConversations} conversation(s) processed.";
+                            _errorMessage = $"Embedding failed: {jobStatus.EmbeddingErrorMessage ?? "unknown error"}. You can retry via POST /conversations/embed.";
+                            StateHasChanged();
+                            return;
+                    }
                 }
             }
             catch
@@ -232,6 +287,8 @@
         _uploadProgress = 0;
         _processedConversations = 0;
         _errorCount = 0;
+        _embeddedConversations = 0;
+        _embeddingErrors = 0;
         _jobId = null;
     }
 
@@ -249,6 +306,10 @@
         string Status,
         int ProcessedConversations,
         int ErrorCount,
-        string? ErrorMessage);
+        string? ErrorMessage,
+        string EmbeddingStatus,
+        int EmbeddedConversations,
+        int EmbeddingErrors,
+        int EmbeddingSkipped,
+        string? EmbeddingErrorMessage);
 }
-

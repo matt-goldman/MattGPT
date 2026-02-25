@@ -61,6 +61,17 @@ public class ConversationRepository : IConversationRepository
     }
 
     /// <inheritdoc/>
+    public async Task<List<StoredConversation>> GetByStatusesAsync(
+        IEnumerable<ConversationProcessingStatus> statuses, int maxCount, CancellationToken ct = default)
+    {
+        var filter = Builders<StoredConversation>.Filter.In(x => x.ProcessingStatus, statuses);
+        return await _collection
+            .Find(filter)
+            .Limit(maxCount)
+            .ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
     public async Task UpdateSummaryAsync(
         string conversationId, string? summary, ConversationProcessingStatus status, CancellationToken ct = default)
     {
@@ -80,5 +91,25 @@ public class ConversationRepository : IConversationRepository
             .Set(x => x.Embedding, embedding)
             .Set(x => x.ProcessingStatus, status);
         await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<List<StoredConversation>> GetByIdsAsync(
+        IEnumerable<string> conversationIds, CancellationToken ct = default)
+    {
+        var filter = Builders<StoredConversation>.Filter.In(x => x.ConversationId, conversationIds);
+        return await _collection.Find(filter).ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<Dictionary<ConversationProcessingStatus, long>> GetStatusCountsAsync(CancellationToken ct = default)
+    {
+        var counts = new Dictionary<ConversationProcessingStatus, long>();
+        foreach (var status in Enum.GetValues<ConversationProcessingStatus>())
+        {
+            var filter = Builders<StoredConversation>.Filter.Eq(x => x.ProcessingStatus, status);
+            counts[status] = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
+        }
+        return counts;
     }
 }

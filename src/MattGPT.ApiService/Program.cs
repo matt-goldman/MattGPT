@@ -61,12 +61,40 @@ var embeddingModelId = llmOptions.EmbeddingModelId ?? llmOptions.ModelId;
 switch (llmOptions.Provider.ToLowerInvariant())
 {
     case "ollama":
-        var chatConnectionName = llmOptions.ChatConnectionName
-            ?? throw new InvalidOperationException("LLM:ChatConnectionName must be set for Ollama provider (normally injected by the AppHost).");
-        var embeddingConnectionName = llmOptions.EmbeddingConnectionName
-            ?? throw new InvalidOperationException("LLM:EmbeddingConnectionName must be set for Ollama provider (normally injected by the AppHost).");
-        builder.AddOllamaApiClient(chatConnectionName).AddChatClient();
-        builder.AddOllamaApiClient(embeddingConnectionName).AddEmbeddingGenerator();
+        // Ollama models running on CPU can take a long time to load and generate,
+        // especially with large RAG prompts. Override the default 100s HttpClient
+        // timeout for the Ollama-backed HttpClients.
+        builder.Services.ConfigureHttpClientDefaults(http =>
+        {
+            http.ConfigureHttpClient(client =>
+            {
+                client.Timeout = TimeSpan.FromMinutes(10);
+            });
+        });
+
+        // When launched via the AppHost, connection names are injected as environment
+        // variables. When running standalone (e.g. dotnet run), fall back to creating
+        // an OllamaApiClient directly from the configured endpoint.
+        if (llmOptions.ChatConnectionName is { } chatConnectionName)
+        {
+            builder.AddOllamaApiClient(chatConnectionName).AddChatClient();
+        }
+        else
+        {
+            var chatEndpoint = new Uri(llmOptions.Endpoint);
+            builder.Services.AddChatClient(new OllamaSharp.OllamaApiClient(chatEndpoint, llmOptions.ModelId));
+        }
+
+        if (llmOptions.EmbeddingConnectionName is { } embeddingConnectionName)
+        {
+            builder.AddOllamaApiClient(embeddingConnectionName).AddEmbeddingGenerator();
+        }
+        else
+        {
+            var embeddingEndpoint = new Uri(llmOptions.Endpoint);
+            builder.Services.AddEmbeddingGenerator(
+                new OllamaSharp.OllamaApiClient(embeddingEndpoint, embeddingModelId));
+        }
         break;
 
     case "foundrylocal":
@@ -179,6 +207,11 @@ app.MapGet("/conversations/status/{jobId}", (string jobId, ImportJobStore jobSto
         errorMessage = job.ErrorMessage,
         createdAt = job.CreatedAt,
         completedAt = job.CompletedAt,
+        embeddingStatus = job.EmbeddingStatus.ToString(),
+        embeddedConversations = job.EmbeddedConversations,
+        embeddingErrors = job.EmbeddingErrors,
+        embeddingSkipped = job.EmbeddingSkipped,
+        embeddingErrorMessage = job.EmbeddingErrorMessage,
     });
 })
 .WithName("GetConversationImportStatus");
@@ -293,6 +326,82 @@ app.MapGet("/llm/status", async (IChatClient chatClient, IOptions<LlmOptions> op
     });
 })
 .WithName("GetLlmStatus");
+
+// RAG pipeline health / diagnostics endpoint.
+app.MapGet("/rag/diagnostics", async (
+    IConversationRepository repository,
+    IQdrantService qdrantService,
+    IOptions<RagOptions> ragOptions,
+    IOptions<LlmOptions> llmOptions,
+    CancellationToken ct) =>
+{
+    var opts = ragOptions.Value;
+    var llm = llmOptions.Value;
+
+    // 1. MongoDB conversation counts by processing status.
+    var statusCounts = await repository.GetStatusCountsAsync(ct);
+
+    // 2. Qdrant point count.
+    ulong? qdrantPoints = null;
+    string? qdrantError = null;
+    try
+    {
+        qdrantPoints = await qdrantService.GetPointCountAsync(ct);
+    }
+    catch (Exception ex)
+    {
+        qdrantError = ex.Message;
+    }
+
+    // 3. Derive pipeline status diagnostics.
+    var totalConversations = statusCounts.Values.Sum();
+    var embedded = statusCounts.GetValueOrDefault(MattGPT.ApiService.Models.ConversationProcessingStatus.Embedded);
+    var summarised = statusCounts.GetValueOrDefault(MattGPT.ApiService.Models.ConversationProcessingStatus.Summarised);
+    var imported = statusCounts.GetValueOrDefault(MattGPT.ApiService.Models.ConversationProcessingStatus.Imported);
+    var summaryErrors = statusCounts.GetValueOrDefault(MattGPT.ApiService.Models.ConversationProcessingStatus.SummaryError);
+    var embeddingErrors = statusCounts.GetValueOrDefault(MattGPT.ApiService.Models.ConversationProcessingStatus.EmbeddingError);
+
+    var issues = new List<string>();
+    if (totalConversations == 0)
+        issues.Add("No conversations in MongoDB. Upload a ChatGPT export via POST /conversations/upload.");
+    else if (imported > 0 || summarised > 0)
+    {
+        var unembedded = imported + summarised;
+        issues.Add($"{unembedded} conversations are not yet embedded. Run POST /conversations/embed (or re-upload — embedding is automatic on import).");
+    }
+    if (summaryErrors > 0)
+        issues.Add($"{summaryErrors} conversations failed summarisation (non-blocking — embedding uses raw content).");
+    if (embeddingErrors > 0)
+        issues.Add($"{embeddingErrors} conversations failed embedding generation.");
+    if (qdrantPoints is null)
+        issues.Add("Qdrant collection does not exist yet. Run POST /conversations/embed to create it.");
+    else if (qdrantPoints == 0)
+        issues.Add("Qdrant collection exists but is empty.");
+    if (embedded > 0 && qdrantPoints is not null && (long)qdrantPoints.Value < embedded)
+        issues.Add($"Qdrant has {qdrantPoints} points but MongoDB has {embedded} embedded conversations — mismatch.");
+
+    var healthy = issues.Count == 0;
+
+    return Results.Ok(new
+    {
+        healthy,
+        issues,
+        ragConfig = new { topK = opts.TopK, minScore = opts.MinScore },
+        llmConfig = new { provider = llm.Provider, modelId = llm.ModelId, embeddingModelId = llm.EmbeddingModelId },
+        mongodb = new
+        {
+            totalConversations,
+            byStatus = statusCounts.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
+        },
+        qdrant = new
+        {
+            pointCount = qdrantPoints,
+            collectionExists = qdrantPoints.HasValue,
+            error = qdrantError,
+        },
+    });
+})
+.WithName("RagDiagnostics");
 
 // RAG chat endpoint — generates a response augmented with relevant past conversations.
 app.MapPost("/chat", async (ChatRequest request, RagService ragService, CancellationToken ct) =>

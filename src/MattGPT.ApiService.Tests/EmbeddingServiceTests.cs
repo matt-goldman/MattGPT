@@ -65,6 +65,9 @@ internal sealed class FakeQdrantService : IQdrantService
     public Task<IReadOnlyList<QdrantSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<QdrantSearchResult>>([]);
+
+    public Task<ulong?> GetPointCountAsync(CancellationToken ct = default)
+        => Task.FromResult<ulong?>((ulong)Upserted.Count);
 }
 
 /// <summary>
@@ -78,26 +81,47 @@ internal sealed class ThrowingQdrantService : IQdrantService
     public Task<IReadOnlyList<QdrantSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<QdrantSearchResult>>([]);
+
+    public Task<ulong?> GetPointCountAsync(CancellationToken ct = default)
+        => Task.FromResult<ulong?>(null);
 }
 
 public class EmbeddingServiceTests
 {
-    private static StoredConversation MakeSummarisedConversation(string id, string? summary = "A test summary.")
-        => new()
+    private static StoredConversation MakeConversation(
+        string id,
+        string? title = "Test",
+        string? summary = null,
+        ConversationProcessingStatus status = ConversationProcessingStatus.Imported,
+        int messageCount = 2)
+    {
+        var messages = Enumerable.Range(0, messageCount)
+            .Select(i => new StoredMessage
+            {
+                Id = $"m{i}",
+                Role = i % 2 == 0 ? "user" : "assistant",
+                ContentType = "text",
+                Parts = [$"Message content {i}"],
+            })
+            .ToList();
+
+        return new StoredConversation
         {
             ConversationId = id,
-            Title = "Test",
+            Title = title,
             Summary = summary,
-            ProcessingStatus = ConversationProcessingStatus.Summarised,
+            ProcessingStatus = status,
+            LinearisedMessages = messages,
         };
+    }
 
     private static readonly float[] TestVector = [0.1f, 0.2f, 0.3f];
 
     [Fact]
-    public async Task EmbedAsync_UpdatesStatusToEmbedded()
+    public async Task EmbedAsync_ImportedConversation_UpdatesStatusToEmbedded()
     {
         var repository = new FakeConversationRepository();
-        repository.Seed([MakeSummarisedConversation("c1")]);
+        repository.Seed([MakeConversation("c1")]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
         var qdrant = new FakeQdrantService();
@@ -114,14 +138,29 @@ public class EmbeddingServiceTests
         Assert.Equal(TestVector, repository.EmbeddingUpdates[0].Embedding);
         Assert.Single(qdrant.Upserted);
         Assert.Equal("c1", qdrant.Upserted[0].Conversation.ConversationId);
-        Assert.Equal(TestVector, qdrant.Upserted[0].Vector);
+    }
+
+    [Fact]
+    public async Task EmbedAsync_SummarisedConversation_StillGetsEmbedded()
+    {
+        var repository = new FakeConversationRepository();
+        repository.Seed([MakeConversation("c1", summary: "A test summary.", status: ConversationProcessingStatus.Summarised)]);
+
+        var generator = new FakeEmbeddingGenerator(TestVector);
+        var qdrant = new FakeQdrantService();
+        var service = new EmbeddingService(repository, generator, qdrant, NullLogger<EmbeddingService>.Instance);
+
+        var result = await service.EmbedAsync();
+
+        Assert.Equal(1, result.Embedded);
+        Assert.Single(qdrant.Upserted);
     }
 
     [Fact]
     public async Task EmbedAsync_EmbeddingError_MarksAsEmbeddingError()
     {
         var repository = new FakeConversationRepository();
-        repository.Seed([MakeSummarisedConversation("c1")]);
+        repository.Seed([MakeConversation("c1")]);
 
         var generator = new ThrowingEmbeddingGenerator(new InvalidOperationException("Model unavailable"));
         var service = new EmbeddingService(repository, generator, new FakeQdrantService(), NullLogger<EmbeddingService>.Instance);
@@ -135,10 +174,11 @@ public class EmbeddingServiceTests
     }
 
     [Fact]
-    public async Task EmbedAsync_NoSummary_MarksAsEmbeddedSkipped()
+    public async Task EmbedAsync_NoContentAtAll_MarksAsEmbeddedSkipped()
     {
+        // A conversation with no title, no summary, and no messages has nothing to embed.
         var repository = new FakeConversationRepository();
-        repository.Seed([MakeSummarisedConversation("c1", summary: null)]);
+        repository.Seed([MakeConversation("c1", title: null, summary: null, messageCount: 0)]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
         var service = new EmbeddingService(repository, generator, new FakeQdrantService(), NullLogger<EmbeddingService>.Instance);
@@ -154,13 +194,31 @@ public class EmbeddingServiceTests
     }
 
     [Fact]
+    public async Task EmbedAsync_NoSummaryButHasMessages_StillEmbeds()
+    {
+        // Conversations without a summary should still be embedded from their message content.
+        var repository = new FakeConversationRepository();
+        repository.Seed([MakeConversation("c1", summary: null, messageCount: 3)]);
+
+        var generator = new FakeEmbeddingGenerator(TestVector);
+        var qdrant = new FakeQdrantService();
+        var service = new EmbeddingService(repository, generator, qdrant, NullLogger<EmbeddingService>.Instance);
+
+        var result = await service.EmbedAsync();
+
+        Assert.Equal(1, result.Embedded);
+        Assert.Equal(0, result.Skipped);
+        Assert.Single(qdrant.Upserted);
+    }
+
+    [Fact]
     public async Task EmbedAsync_MultipleConversations_AllProcessed()
     {
         var repository = new FakeConversationRepository();
         repository.Seed([
-            MakeSummarisedConversation("c1"),
-            MakeSummarisedConversation("c2"),
-            MakeSummarisedConversation("c3"),
+            MakeConversation("c1"),
+            MakeConversation("c2"),
+            MakeConversation("c3"),
         ]);
 
         int callCount = 0;
@@ -179,13 +237,31 @@ public class EmbeddingServiceTests
     }
 
     [Fact]
+    public async Task EmbedAsync_MixedImportedAndSummarised_BothProcessed()
+    {
+        var repository = new FakeConversationRepository();
+        repository.Seed([
+            MakeConversation("c1", status: ConversationProcessingStatus.Imported),
+            MakeConversation("c2", summary: "Has a summary", status: ConversationProcessingStatus.Summarised),
+        ]);
+
+        var generator = new FakeEmbeddingGenerator(TestVector);
+        var service = new EmbeddingService(repository, generator, new FakeQdrantService(), NullLogger<EmbeddingService>.Instance);
+
+        var result = await service.EmbedAsync();
+
+        Assert.Equal(2, result.Embedded);
+        Assert.Equal(0, result.Errors);
+    }
+
+    [Fact]
     public async Task EmbedAsync_ErrorDoesNotAbortBatch()
     {
         var repository = new FakeConversationRepository();
         repository.Seed([
-            MakeSummarisedConversation("c1"),
-            MakeSummarisedConversation("c2"),
-            MakeSummarisedConversation("c3"),
+            MakeConversation("c1"),
+            MakeConversation("c2"),
+            MakeConversation("c3"),
         ]);
 
         int callCount = 0;
@@ -224,7 +300,7 @@ public class EmbeddingServiceTests
     public async Task EmbedAsync_SuccessfulEmbedding_UpsertsToQdrant()
     {
         var repository = new FakeConversationRepository();
-        repository.Seed([MakeSummarisedConversation("c1")]);
+        repository.Seed([MakeConversation("c1")]);
 
         var qdrant = new FakeQdrantService();
         var generator = new FakeEmbeddingGenerator(TestVector);
@@ -241,7 +317,7 @@ public class EmbeddingServiceTests
     public async Task EmbedAsync_QdrantFails_StillMarksEmbedded()
     {
         var repository = new FakeConversationRepository();
-        repository.Seed([MakeSummarisedConversation("c1")]);
+        repository.Seed([MakeConversation("c1")]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
         var service = new EmbeddingService(repository, generator, new ThrowingQdrantService(), NullLogger<EmbeddingService>.Instance);
@@ -256,10 +332,10 @@ public class EmbeddingServiceTests
     }
 
     [Fact]
-    public async Task EmbedAsync_NoSummary_DoesNotUpsertToQdrant()
+    public async Task EmbedAsync_EmptyConversation_DoesNotUpsertToQdrant()
     {
         var repository = new FakeConversationRepository();
-        repository.Seed([MakeSummarisedConversation("c1", summary: null)]);
+        repository.Seed([MakeConversation("c1", title: null, summary: null, messageCount: 0)]);
 
         var qdrant = new FakeQdrantService();
         var generator = new FakeEmbeddingGenerator(TestVector);
@@ -267,7 +343,53 @@ public class EmbeddingServiceTests
 
         await service.EmbedAsync();
 
-        // No embedding vector means nothing to upsert to Qdrant.
+        // No embeddable content means nothing to upsert to Qdrant.
         Assert.Empty(qdrant.Upserted);
+    }
+
+    [Fact]
+    public void BuildEmbeddingText_IncludesTitleAndMessages()
+    {
+        var conv = MakeConversation("c1", title: "My Topic", messageCount: 2);
+
+        var text = EmbeddingService.BuildEmbeddingText(conv);
+
+        Assert.Contains("My Topic", text);
+        Assert.Contains("user: Message content 0", text);
+        Assert.Contains("assistant: Message content 1", text);
+    }
+
+    [Fact]
+    public void BuildEmbeddingText_WithSummary_IncludesSummary()
+    {
+        var conv = MakeConversation("c1", title: "My Topic", summary: "This is a summary.", messageCount: 1);
+
+        var text = EmbeddingService.BuildEmbeddingText(conv);
+
+        Assert.Contains("This is a summary.", text);
+        Assert.Contains("My Topic", text);
+    }
+
+    [Fact]
+    public void BuildEmbeddingText_TruncatesLongConversations()
+    {
+        var conv = new StoredConversation
+        {
+            ConversationId = "long",
+            Title = "Long",
+            LinearisedMessages = Enumerable.Range(0, 500)
+                .Select(i => new StoredMessage
+                {
+                    Id = $"m{i}",
+                    Role = "user",
+                    ContentType = "text",
+                    Parts = [$"This is a fairly long message number {i} to eventually exceed the limit."],
+                })
+                .ToList(),
+        };
+
+        var text = EmbeddingService.BuildEmbeddingText(conv);
+
+        Assert.True(text.Length <= EmbeddingService.MaxEmbeddingTextChars);
     }
 }

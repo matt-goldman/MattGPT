@@ -2,6 +2,7 @@ using System.Text;
 using System.Threading.Channels;
 using MattGPT.ApiService.Models;
 using MattGPT.ApiService.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MattGPT.ApiService.Tests;
@@ -36,6 +37,16 @@ internal sealed class FakeConversationRepository : IConversationRepository
         return Task.FromResult(items);
     }
 
+    public Task<List<StoredConversation>> GetByStatusesAsync(IEnumerable<ConversationProcessingStatus> statuses, int maxCount, CancellationToken ct = default)
+    {
+        var statusSet = statuses.ToHashSet();
+        var items = _conversations
+            .Where(c => statusSet.Contains(c.ProcessingStatus))
+            .Take(maxCount)
+            .ToList();
+        return Task.FromResult(items);
+    }
+
     public Task UpdateSummaryAsync(string conversationId, string? summary, ConversationProcessingStatus status, CancellationToken ct = default)
     {
         SummaryUpdates.Add((conversationId, summary, status));
@@ -58,6 +69,21 @@ internal sealed class FakeConversationRepository : IConversationRepository
             conv.ProcessingStatus = status;
         }
         return Task.CompletedTask;
+    }
+
+    public Task<List<StoredConversation>> GetByIdsAsync(IEnumerable<string> conversationIds, CancellationToken ct = default)
+    {
+        var ids = conversationIds.ToHashSet();
+        var items = _conversations.Where(c => ids.Contains(c.ConversationId)).ToList();
+        return Task.FromResult(items);
+    }
+
+    public Task<Dictionary<ConversationProcessingStatus, long>> GetStatusCountsAsync(CancellationToken ct = default)
+    {
+        var counts = _conversations
+            .GroupBy(c => c.ProcessingStatus)
+            .ToDictionary(g => g.Key, g => (long)g.Count());
+        return Task.FromResult(counts);
     }
 }
 
@@ -115,6 +141,11 @@ public class ImportJobStoreTests
 
 public class ImportProcessingServiceTests
 {
+    /// <summary>Creates a minimal <see cref="IServiceProvider"/> for tests.
+    /// Auto-embed will fail harmlessly because EmbeddingService is not registered.</summary>
+    private static IServiceProvider EmptyServiceProvider()
+        => new ServiceCollection().BuildServiceProvider();
+
     [Fact]
     public async Task ProcessesJob_UpdatesStatusToComplete()
     {
@@ -124,7 +155,7 @@ public class ImportProcessingServiceTests
         var parser = new ConversationParser();
         var repository = new FakeConversationRepository();
         var logger = NullLogger<ImportProcessingService>.Instance;
-        var service = new ImportProcessingService(channel, store, parser, repository, logger);
+        var service = new ImportProcessingService(channel, store, parser, repository, EmptyServiceProvider(), logger);
 
         var json = """
             [
@@ -176,7 +207,7 @@ public class ImportProcessingServiceTests
         var parser = new ConversationParser();
         var repository = new FakeConversationRepository();
         var logger = NullLogger<ImportProcessingService>.Instance;
-        var service = new ImportProcessingService(channel, store, parser, repository, logger);
+        var service = new ImportProcessingService(channel, store, parser, repository, EmptyServiceProvider(), logger);
 
         var json = """
             [
@@ -233,7 +264,7 @@ public class ImportProcessingServiceTests
         var parser = new ConversationParser();
         var repository = new FakeConversationRepository();
         var logger = NullLogger<ImportProcessingService>.Instance;
-        var service = new ImportProcessingService(channel, store, parser, repository, logger);
+        var service = new ImportProcessingService(channel, store, parser, repository, EmptyServiceProvider(), logger);
 
         var tempPath = Path.GetTempFileName();
         await File.WriteAllTextAsync(tempPath, "NOT VALID JSON {{{{");
@@ -268,7 +299,7 @@ public class ImportProcessingServiceTests
         var parser = new ConversationParser();
         var repository = new FakeConversationRepository();
         var logger = NullLogger<ImportProcessingService>.Instance;
-        var service = new ImportProcessingService(channel, store, parser, repository, logger);
+        var service = new ImportProcessingService(channel, store, parser, repository, EmptyServiceProvider(), logger);
 
         var tempPath = Path.GetTempFileName();
         await File.WriteAllTextAsync(tempPath, "[]");

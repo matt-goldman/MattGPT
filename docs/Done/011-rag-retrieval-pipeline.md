@@ -37,3 +37,7 @@ Implement the retrieval-augmented generation pipeline that, given a user query, 
 - Consider returning the retrieved sources alongside the answer so the UI can display them.
 - Prompt engineering will be important here — the system message should clearly instruct the LLM on how to use the retrieved context.
 - Start with summary-only retrieval; full conversation retrieval can be a follow-up enhancement.
+
+## Post-Completion Changes
+
+**2026-02-26 — ADR-003:** `RagService` was rewritten with proper System/User chat message roles via `Microsoft.Extensions.AI.ChatMessage`. The system message frames the LLM as "Matt's AI assistant with access to his conversation history" and includes up to 5 full conversation excerpts (fetched from MongoDB, not just summaries) with title, date, and messages (up to 4,000 chars each). The user message contains only the user's question. This dramatically improved response quality — the LLM now correctly references past conversations instead of ignoring them. See [ADR-003](../Decisions/003-rag-pipeline-v2-embed-from-content.md).
