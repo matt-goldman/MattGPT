@@ -1,6 +1,6 @@
 # 006 — Implement Background Processing Service for Import
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 6
 **Dependencies:** 004 (parser), 005 (upload UI)
 
@@ -21,11 +21,11 @@ Implement a background processing pipeline that receives uploaded conversation f
 
 ## Acceptance Criteria
 
-- [ ] Uploading a file triggers background processing that does not block the HTTP response.
-- [ ] Progress is observable in the UI (number of conversations processed, percentage, errors).
-- [ ] The processing pipeline can handle the full ~148 MB file without running out of memory.
-- [ ] Individual conversation parsing errors are logged but do not stop the import.
-- [ ] Processing status persists across page refreshes (stored in-memory or in the database).
+- [x] Uploading a file triggers background processing that does not block the HTTP response.
+- [x] Progress is observable in the UI (number of conversations processed, percentage, errors).
+- [x] The processing pipeline can handle the full ~148 MB file without running out of memory.
+- [x] Individual conversation parsing errors are logged but do not stop the import.
+- [x] Processing status persists across page refreshes (stored in-memory or in the database).
 
 ## Notes
 
