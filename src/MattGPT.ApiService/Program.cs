@@ -11,6 +11,7 @@ builder.AddQdrantClient("qdrant");
 
 // Add services to the container.
 builder.Services.AddProblemDetails();
+builder.Services.AddSingleton<MattGPT.ApiService.Services.ConversationParser>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
