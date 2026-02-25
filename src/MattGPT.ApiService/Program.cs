@@ -6,6 +6,9 @@ builder.AddServiceDefaults();
 // Add MongoDB client via Aspire integration.
 builder.AddMongoDBClient("mattgptdb");
 
+// Add Qdrant client via Aspire integration.
+builder.AddQdrantClient("qdrant");
+
 // Add services to the container.
 builder.Services.AddProblemDetails();
 

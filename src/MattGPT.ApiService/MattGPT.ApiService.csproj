@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <PackageReference Include="Aspire.MongoDB.Driver" Version="13.1.1" />
+    <PackageReference Include="Aspire.Qdrant.Client" Version="13.1.1" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
   </ItemGroup>
 
