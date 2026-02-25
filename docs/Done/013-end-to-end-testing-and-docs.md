@@ -1,6 +1,6 @@
 # 013 — End-to-End Testing and Documentation
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 13
 **Dependencies:** All previous issues
 
@@ -32,11 +32,11 @@ Place documentation in appropriate locations (README updates, `docs/` folder, or
 
 ## Acceptance Criteria
 
-- [ ] The full pipeline works end-to-end from upload to RAG-augmented chat.
-- [ ] Documentation covers all four areas listed above.
-- [ ] At least two LLM providers are tested and confirmed working.
-- [ ] No critical bugs remain open.
-- [ ] The README is updated with final setup and usage instructions.
+- [x] The full pipeline works end-to-end from upload to RAG-augmented chat.
+- [x] Documentation covers all four areas listed above.
+- [x] At least two LLM providers are tested and confirmed working.
+- [x] No critical bugs remain open.
+- [x] The README is updated with final setup and usage instructions.
 
 ## Notes
 

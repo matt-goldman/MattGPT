@@ -43,8 +43,8 @@ This document is the **system of record** for project planning and issue trackin
 | 9 | 009-generate-embeddings.md | Generate embeddings from summaries | Done | Done/ | Depends on 8 |
 | 10 | 010-store-embeddings-in-qdrant.md | Store embeddings in Qdrant with metadata | Done | Done/ | Depends on 2, 9 |
 | 11 | 011-rag-retrieval-pipeline.md | Build RAG retrieval pipeline | Done | Done/ | Depends on 10 |
-| 12 | 012-chat-ui-with-rag.md | Create chat UI page for LLM interaction with RAG memory | TODO | TODO/ | Depends on 11; OpenWebUI evaluated and deferred — see ADR-002 |
-| 13 | 013-end-to-end-testing-and-docs.md | End-to-end testing and documentation | TODO | TODO/ | Depends on all |
+| 12 | 012-chat-ui-with-rag.md | Create chat UI page for LLM interaction with RAG memory | Done | Done/ | Depends on 11; OpenWebUI evaluated and deferred — see ADR-002 |
+| 13 | 013-end-to-end-testing-and-docs.md | End-to-end testing and documentation | Done | Done/ | Depends on all |
 
 ---
 
