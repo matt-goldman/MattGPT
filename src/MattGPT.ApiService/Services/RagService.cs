@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -9,6 +10,11 @@ public record ChatSource(string ConversationId, string? Title, string? Summary, 
 
 /// <summary>The result of a RAG-augmented chat request.</summary>
 public record RagChatResponse(string Answer, IReadOnlyList<ChatSource> Sources);
+
+/// <summary>A single streamed chunk from the RAG pipeline.</summary>
+/// <param name="Text">Incremental text token (null for the final "sources" frame).</param>
+/// <param name="Sources">Set only on the final chunk to deliver source metadata.</param>
+public record RagStreamChunk(string? Text, IReadOnlyList<ChatSource>? Sources = null);
 
 /// <summary>
 /// Implements the retrieval-augmented generation (RAG) pipeline.
@@ -70,6 +76,50 @@ public class RagService
             .ToList();
 
         return new RagChatResponse(response.Text, sources);
+    }
+
+    /// <summary>
+    /// Streaming variant of <see cref="ChatAsync"/>. Yields text tokens as they arrive
+    /// from the LLM, then a final chunk containing the sources used.
+    /// </summary>
+    public async IAsyncEnumerable<RagStreamChunk> ChatStreamAsync(
+        string query,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        // 1. Embed the query.
+        var embeddings = await _embeddingGenerator.GenerateAsync([query], cancellationToken: ct);
+        var queryVector = embeddings[0].Vector.ToArray();
+
+        // 2. Retrieve top-K candidates from Qdrant.
+        var searchResults = await _qdrantService.SearchAsync(queryVector, _options.TopK, ct);
+
+        // 3. Apply minimum similarity threshold.
+        var relevant = searchResults
+            .Where(r => r.Score >= _options.MinScore)
+            .ToList();
+
+        _logger.LogInformation(
+            "RAG streaming query retrieved {Total} results; {Relevant} meet the minimum score threshold of {Threshold:F2}.",
+            searchResults.Count, relevant.Count, _options.MinScore);
+
+        // 4. Build the augmented prompt.
+        var prompt = BuildPrompt(query, relevant);
+
+        // 5. Stream from the LLM.
+        await foreach (var update in _chatClient.GetStreamingResponseAsync(prompt, cancellationToken: ct))
+        {
+            if (!string.IsNullOrEmpty(update.Text))
+            {
+                yield return new RagStreamChunk(update.Text);
+            }
+        }
+
+        // 6. Final chunk carries the sources.
+        var sources = relevant
+            .Select(r => new ChatSource(r.ConversationId, r.Title, r.Summary, r.Score))
+            .ToList();
+
+        yield return new RagStreamChunk(null, sources);
     }
 
     /// <summary>

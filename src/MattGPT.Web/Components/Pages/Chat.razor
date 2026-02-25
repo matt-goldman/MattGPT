@@ -1,6 +1,8 @@
 @page "/chat"
 @rendermode InteractiveServer
 @inject IHttpClientFactory HttpClients
+@using System.IO
+@using System.Text.Json
 
 <PageTitle>Chat</PageTitle>
 
@@ -69,7 +71,14 @@
         {
             <div class="flex justify-start">
                 <div class="bg-default-100 rounded-2xl rounded-tl-sm px-4 py-3">
-                    <LumexSpinner Color="@ThemeColor.Primary" Size="@Size.Small" />
+                    @if (_streamingContent.Length == 0)
+                    {
+                        <LumexSpinner Color="@ThemeColor.Primary" Size="@Size.Small" />
+                    }
+                    else
+                    {
+                        <div class="max-w-2xl text-sm whitespace-pre-wrap">@_streamingContent.ToString()</div>
+                    }
                 </div>
             </div>
         }
@@ -103,6 +112,7 @@
 
 @code {
     private readonly List<ChatMessage> _messages = [];
+    private readonly System.Text.StringBuilder _streamingContent = new();
     private string _inputText = string.Empty;
     private bool _isThinking;
     private string _errorMessage = string.Empty;
@@ -122,6 +132,7 @@
 
         _inputText = string.Empty;
         _errorMessage = string.Empty;
+        _streamingContent.Clear();
         _messages.Add(new ChatMessage("user", text, null));
         _isThinking = true;
         StateHasChanged();
@@ -129,22 +140,72 @@
         try
         {
             var client = HttpClients.CreateClient("apiservice");
-            var response = await client.PostAsJsonAsync("/chat", new { message = text });
-
-            if (response.IsSuccessStatusCode)
+            var request = new HttpRequestMessage(HttpMethod.Post, "/chat/stream")
             {
-                var result = await response.Content.ReadFromJsonAsync<ChatResponse>();
-                if (result is not null)
-                {
-                    var sources = result.Sources?.Select(s => new ChatSource(s.ConversationId, s.Title, s.Summary, s.Score)).ToList();
-                    _messages.Add(new ChatMessage("assistant", result.Answer, sources));
-                }
-            }
-            else
+                Content = JsonContent.Create(new { message = text }),
+            };
+            request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
+
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+
+            if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync();
                 _errorMessage = $"Request failed ({(int)response.StatusCode}): {error}";
+                return;
             }
+
+            List<ChatSource>? sources = null;
+
+            using var stream = await response.Content.ReadAsStreamAsync();
+            using var reader = new StreamReader(stream);
+
+            string? currentEvent = null;
+
+            while (!reader.EndOfStream)
+            {
+                var line = await reader.ReadLineAsync();
+                if (line is null) break;
+
+                if (line.StartsWith("event: "))
+                {
+                    currentEvent = line["event: ".Length..];
+                    continue;
+                }
+
+                if (line.StartsWith("data: "))
+                {
+                    var data = line["data: ".Length..];
+
+                    switch (currentEvent)
+                    {
+                        case "token":
+                            // Data is a JSON-encoded string — deserialise to get the raw text.
+                            var token = JsonSerializer.Deserialize<string>(data);
+                            if (token is not null)
+                            {
+                                _streamingContent.Append(token);
+                                StateHasChanged();
+                            }
+                            break;
+
+                        case "sources":
+                            sources = JsonSerializer.Deserialize<List<ChatSource>>(data, _jsonOptions);
+                            break;
+
+                        case "done":
+                            // Stream complete — handled after the loop.
+                            break;
+                    }
+
+                    currentEvent = null;
+                    continue;
+                }
+
+                // Blank lines are SSE frame separators — nothing to do.
+            }
+
+            _messages.Add(new ChatMessage("assistant", _streamingContent.ToString(), sources));
         }
         catch (Exception ex)
         {
@@ -152,21 +213,17 @@
         }
         finally
         {
+            _streamingContent.Clear();
             _isThinking = false;
             StateHasChanged();
         }
     }
 
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
     private record ChatMessage(string Role, string Content, List<ChatSource>? Sources);
     private record ChatSource(string ConversationId, string? Title, string? Summary, float Score);
-
-    private record ChatResponse(
-        string Answer,
-        List<ChatResponseSource>? Sources);
-
-    private record ChatResponseSource(
-        string ConversationId,
-        string? Title,
-        string? Summary,
-        float Score);
 }
