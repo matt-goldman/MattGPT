@@ -1,6 +1,6 @@
 # 007 — Store Parsed Conversations in MongoDB
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 7
 **Dependencies:** 001 (MongoDB in AppHost), 004 (parser), 006 (background processing)
 
@@ -26,11 +26,11 @@ Extend the background processing pipeline to store each parsed conversation as a
 
 ## Acceptance Criteria
 
-- [ ] Parsed conversations are stored in MongoDB during import processing.
-- [ ] Re-importing the same file does not create duplicates (upsert by conversation ID).
-- [ ] The `GET /conversations` endpoint returns paginated conversation metadata.
-- [ ] `ProcessingStatus` is set to `Imported` on initial storage.
-- [ ] MongoDB data is visible/queryable via the Aspire dashboard or a simple API call.
+- [x] Parsed conversations are stored in MongoDB during import processing.
+- [x] Re-importing the same file does not create duplicates (upsert by conversation ID).
+- [x] The `GET /conversations` endpoint returns paginated conversation metadata.
+- [x] `ProcessingStatus` is set to `Imported` on initial storage.
+- [x] MongoDB data is visible/queryable via the Aspire dashboard or a simple API call.
 
 ## Notes
 
