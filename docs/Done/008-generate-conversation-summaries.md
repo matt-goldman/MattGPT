@@ -1,6 +1,6 @@
 # 008 — Generate Conversation Summaries Using LLM
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 8
 **Dependencies:** 003 (LLM config), 007 (conversations in MongoDB)
 
@@ -25,11 +25,11 @@ For each stored conversation, use the configured LLM to generate a summary that 
 
 ## Acceptance Criteria
 
-- [ ] Conversations with status `Imported` are summarised and updated to `Summarised`.
-- [ ] Summaries are stored in MongoDB alongside the full conversation.
-- [ ] The summarisation process handles LLM errors without aborting the batch.
-- [ ] Progress is trackable (number summarised, errors).
-- [ ] The summary content is meaningful and captures the key elements described above.
+- [x] Conversations with status `Imported` are summarised and updated to `Summarised`.
+- [x] Summaries are stored in MongoDB alongside the full conversation.
+- [x] The summarisation process handles LLM errors without aborting the batch.
+- [x] Progress is trackable (number summarised, errors).
+- [x] The summary content is meaningful and captures the key elements described above.
 
 ## Notes
 

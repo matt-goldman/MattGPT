@@ -48,4 +48,26 @@ public class ConversationRepository : IConversationRepository
             .ToListAsync(ct);
         return (items, total);
     }
+
+    /// <inheritdoc/>
+    public async Task<List<StoredConversation>> GetByStatusAsync(
+        ConversationProcessingStatus status, int maxCount, CancellationToken ct = default)
+    {
+        var filter = Builders<StoredConversation>.Filter.Eq(x => x.ProcessingStatus, status);
+        return await _collection
+            .Find(filter)
+            .Limit(maxCount)
+            .ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task UpdateSummaryAsync(
+        string conversationId, string? summary, ConversationProcessingStatus status, CancellationToken ct = default)
+    {
+        var filter = Builders<StoredConversation>.Filter.Eq(x => x.ConversationId, conversationId);
+        var update = Builders<StoredConversation>.Update
+            .Set(x => x.Summary, summary)
+            .Set(x => x.ProcessingStatus, status);
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
 }
