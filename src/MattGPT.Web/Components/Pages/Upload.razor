@@ -1,0 +1,172 @@
+@page "/upload"
+@rendermode InteractiveServer
+@inject IHttpClientFactory HttpClients
+
+<PageTitle>Upload Conversations</PageTitle>
+
+<div class="max-w-2xl mx-auto">
+    <h1 class="text-2xl font-bold mb-2">Upload Conversations</h1>
+    <p class="text-default-500 mb-6">
+        Upload your ChatGPT <code class="font-mono text-sm bg-default-100 px-1 rounded">conversations.json</code> export file to import your conversation history.
+    </p>
+
+    <LumexCard Class="p-6">
+        <div class="space-y-4">
+            @if (_status == UploadStatus.Idle || _status == UploadStatus.Error)
+            {
+                <div class="border-2 border-dashed border-default-200 rounded-lg p-8 text-center">
+                    <p class="text-default-500 mb-4">Select your <code class="font-mono text-sm">conversations.json</code> file (up to 200 MB)</p>
+                    <InputFile OnChange="OnFileSelected"
+                               accept=".json"
+                               class="block w-full text-sm text-default-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:opacity-80 cursor-pointer" />
+                    @if (_selectedFile is not null)
+                    {
+                        <p class="mt-3 text-sm text-default-600">
+                            Selected: <span class="font-medium">@_selectedFile.Name</span>
+                            (@FormatBytes(_selectedFile.Size))
+                        </p>
+                    }
+                </div>
+
+                @if (_status == UploadStatus.Error)
+                {
+                    <LumexAlert Color="@ThemeColor.Danger" Title="Upload failed">
+                        @_errorMessage
+                    </LumexAlert>
+                }
+
+                <div class="flex justify-end">
+                    <LumexButton Color="@ThemeColor.Primary"
+                                 IsDisabled="@(_selectedFile is null)"
+                                 OnClick="StartUpload">
+                        Upload & Process
+                    </LumexButton>
+                </div>
+            }
+            else if (_status == UploadStatus.Uploading)
+            {
+                <div class="flex flex-col items-center py-8 space-y-4">
+                    <LumexSpinner Color="@ThemeColor.Primary" Size="@Size.Large" />
+                    <p class="text-default-600 font-medium">@_statusMessage</p>
+                    <div class="w-full bg-default-100 rounded-full h-2">
+                        <div class="bg-primary h-2 rounded-full transition-all duration-300"
+                             style="width: @(_uploadProgress)%"></div>
+                    </div>
+                    <p class="text-sm text-default-400">@_uploadProgress% complete</p>
+                </div>
+            }
+            else if (_status == UploadStatus.Complete)
+            {
+                <div class="flex flex-col items-center py-8 space-y-4">
+                    <div class="w-16 h-16 rounded-full bg-success-100 flex items-center justify-center text-3xl">✓</div>
+                    <LumexAlert Color="@ThemeColor.Success" Title="Upload complete">
+                        @_statusMessage
+                    </LumexAlert>
+                    <LumexButton Color="@ThemeColor.Default" Variant="@Variant.Outlined" OnClick="Reset">
+                        Upload another file
+                    </LumexButton>
+                </div>
+            }
+        </div>
+    </LumexCard>
+</div>
+
+@code {
+    private enum UploadStatus { Idle, Uploading, Complete, Error }
+
+    private IBrowserFile? _selectedFile;
+    private UploadStatus _status = UploadStatus.Idle;
+    private string _statusMessage = string.Empty;
+    private string _errorMessage = string.Empty;
+    private int _uploadProgress = 0;
+
+    private const long MaxFileSize = 209_715_200; // 200 MB
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _status = UploadStatus.Idle;
+        _errorMessage = string.Empty;
+
+        var file = e.File;
+
+        if (!file.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            _status = UploadStatus.Error;
+            _errorMessage = "Only .json files are accepted. Please select your conversations.json export file.";
+            _selectedFile = null;
+            return;
+        }
+
+        if (file.Size > MaxFileSize)
+        {
+            _status = UploadStatus.Error;
+            _errorMessage = $"File size ({FormatBytes(file.Size)}) exceeds the 200 MB limit.";
+            _selectedFile = null;
+            return;
+        }
+
+        _selectedFile = file;
+    }
+
+    private async Task StartUpload()
+    {
+        if (_selectedFile is null) return;
+
+        _status = UploadStatus.Uploading;
+        _statusMessage = "Uploading file…";
+        _uploadProgress = 0;
+
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            await using var stream = _selectedFile.OpenReadStream(MaxFileSize);
+            var streamContent = new StreamContent(stream);
+            streamContent.Headers.ContentType = new("application/json");
+            content.Add(streamContent, "file", _selectedFile.Name);
+
+            _uploadProgress = 10;
+            _statusMessage = "Sending to API…";
+            StateHasChanged();
+
+            var client = HttpClients.CreateClient("apiservice");
+            var response = await client.PostAsync("/conversations/upload", content);
+
+            _uploadProgress = 90;
+            StateHasChanged();
+
+            if (response.IsSuccessStatusCode)
+            {
+                _uploadProgress = 100;
+                _status = UploadStatus.Complete;
+                _statusMessage = "File uploaded successfully. Processing will begin in the background.";
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _status = UploadStatus.Error;
+                _errorMessage = $"Upload failed ({(int)response.StatusCode}): {error}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _status = UploadStatus.Error;
+            _errorMessage = $"An unexpected error occurred: {ex.Message}";
+        }
+    }
+
+    private void Reset()
+    {
+        _selectedFile = null;
+        _status = UploadStatus.Idle;
+        _statusMessage = string.Empty;
+        _errorMessage = string.Empty;
+        _uploadProgress = 0;
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1_048_576) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / 1_048_576.0:F1} MB";
+    }
+}
