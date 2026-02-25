@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.MongoDB" Version="13.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MattGPT.ApiService\MattGPT.ApiService.csproj" />
     <ProjectReference Include="..\MattGPT.Web\MattGPT.Web.csproj" />
   </ItemGroup>

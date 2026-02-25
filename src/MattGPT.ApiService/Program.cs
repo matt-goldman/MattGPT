@@ -3,6 +3,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
+// Add MongoDB client via Aspire integration.
+builder.AddMongoDBClient("mattgptdb");
+
 // Add services to the container.
 builder.Services.AddProblemDetails();
 
