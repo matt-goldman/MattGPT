@@ -1,6 +1,6 @@
 # 005 — Create File Upload UI Page with Progress Tracking
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 5
 **Dependencies:** None (UI scaffold, backend wiring comes in issue 006)
 
