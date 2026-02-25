@@ -1,6 +1,6 @@
 # 011 — Build RAG Retrieval Pipeline
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 11
 **Dependencies:** 010 (embeddings in Qdrant)
 
@@ -26,11 +26,11 @@ Implement the retrieval-augmented generation pipeline that, given a user query, 
 
 ## Acceptance Criteria
 
-- [ ] A user query returns an LLM response augmented with relevant conversation context.
-- [ ] The response quality visibly improves when relevant conversations exist vs. when they don't.
-- [ ] Retrieved context is included in the LLM prompt in a structured, readable format.
-- [ ] The number of retrieved results and similarity threshold are configurable.
-- [ ] The endpoint returns both the LLM response and the list of retrieved conversation references.
+- [x] A user query returns an LLM response augmented with relevant conversation context.
+- [x] The response quality visibly improves when relevant conversations exist vs. when they don't.
+- [x] Retrieved context is included in the LLM prompt in a structured, readable format.
+- [x] The number of retrieved results and similarity threshold are configurable.
+- [x] The endpoint returns both the LLM response and the list of retrieved conversation references.
 
 ## Notes
 
