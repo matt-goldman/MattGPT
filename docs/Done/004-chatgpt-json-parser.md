@@ -1,6 +1,6 @@
 # 004 — Build ChatGPT JSON Parser & Conversation Lineariser
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 4
 **Dependencies:** None (pure logic, no infrastructure dependencies)
 
@@ -23,11 +23,11 @@ Build a parser that can stream-read a large ChatGPT `conversations.json` export 
 
 ## Acceptance Criteria
 
-- [ ] Parser can stream a multi-GB JSON file without loading it entirely into memory.
-- [ ] Message trees are correctly linearised to the active thread.
-- [ ] Branching conversations (edits/regenerations) are handled — only the active branch is linearised.
-- [ ] Unit tests pass for parsing and linearisation.
-- [ ] The parser is a standalone service/class with no dependency on databases or LLMs.
+- [x] Parser can stream a multi-GB JSON file without loading it entirely into memory.
+- [x] Message trees are correctly linearised to the active thread.
+- [x] Branching conversations (edits/regenerations) are handled — only the active branch is linearised.
+- [x] Unit tests pass for parsing and linearisation.
+- [x] The parser is a standalone service/class with no dependency on databases or LLMs.
 
 ## Notes
 
