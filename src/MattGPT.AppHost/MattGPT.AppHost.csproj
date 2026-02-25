@@ -1,0 +1,16 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.1.0">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>4f6469b2-1f06-4118-8e47-74ba12c55f7b</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MattGPT.ApiService\MattGPT.ApiService.csproj" />
+    <ProjectReference Include="..\MattGPT.Web\MattGPT.Web.csproj" />
+  </ItemGroup>
+
+</Project>

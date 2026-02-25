@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/MattGPT.ApiService/MattGPT.ApiService.csproj" />
+  <Project Path="src/MattGPT.AppHost/MattGPT.AppHost.csproj" />
+  <Project Path="src/MattGPT.ServiceDefaults/MattGPT.ServiceDefaults.csproj" />
+  <Project Path="src/MattGPT.Web/MattGPT.Web.csproj" />
+</Solution>
