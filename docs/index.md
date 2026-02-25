@@ -40,7 +40,7 @@ This document is the **system of record** for project planning and issue trackin
 | 6 | 006-background-processing-service.md | Implement background processing service for import | Done | Done/ | Depends on 4, 5 |
 | 7 | 007-store-conversations-in-mongodb.md | Store parsed conversations in MongoDB | Done | Done/ | Depends on 1, 4, 6 |
 | 8 | 008-generate-conversation-summaries.md | Generate conversation summaries using LLM | Done | Done/ | Depends on 3, 7 |
-| 9 | 009-generate-embeddings.md | Generate embeddings from summaries | TODO | TODO/ | Depends on 8 |
+| 9 | 009-generate-embeddings.md | Generate embeddings from summaries | Done | Done/ | Depends on 8 |
 | 10 | 010-store-embeddings-in-qdrant.md | Store embeddings in Qdrant with metadata | TODO | TODO/ | Depends on 2, 9 |
 | 11 | 011-rag-retrieval-pipeline.md | Build RAG retrieval pipeline | TODO | TODO/ | Depends on 10 |
 | 12 | 012-chat-ui-with-rag.md | Create chat UI page for LLM interaction with RAG memory | TODO | TODO/ | Depends on 11 |
