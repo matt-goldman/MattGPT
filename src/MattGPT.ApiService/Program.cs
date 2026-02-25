@@ -39,6 +39,7 @@ builder.Services.AddSingleton(Channel.CreateBounded<ImportJobRequest>(new Bounde
 builder.Services.AddHostedService<ImportProcessingService>();
 builder.Services.AddScoped<SummarisationService>();
 builder.Services.AddScoped<EmbeddingService>();
+builder.Services.AddSingleton<IQdrantService, QdrantService>();
 
 // Allow large multipart form uploads on this service.
 builder.Services.Configure<FormOptions>(options =>
@@ -229,6 +230,34 @@ app.MapPost("/conversations/embed", async (EmbeddingService embedder, Cancellati
     });
 })
 .WithName("EmbedConversations");
+
+// Search conversations using semantic similarity.
+app.MapGet("/search", async (
+    string q,
+    IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+    IQdrantService qdrantService,
+    CancellationToken ct,
+    int limit = 5) =>
+{
+    if (string.IsNullOrWhiteSpace(q))
+        return Results.BadRequest("Query parameter 'q' is required.");
+
+    if (limit is < 1 or > 100) limit = 5;
+
+    var embeddings = await embeddingGenerator.GenerateAsync([q], cancellationToken: ct);
+    var queryVector = embeddings[0].Vector.ToArray();
+
+    var results = await qdrantService.SearchAsync(queryVector, limit, ct);
+
+    return Results.Ok(results.Select(r => new
+    {
+        conversationId = r.ConversationId,
+        score = r.Score,
+        title = r.Title,
+        summary = r.Summary,
+    }));
+})
+.WithName("SearchConversations");
 
 app.MapGet("/llm/status", async (IChatClient chatClient, IOptions<LlmOptions> options) =>
 {

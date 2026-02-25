@@ -19,15 +19,18 @@ public class EmbeddingService
 
     private readonly IConversationRepository _repository;
     private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator;
+    private readonly IQdrantService _qdrantService;
     private readonly ILogger<EmbeddingService> _logger;
 
     public EmbeddingService(
         IConversationRepository repository,
         IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+        IQdrantService qdrantService,
         ILogger<EmbeddingService> logger)
     {
         _repository = repository;
         _embeddingGenerator = embeddingGenerator;
+        _qdrantService = qdrantService;
         _logger = logger;
     }
 
@@ -106,6 +109,8 @@ public class EmbeddingService
                 ConversationProcessingStatus.Embedded,
                 ct);
 
+            await TryUpsertQdrantAsync(conversation, vector, ct);
+
             _logger.LogDebug(
                 "Embedded conversation {Id} ({Title}), dimensions: {Dims}.",
                 conversation.ConversationId, conversation.Title, vector.Length);
@@ -121,6 +126,21 @@ public class EmbeddingService
 
             await TryMarkErrorAsync(conversation.ConversationId, ct);
             return EmbedOutcome.Error;
+        }
+    }
+
+    private async Task TryUpsertQdrantAsync(StoredConversation conversation, float[] vector, CancellationToken ct)
+    {
+        try
+        {
+            await _qdrantService.UpsertAsync(conversation, vector, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed to upsert conversation {Id} into Qdrant; the embedding is stored in MongoDB.",
+                conversation.ConversationId);
         }
     }
 
