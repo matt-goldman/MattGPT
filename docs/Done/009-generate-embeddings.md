@@ -1,6 +1,6 @@
 # 009 — Generate Embeddings from Summaries
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 9
 **Dependencies:** 008 (summaries exist in MongoDB)
 
@@ -21,11 +21,11 @@ Generate vector embeddings for each conversation summary using an embeddings mod
 
 ## Acceptance Criteria
 
-- [ ] Summaries are converted to embedding vectors.
-- [ ] Embedding generation handles errors without aborting the batch.
-- [ ] `ProcessingStatus` is updated to `Embedded` on success.
-- [ ] The embedding dimensionality is consistent and matches the model configuration.
-- [ ] Progress is trackable.
+- [x] Summaries are converted to embedding vectors.
+- [x] Embedding generation handles errors without aborting the batch.
+- [x] `ProcessingStatus` is updated to `Embedded` on success.
+- [x] The embedding dimensionality is consistent and matches the model configuration.
+- [x] Progress is trackable.
 
 ## Notes
 
