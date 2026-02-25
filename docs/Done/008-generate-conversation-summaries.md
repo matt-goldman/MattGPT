@@ -35,3 +35,7 @@ For each stored conversation, use the configured LLM to generate a summary that 
 
 - For very long conversations, consider summarising in chunks and then summarising the summaries, or truncating to the most recent N messages.
 - The prompt template should be configurable or at least easy to iterate on.
+
+## Post-Completion Changes
+
+**2026-02-26 — ADR-003:** Summarisation is no longer a prerequisite for embedding or RAG retrieval. LLM summarisation at ~1 min/conversation via Ollama on CPU was prohibitively slow for 2,213+ conversations. The embedding pipeline was redesigned to work directly from conversation content, making summarisation an optional background enrichment step. If a summary exists it's included in the embedding text for potentially better quality, but it's not required. See [ADR-003](../Decisions/003-rag-pipeline-v2-embed-from-content.md).

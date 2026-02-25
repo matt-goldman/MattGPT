@@ -20,6 +20,9 @@ public interface IQdrantService
 
     /// <summary>Search for the most similar conversations to the given query vector.</summary>
     Task<IReadOnlyList<QdrantSearchResult>> SearchAsync(float[] queryVector, int limit = 5, CancellationToken ct = default);
+
+    /// <summary>Return the number of points in the conversations collection, or null if the collection doesn't exist.</summary>
+    Task<ulong?> GetPointCountAsync(CancellationToken ct = default);
 }
 
 /// <summary>
@@ -95,6 +98,16 @@ public class QdrantService : IQdrantService
         return payload.TryGetValue(key, out var value) && value.KindCase == Value.KindOneofCase.StringValue
             ? value.StringValue
             : null;
+    }
+
+    /// <inheritdoc/>
+    public async Task<ulong?> GetPointCountAsync(CancellationToken ct = default)
+    {
+        if (!await _client.CollectionExistsAsync(CollectionName, ct))
+            return null;
+
+        var info = await _client.GetCollectionInfoAsync(CollectionName, ct);
+        return info.PointsCount;
     }
 
     /// <summary>

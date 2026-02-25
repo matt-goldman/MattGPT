@@ -33,3 +33,7 @@ Add a Blazor page to the web frontend that allows users to upload their ChatGPT 
 - At this stage the backend endpoint to receive the file may be a stub that accepts the stream and returns a mock response. Full processing is wired in issue 006.
 - Consider using `InputFile` component with streaming or a chunked upload approach.
 - Large file upload configuration may need Kestrel `MaxRequestBodySize` adjustment.
+
+## Post-Completion Changes
+
+**2026-02-26 — ADR-003:** The Upload UI now shows an "Embedding" phase after import processing completes. A progress bar displays `embedded / total` conversations with error counts. The polling endpoint (`/conversations/status/{jobId}`) returns embedding status fields (`EmbeddingStatus`, `EmbeddedConversations`, `EmbeddingErrors`, etc.) tracked on the `ImportJob` model. Embedding failures are shown as warnings on the completion screen rather than blocking the user. See [ADR-003](../Decisions/003-rag-pipeline-v2-embed-from-content.md).

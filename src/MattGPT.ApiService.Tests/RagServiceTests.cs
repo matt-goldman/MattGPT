@@ -1,4 +1,5 @@
 using MattGPT.ApiService;
+using MattGPT.ApiService.Models;
 using MattGPT.ApiService.Services;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -22,21 +23,48 @@ internal sealed class FakeSearchQdrantService : IQdrantService
     public Task<IReadOnlyList<QdrantSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, CancellationToken ct = default)
         => Task.FromResult(_results);
+
+    public Task<ulong?> GetPointCountAsync(CancellationToken ct = default)
+        => Task.FromResult<ulong?>((ulong)_results.Count);
 }
 
 public class RagServiceTests
 {
     private static readonly float[] TestVector = [0.1f, 0.2f, 0.3f];
 
+    private static StoredConversation MakeConversation(string id, string title, string? summary = null, int messageCount = 2)
+    {
+        var messages = Enumerable.Range(0, messageCount)
+            .Select(i => new StoredMessage
+            {
+                Id = $"m{i}",
+                Role = i % 2 == 0 ? "user" : "assistant",
+                ContentType = "text",
+                Parts = [$"Message content {i} from {title}"],
+            })
+            .ToList();
+
+        return new StoredConversation
+        {
+            ConversationId = id,
+            Title = title,
+            Summary = summary,
+            LinearisedMessages = messages,
+            ProcessingStatus = ConversationProcessingStatus.Embedded,
+        };
+    }
+
     private static RagService CreateService(
         IReadOnlyList<QdrantSearchResult> searchResults,
         string llmResponse = "Test answer.",
-        RagOptions? ragOptions = null)
+        RagOptions? ragOptions = null,
+        FakeConversationRepository? repository = null)
     {
         var options = Options.Create(ragOptions ?? new RagOptions { TopK = 5, MinScore = 0.5f });
         return new RagService(
             new FakeEmbeddingGenerator(TestVector),
             new FakeSearchQdrantService(searchResults),
+            repository ?? new FakeConversationRepository(),
             new FakeChatClient(llmResponse),
             options,
             NullLogger<RagService>.Instance);
@@ -70,7 +98,9 @@ public class RagServiceTests
             new("c1", 0.9f, "Title 1", "Summary 1"),
             new("c2", 0.7f, "Title 2", "Summary 2"),
         };
-        var service = CreateService(results, ragOptions: new RagOptions { TopK = 5, MinScore = 0.5f });
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", "Title 1", "Summary 1"), MakeConversation("c2", "Title 2", "Summary 2")]);
+        var service = CreateService(results, ragOptions: new RagOptions { TopK = 5, MinScore = 0.5f }, repository: repo);
 
         var result = await service.ChatAsync("query");
 
@@ -87,7 +117,9 @@ public class RagServiceTests
             new("c1", 0.9f, "Title 1", "Summary 1"),
             new("c2", 0.3f, "Title 2", "Summary 2"), // below 0.5 threshold
         };
-        var service = CreateService(results, ragOptions: new RagOptions { TopK = 5, MinScore = 0.5f });
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", "Title 1", "Summary 1")]);
+        var service = CreateService(results, ragOptions: new RagOptions { TopK = 5, MinScore = 0.5f }, repository: repo);
 
         var result = await service.ChatAsync("query");
 
@@ -117,7 +149,9 @@ public class RagServiceTests
         {
             new("conv-123", 0.85f, "My Title", "My Summary"),
         };
-        var service = CreateService(results, ragOptions: new RagOptions { TopK = 5, MinScore = 0.5f });
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("conv-123", "My Title", "My Summary")]);
+        var service = CreateService(results, ragOptions: new RagOptions { TopK = 5, MinScore = 0.5f }, repository: repo);
 
         var result = await service.ChatAsync("query");
 
@@ -129,31 +163,43 @@ public class RagServiceTests
     }
 
     [Fact]
-    public void BuildPrompt_WithContext_IncludesRetrievedConversations()
+    public void BuildMessages_WithContext_IncludesRetrievedConversations()
     {
         var context = new List<QdrantSearchResult>
         {
             new("c1", 0.9f, "Test Title", "Test Summary"),
         };
+        var fullConversations = new Dictionary<string, StoredConversation>
+        {
+            ["c1"] = MakeConversation("c1", "Test Title", "Test Summary"),
+        };
 
-        var prompt = RagService.BuildPrompt("What is this?", context);
+        var messages = RagService.BuildMessages("What is this?", context, fullConversations);
 
-        Assert.Contains("Test Title", prompt);
-        Assert.Contains("Test Summary", prompt);
-        Assert.Contains("What is this?", prompt);
+        Assert.Equal(2, messages.Count);
+        Assert.Equal(ChatRole.System, messages[0].Role);
+        Assert.Equal(ChatRole.User, messages[1].Role);
+
+        var systemText = messages[0].Text!;
+        Assert.Contains("Test Title", systemText);
+        Assert.Contains("Test Summary", systemText);
+        Assert.Contains("YOUR MEMORIES", systemText);
+        Assert.Contains("Message content", systemText); // Full conversation content
+        Assert.Equal("What is this?", messages[1].Text);
     }
 
     [Fact]
-    public void BuildPrompt_WithoutContext_ContainsNoContextMessage()
+    public void BuildMessages_WithoutContext_ContainsNoMemoriesMessage()
     {
-        var prompt = RagService.BuildPrompt("Any query", []);
+        var messages = RagService.BuildMessages("Any query", []);
 
-        Assert.Contains("No relevant past conversations were found", prompt);
-        Assert.Contains("Any query", prompt);
+        Assert.Equal(2, messages.Count);
+        Assert.Contains("No relevant memories", messages[0].Text!);
+        Assert.Equal("Any query", messages[1].Text);
     }
 
     [Fact]
-    public void BuildPrompt_MultipleContextItems_AllIncluded()
+    public void BuildMessages_MultipleContextItems_AllIncluded()
     {
         var context = new List<QdrantSearchResult>
         {
@@ -162,27 +208,76 @@ public class RagServiceTests
             new("c3", 0.7f, "Title C", "Summary C"),
         };
 
-        var prompt = RagService.BuildPrompt("query", context);
+        var messages = RagService.BuildMessages("query", context);
 
-        Assert.Contains("Title A", prompt);
-        Assert.Contains("Title B", prompt);
-        Assert.Contains("Title C", prompt);
-        Assert.Contains("Summary A", prompt);
-        Assert.Contains("Summary B", prompt);
-        Assert.Contains("Summary C", prompt);
+        var systemText = messages[0].Text!;
+        Assert.Contains("Title A", systemText);
+        Assert.Contains("Title B", systemText);
+        Assert.Contains("Title C", systemText);
+        Assert.Contains("Summary A", systemText);
+        Assert.Contains("Summary B", systemText);
+        Assert.Contains("Summary C", systemText);
     }
 
     [Fact]
-    public void BuildPrompt_ContextItemWithNoSummary_ShowsPlaceholder()
+    public void BuildMessages_SystemPromptFramesContextAsMemory()
     {
         var context = new List<QdrantSearchResult>
         {
-            new("c1", 0.9f, "Title Only", null),
+            new("c1", 0.9f, "Title", "Summary"),
         };
 
-        var prompt = RagService.BuildPrompt("query", context);
+        var messages = RagService.BuildMessages("query", context);
 
-        Assert.Contains("No summary available", prompt);
+        var systemText = messages[0].Text!;
+        Assert.Contains("recollections", systemText);
+        Assert.Contains("memories", systemText, StringComparison.OrdinalIgnoreCase);
+        // The prompt should frame context as the assistant's own memories,
+        // not as external data to be consulted.
+        Assert.DoesNotContain("retrieved to help answer", systemText);
+    }
+
+    [Fact]
+    public void BuildMessages_IncludesFullConversationExcerpt()
+    {
+        var context = new List<QdrantSearchResult>
+        {
+            new("c1", 0.9f, "Coding Help", "Helped with Python"),
+        };
+        var fullConversations = new Dictionary<string, StoredConversation>
+        {
+            ["c1"] = MakeConversation("c1", "Coding Help", "Helped with Python", messageCount: 4),
+        };
+
+        var messages = RagService.BuildMessages("query", context, fullConversations);
+
+        var systemText = messages[0].Text!;
+        Assert.Contains("Conversation excerpt:", systemText);
+        Assert.Contains("User:", systemText);
+        Assert.Contains("Assistant:", systemText);
+    }
+
+    [Fact]
+    public void BuildConversationExcerpt_TruncatesLongConversations()
+    {
+        var conv = new StoredConversation
+        {
+            ConversationId = "long",
+            Title = "Long conv",
+            LinearisedMessages = Enumerable.Range(0, 200)
+                .Select(i => new StoredMessage
+                {
+                    Id = $"m{i}",
+                    Role = i % 2 == 0 ? "user" : "assistant",
+                    ContentType = "text",
+                    Parts = [$"This is a moderately long message number {i} that should eventually cause truncation when enough messages accumulate."],
+                })
+                .ToList(),
+        };
+
+        var excerpt = RagService.BuildConversationExcerpt(conv);
+
+        Assert.True(excerpt.Length <= RagService.MaxExcerptCharsPerConversation + 100); // small buffer for final line
+        Assert.Contains("[conversation truncated]", excerpt);
     }
 }
-

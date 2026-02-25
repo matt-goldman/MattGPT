@@ -1,3 +1,4 @@
+using System.Text;
 using MattGPT.ApiService.Models;
 using Microsoft.Extensions.AI;
 
@@ -9,13 +10,27 @@ namespace MattGPT.ApiService.Services;
 public record EmbeddingResult(int Embedded, int Errors, int Skipped);
 
 /// <summary>
-/// Generates embedding vectors for conversations that have been summarised but not yet embedded.
-/// Processes conversations in batches and stores the embedding on the MongoDB document.
+/// Progress snapshot reported after each conversation is processed during embedding.
+/// </summary>
+public record EmbeddingProgress(int Embedded, int Errors, int Skipped);
+
+/// <summary>
+/// Generates embedding vectors for imported conversations and stores them in Qdrant.
+/// Embeds directly from conversation content (title + messages), so LLM summarisation is
+/// NOT required before embedding. Conversations with a summary use the summary as part of
+/// the embedding text for better quality; conversations without one are still embedded.
 /// </summary>
 public class EmbeddingService
 {
     /// <summary>Number of conversations to load per batch from MongoDB.</summary>
     private const int BatchSize = 50;
+
+    /// <summary>Maximum characters of conversation content to include for embedding.</summary>
+    internal const int MaxEmbeddingTextChars = 8_000;
+
+    /// <summary>Statuses eligible for embedding — both freshly imported and summarised conversations.</summary>
+    private static readonly ConversationProcessingStatus[] EmbeddableStatuses =
+        [ConversationProcessingStatus.Imported, ConversationProcessingStatus.Summarised];
 
     private readonly IConversationRepository _repository;
     private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator;
@@ -35,11 +50,14 @@ public class EmbeddingService
     }
 
     /// <summary>
-    /// Processes all conversations with <see cref="ConversationProcessingStatus.Summarised"/> status,
-    /// generates an embedding vector for each summary, and updates MongoDB.
+    /// Processes all conversations with <see cref="ConversationProcessingStatus.Imported"/> or
+    /// <see cref="ConversationProcessingStatus.Summarised"/> status, generates an embedding
+    /// vector from conversation content, and stores it in MongoDB and Qdrant.
     /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <param name="progress">Optional progress reporter, invoked after each conversation.</param>
     /// <returns>An <see cref="EmbeddingResult"/> with counts of successes and errors.</returns>
-    public async Task<EmbeddingResult> EmbedAsync(CancellationToken ct = default)
+    public async Task<EmbeddingResult> EmbedAsync(CancellationToken ct = default, IProgress<EmbeddingProgress>? progress = null)
     {
         int embedded = 0;
         int errors = 0;
@@ -47,8 +65,7 @@ public class EmbeddingService
 
         while (!ct.IsCancellationRequested)
         {
-            var batch = await _repository.GetByStatusAsync(
-                ConversationProcessingStatus.Summarised, BatchSize, ct);
+            var batch = await _repository.GetByStatusesAsync(EmbeddableStatuses, BatchSize, ct);
 
             if (batch.Count == 0)
                 break;
@@ -67,6 +84,8 @@ public class EmbeddingService
                     case EmbedOutcome.Error:   errors++;   break;
                     case EmbedOutcome.Skipped: skipped++;  break;
                 }
+
+                progress?.Report(new EmbeddingProgress(embedded, errors, skipped));
             }
         }
 
@@ -82,10 +101,12 @@ public class EmbeddingService
     private async Task<EmbedOutcome> EmbedConversationAsync(
         StoredConversation conversation, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(conversation.Summary))
+        var embeddingText = BuildEmbeddingText(conversation);
+
+        if (string.IsNullOrWhiteSpace(embeddingText))
         {
             _logger.LogDebug(
-                "Conversation {Id} has no summary; marking as Embedded with null vector.",
+                "Conversation {Id} has no embeddable content; marking as Embedded with null vector.",
                 conversation.ConversationId);
 
             await _repository.UpdateEmbeddingAsync(
@@ -99,7 +120,7 @@ public class EmbeddingService
         try
         {
             var result = await _embeddingGenerator.GenerateAsync(
-                [conversation.Summary], cancellationToken: ct);
+                [embeddingText], cancellationToken: ct);
 
             var vector = result[0].Vector.ToArray();
 
@@ -112,8 +133,8 @@ public class EmbeddingService
             await TryUpsertQdrantAsync(conversation, vector, ct);
 
             _logger.LogDebug(
-                "Embedded conversation {Id} ({Title}), dimensions: {Dims}.",
-                conversation.ConversationId, conversation.Title, vector.Length);
+                "Embedded conversation {Id} ({Title}), dimensions: {Dims}, text length: {TextLen}.",
+                conversation.ConversationId, conversation.Title, vector.Length, embeddingText.Length);
 
             return EmbedOutcome.Success;
         }
@@ -127,6 +148,45 @@ public class EmbeddingService
             await TryMarkErrorAsync(conversation.ConversationId, ct);
             return EmbedOutcome.Error;
         }
+    }
+
+    /// <summary>
+    /// Builds the text that will be embedded. Uses the summary if available (higher quality),
+    /// but always includes the title and message content so that freshly imported conversations
+    /// can be embedded without waiting for LLM summarisation.
+    /// </summary>
+    internal static string BuildEmbeddingText(StoredConversation conversation)
+    {
+        var sb = new StringBuilder();
+
+        if (!string.IsNullOrWhiteSpace(conversation.Title))
+            sb.Append("Title: ").AppendLine(conversation.Title);
+
+        if (!string.IsNullOrWhiteSpace(conversation.Summary))
+            sb.Append("Summary: ").AppendLine(conversation.Summary);
+
+        // Append message content up to the character limit.
+        foreach (var msg in conversation.LinearisedMessages)
+        {
+            var content = string.Join(" ", msg.Parts);
+            if (string.IsNullOrWhiteSpace(content))
+                continue;
+
+            var line = $"{msg.Role}: {content}\n";
+
+            if (sb.Length + line.Length > MaxEmbeddingTextChars)
+            {
+                // Fit as much as we can.
+                var remaining = MaxEmbeddingTextChars - sb.Length;
+                if (remaining > 20)
+                    sb.Append(line.AsSpan(0, remaining));
+                break;
+            }
+
+            sb.Append(line);
+        }
+
+        return sb.ToString().Trim();
     }
 
     private async Task TryUpsertQdrantAsync(StoredConversation conversation, float[] vector, CancellationToken ct)

@@ -32,3 +32,7 @@ Generate vector embeddings for each conversation summary using an embeddings mod
 - Common embedding models: `text-embedding-ada-002` (Azure OpenAI), `nomic-embed-text` (Ollama), or similar.
 - Embedding dimensionality will depend on the model — ensure Qdrant collection is configured to match.
 - If issue 010 is implemented simultaneously, embedding + storage can be combined into a single step.
+
+## Post-Completion Changes
+
+**2026-02-26 — ADR-003:** `EmbeddingService` was rewritten to embed directly from conversation content (title + optional summary + messages, up to 8,000 chars) rather than requiring LLM-generated summaries. This eliminates the dependency on issue 008 (summarisation) for embedding, making conversations searchable immediately after import. Both `Imported` and `Summarised` statuses are now eligible for embedding. Auto-embedding triggers automatically after import completes. See [ADR-003](../Decisions/003-rag-pipeline-v2-embed-from-content.md).

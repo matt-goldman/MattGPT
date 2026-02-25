@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="MattGPT.ApiService.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MattGPT.ServiceDefaults\MattGPT.ServiceDefaults.csproj" />
   </ItemGroup>
 
