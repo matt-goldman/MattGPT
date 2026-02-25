@@ -69,7 +69,7 @@ Significant architectural decisions must be recorded as ADRs in `docs/Decisions/
 
 ## Project Overview
 
-**MattGPT** imports an entire ChatGPT conversation history (~148 MB, ~2,213 conversations) and makes it available as RAG memory for any LLM. See [README.md](../README.md) and [conversation-restore-outline.md](../conversation-restore-outline.md) for full context.
+**MattGPT** imports an entire ChatGPT conversation history (~148 MB, ~2,213 conversations) and makes it available as RAG memory for any LLM. See [README.md](../README.md) and [conversation-restore-outline.md](conversation-restore-outline.md) for full context.
 
 ### Key Components (target architecture)
 
