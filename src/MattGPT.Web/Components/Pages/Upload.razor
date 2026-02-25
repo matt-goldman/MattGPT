@@ -55,13 +55,33 @@
                     <p class="text-sm text-default-400">@_uploadProgress% complete</p>
                 </div>
             }
+            else if (_status == UploadStatus.Processing)
+            {
+                <div class="flex flex-col items-center py-8 space-y-4">
+                    <LumexSpinner Color="@ThemeColor.Primary" Size="@Size.Large" />
+                    <p class="text-default-600 font-medium">@_statusMessage</p>
+                    <p class="text-sm text-default-500">
+                        Conversations processed: <span class="font-semibold">@_processedConversations</span>
+                        @if (_errorCount > 0)
+                        {
+                            <span class="text-danger ml-2">(@_errorCount errors)</span>
+                        }
+                    </p>
+                </div>
+            }
             else if (_status == UploadStatus.Complete)
             {
                 <div class="flex flex-col items-center py-8 space-y-4">
                     <div class="w-16 h-16 rounded-full bg-success-100 flex items-center justify-center text-3xl">✓</div>
-                    <LumexAlert Color="@ThemeColor.Success" Title="Upload complete">
+                    <LumexAlert Color="@ThemeColor.Success" Title="Import complete">
                         @_statusMessage
                     </LumexAlert>
+                    @if (_errorCount > 0)
+                    {
+                        <LumexAlert Color="@ThemeColor.Warning" Title="Some conversations had errors">
+                            @_errorCount conversation(s) could not be parsed and were skipped.
+                        </LumexAlert>
+                    }
                     <LumexButton Color="@ThemeColor.Default" Variant="@Variant.Outlined" OnClick="Reset">
                         Upload another file
                     </LumexButton>
@@ -72,13 +92,16 @@
 </div>
 
 @code {
-    private enum UploadStatus { Idle, Uploading, Complete, Error }
+    private enum UploadStatus { Idle, Uploading, Processing, Complete, Error }
 
     private IBrowserFile? _selectedFile;
     private UploadStatus _status = UploadStatus.Idle;
     private string _statusMessage = string.Empty;
     private string _errorMessage = string.Empty;
     private int _uploadProgress = 0;
+    private int _processedConversations = 0;
+    private int _errorCount = 0;
+    private string? _jobId;
 
     private const long MaxFileSize = 209_715_200; // 200 MB
 
@@ -131,14 +154,19 @@
             var client = HttpClients.CreateClient("apiservice");
             var response = await client.PostAsync("/conversations/upload", content);
 
-            _uploadProgress = 90;
+            _uploadProgress = 100;
             StateHasChanged();
 
             if (response.IsSuccessStatusCode)
             {
-                _uploadProgress = 100;
-                _status = UploadStatus.Complete;
-                _statusMessage = "File uploaded successfully. Processing will begin in the background.";
+                var result = await response.Content.ReadFromJsonAsync<UploadResponse>();
+                _jobId = result?.JobId;
+                _status = UploadStatus.Processing;
+                _statusMessage = "Processing conversations...";
+                StateHasChanged();
+
+                if (_jobId is not null)
+                    await PollProgressAsync(_jobId, client);
             }
             else
             {
@@ -154,6 +182,47 @@
         }
     }
 
+    private async Task PollProgressAsync(string jobId, HttpClient client)
+    {
+        while (true)
+        {
+            await Task.Delay(2000);
+
+            try
+            {
+                var resp = await client.GetAsync($"/conversations/status/{jobId}");
+                if (!resp.IsSuccessStatusCode) break;
+
+                var jobStatus = await resp.Content.ReadFromJsonAsync<JobStatusResponse>();
+                if (jobStatus is null) break;
+
+                _processedConversations = jobStatus.ProcessedConversations;
+                _errorCount = jobStatus.ErrorCount;
+
+                if (jobStatus.Status == "Complete")
+                {
+                    _status = UploadStatus.Complete;
+                    _statusMessage = $"Import complete. {_processedConversations} conversation(s) processed.";
+                    StateHasChanged();
+                    return;
+                }
+                else if (jobStatus.Status == "Failed")
+                {
+                    _status = UploadStatus.Error;
+                    _errorMessage = jobStatus.ErrorMessage ?? "Processing failed for an unknown reason.";
+                    StateHasChanged();
+                    return;
+                }
+            }
+            catch
+            {
+                // Polling errors are non-fatal; keep trying.
+            }
+
+            StateHasChanged();
+        }
+    }
+
     private void Reset()
     {
         _selectedFile = null;
@@ -161,6 +230,9 @@
         _statusMessage = string.Empty;
         _errorMessage = string.Empty;
         _uploadProgress = 0;
+        _processedConversations = 0;
+        _errorCount = 0;
+        _jobId = null;
     }
 
     private static string FormatBytes(long bytes)
@@ -169,4 +241,14 @@
         if (bytes < 1_048_576) return $"{bytes / 1024.0:F1} KB";
         return $"{bytes / 1_048_576.0:F1} MB";
     }
+
+    private record UploadResponse(string JobId);
+
+    private record JobStatusResponse(
+        string JobId,
+        string Status,
+        int ProcessedConversations,
+        int ErrorCount,
+        string? ErrorMessage);
 }
+
