@@ -1,6 +1,6 @@
 # 001 — Add MongoDB Integration to AppHost
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 1
 **Dependencies:** None
 
