@@ -40,6 +40,8 @@ builder.Services.AddHostedService<ImportProcessingService>();
 builder.Services.AddScoped<SummarisationService>();
 builder.Services.AddScoped<EmbeddingService>();
 builder.Services.AddSingleton<IQdrantService, QdrantService>();
+builder.Services.AddScoped<RagService>();
+builder.Services.Configure<RagOptions>(builder.Configuration.GetSection(RagOptions.SectionName));
 
 // Allow large multipart form uploads on this service.
 builder.Services.Configure<FormOptions>(options =>
@@ -289,6 +291,28 @@ app.MapGet("/llm/status", async (IChatClient chatClient, IOptions<LlmOptions> op
 })
 .WithName("GetLlmStatus");
 
+// RAG chat endpoint — generates a response augmented with relevant past conversations.
+app.MapPost("/chat", async (ChatRequest request, RagService ragService, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Message))
+        return Results.BadRequest("'message' is required.");
+
+    var result = await ragService.ChatAsync(request.Message, ct);
+
+    return Results.Ok(new
+    {
+        answer = result.Answer,
+        sources = result.Sources.Select(s => new
+        {
+            conversationId = s.ConversationId,
+            title = s.Title,
+            summary = s.Summary,
+            score = s.Score,
+        }),
+    });
+})
+.WithName("Chat");
+
 app.MapDefaultEndpoints();
 
 app.Run();
@@ -297,3 +321,5 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
+
+record ChatRequest(string Message);
