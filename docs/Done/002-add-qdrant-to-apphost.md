@@ -1,6 +1,6 @@
 # 002 — Add Qdrant Vector DB Integration to AppHost
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 2
 **Dependencies:** None
 
