@@ -37,6 +37,7 @@ The Aspire dashboard will be available at the URL printed on startup. All servic
 - **One `In Progress` issue per agent** at a time.
 - **Do not skip sequence numbers** — dependencies are implicit in the ordering. If blocked, note the blocker and move to the next unblocked issue.
 - **Issue files must be self-contained** — any agent should be able to pick one up cold.
+- **All tests must pass** before requesting review on a PR. Run `dotnet test MattGPT.slnx` and confirm there are no failures. This is enforced by the CI workflow on every pull request.
 
 ## Additional Agent Instructions
 
@@ -93,6 +94,7 @@ MattGPT/
 
 - Validate changes by running the Aspire AppHost and checking the dashboard.
 - Unit tests should be added for pure logic (parsers, transformers) but are not required for integration/UI code in the MVP phase.
+- **All tests must pass** before requesting review. Run `dotnet test MattGPT.slnx` to verify.
 
 ### Commits
 
