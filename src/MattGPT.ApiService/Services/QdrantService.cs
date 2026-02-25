@@ -8,6 +8,11 @@ namespace MattGPT.ApiService.Services;
 public record QdrantSearchResult(string ConversationId, float Score, string? Title, string? Summary);
 
 /// <summary>Manages storage and similarity search of conversation embeddings in Qdrant.</summary>
+/// <remarks>
+/// TODO: Replace with a provider-agnostic <c>IVectorStore</c> abstraction before implementing
+/// config-driven vector store provider selection (analogous to <see cref="LlmOptions"/>).
+/// <c>QdrantService</c> would become one of several concrete implementations.
+/// </remarks>
 public interface IQdrantService
 {
     /// <summary>Upsert a conversation embedding into Qdrant with its metadata payload.</summary>
