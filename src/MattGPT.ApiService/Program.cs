@@ -30,6 +30,7 @@ builder.AddQdrantClient("qdrant");
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<ConversationParser>();
 builder.Services.AddSingleton<ImportJobStore>();
+builder.Services.AddSingleton<IConversationRepository, ConversationRepository>();
 builder.Services.AddSingleton(Channel.CreateBounded<ImportJobRequest>(new BoundedChannelOptions(50)
 {
     FullMode = BoundedChannelFullMode.Wait,
@@ -173,6 +174,33 @@ app.MapGet("/conversations/status/{jobId}", (string jobId, ImportJobStore jobSto
     });
 })
 .WithName("GetConversationImportStatus");
+
+// Paginated list of stored conversations.
+app.MapGet("/conversations", async (IConversationRepository repository, int page = 1, int pageSize = 20) =>
+{
+    if (page < 1) page = 1;
+    if (pageSize is < 1 or > 100) pageSize = 20;
+
+    var (items, total) = await repository.GetPageAsync(page, pageSize);
+    return Results.Ok(new
+    {
+        page,
+        pageSize,
+        total,
+        items = items.Select(c => new
+        {
+            conversationId = c.ConversationId,
+            title = c.Title,
+            createTime = c.CreateTime,
+            updateTime = c.UpdateTime,
+            defaultModelSlug = c.DefaultModelSlug,
+            messageCount = c.LinearisedMessages.Count,
+            importTimestamp = c.ImportTimestamp,
+            processingStatus = c.ProcessingStatus.ToString(),
+        }),
+    });
+})
+.WithName("GetConversations");
 
 app.MapGet("/llm/status", async (IChatClient chatClient, IOptions<LlmOptions> options) =>
 {

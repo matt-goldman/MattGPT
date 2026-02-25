@@ -28,6 +28,7 @@ The Aspire dashboard will be available at the URL printed on startup. All servic
 4. Implement the issue. Commit early and often.
 5. When complete:
    - Move the issue file from `docs/TODO/` to `docs/Done/`.
+   - **Update the issue file itself:** set `**Status:**` to `Done` and tick all acceptance criteria checkboxes (`- [ ]` → `- [x]`).
    - Update the index table: set the status to `Done` and the location to `Done/`.
 6. If you make a significant architectural decision, create an ADR in `docs/Decisions/` using the template there (`000-template.md`).
 
@@ -37,6 +38,7 @@ The Aspire dashboard will be available at the URL printed on startup. All servic
 - **One `In Progress` issue per agent** at a time.
 - **Do not skip sequence numbers** — dependencies are implicit in the ordering. If blocked, note the blocker and move to the next unblocked issue.
 - **Issue files must be self-contained** — any agent should be able to pick one up cold.
+- **Update the issue file when done** — set `**Status:** Done` and tick all acceptance criteria checkboxes before closing the issue.
 - **All tests must pass** before requesting review on a PR. Run `dotnet test MattGPT.slnx` and confirm there are no failures. This is enforced by the CI workflow on every pull request.
 
 ## Additional Agent Instructions
