@@ -33,7 +33,7 @@ This document is the **system of record** for project planning and issue trackin
 |-----|-----------|-------|--------|----------|-------|
 | 1 | 001-add-mongodb-to-apphost.md | Add MongoDB integration to AppHost | Done | Done/ | |
 | 2 | 002-add-qdrant-to-apphost.md | Add Qdrant vector DB integration to AppHost | Done | Done/ | |
-| 3 | 003-configure-llm-endpoint.md | Config-driven LLM endpoint selection | TODO | TODO/ | Depends on 1 |
+| 3 | 003-configure-llm-endpoint.md | Config-driven LLM endpoint selection | Done | Done/ | Depends on 1 |
 | 4 | 004-chatgpt-json-parser.md | Build ChatGPT JSON parser & conversation lineariser | Done | Done/ | |
 | 5 | 005-file-upload-ui.md | Create file upload UI page with progress tracking | TODO | TODO/ | |
 | 6 | 006-background-processing-service.md | Implement background processing service for import | TODO | TODO/ | Depends on 4, 5 |
