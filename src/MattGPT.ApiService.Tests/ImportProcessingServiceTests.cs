@@ -10,6 +10,12 @@ namespace MattGPT.ApiService.Tests;
 internal sealed class FakeConversationRepository : IConversationRepository
 {
     public List<StoredConversation> Upserted { get; } = new();
+    public List<(string Id, string? Summary, ConversationProcessingStatus Status)> SummaryUpdates { get; } = new();
+
+    private List<StoredConversation> _conversations = new();
+
+    public void Seed(IEnumerable<StoredConversation> conversations)
+        => _conversations.AddRange(conversations);
 
     public Task UpsertAsync(StoredConversation conversation, CancellationToken ct = default)
     {
@@ -19,6 +25,27 @@ internal sealed class FakeConversationRepository : IConversationRepository
 
     public Task<(List<StoredConversation> Items, long Total)> GetPageAsync(int page, int pageSize, CancellationToken ct = default)
         => Task.FromResult((new List<StoredConversation>(), 0L));
+
+    public Task<List<StoredConversation>> GetByStatusAsync(ConversationProcessingStatus status, int maxCount, CancellationToken ct = default)
+    {
+        var items = _conversations
+            .Where(c => c.ProcessingStatus == status)
+            .Take(maxCount)
+            .ToList();
+        return Task.FromResult(items);
+    }
+
+    public Task UpdateSummaryAsync(string conversationId, string? summary, ConversationProcessingStatus status, CancellationToken ct = default)
+    {
+        SummaryUpdates.Add((conversationId, summary, status));
+        var conv = _conversations.FirstOrDefault(c => c.ConversationId == conversationId);
+        if (conv is not null)
+        {
+            conv.Summary = summary;
+            conv.ProcessingStatus = status;
+        }
+        return Task.CompletedTask;
+    }
 }
 
 public class ImportJobStoreTests

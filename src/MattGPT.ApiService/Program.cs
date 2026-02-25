@@ -37,6 +37,7 @@ builder.Services.AddSingleton(Channel.CreateBounded<ImportJobRequest>(new Bounde
     SingleReader = true,
 }));
 builder.Services.AddHostedService<ImportProcessingService>();
+builder.Services.AddScoped<SummarisationService>();
 
 // Allow large multipart form uploads on this service.
 builder.Services.Configure<FormOptions>(options =>
@@ -201,6 +202,19 @@ app.MapGet("/conversations", async (IConversationRepository repository, int page
     });
 })
 .WithName("GetConversations");
+
+// Trigger LLM summarisation for all imported conversations.
+app.MapPost("/conversations/summarise", async (SummarisationService summariser, CancellationToken ct) =>
+{
+    var result = await summariser.SummariseAsync(ct);
+    return Results.Ok(new
+    {
+        summarised = result.Summarised,
+        errors = result.Errors,
+        skipped = result.Skipped,
+    });
+})
+.WithName("SummariseConversations");
 
 app.MapGet("/llm/status", async (IChatClient chatClient, IOptions<LlmOptions> options) =>
 {
