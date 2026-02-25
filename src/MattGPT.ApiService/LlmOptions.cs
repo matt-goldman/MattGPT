@@ -28,4 +28,14 @@ public class LlmOptions
     /// API key for Azure OpenAI or Foundry Local. Not required for Ollama.
     /// </summary>
     public string? ApiKey { get; set; }
+
+    /// <summary>
+    /// Aspire connection string name for the chat model (set automatically by the AppHost).
+    /// </summary>
+    public string? ChatConnectionName { get; set; }
+
+    /// <summary>
+    /// Aspire connection string name for the embedding model (set automatically by the AppHost).
+    /// </summary>
+    public string? EmbeddingConnectionName { get; set; }
 }
