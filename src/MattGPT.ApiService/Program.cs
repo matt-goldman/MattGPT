@@ -1,3 +1,10 @@
+using Azure.AI.OpenAI;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
+using MattGPT.ApiService;
+using OpenAI;
+using System.ClientModel;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add service defaults & Aspire client integrations.
@@ -15,6 +22,43 @@ builder.Services.AddSingleton<MattGPT.ApiService.Services.ConversationParser>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// Register LLM services based on configuration.
+var llmOptions = builder.Configuration.GetSection(LlmOptions.SectionName).Get<LlmOptions>() ?? new LlmOptions();
+builder.Services.Configure<LlmOptions>(builder.Configuration.GetSection(LlmOptions.SectionName));
+
+var embeddingModelId = llmOptions.EmbeddingModelId ?? llmOptions.ModelId;
+
+switch (llmOptions.Provider.ToLowerInvariant())
+{
+    case "ollama":
+        var ollamaEndpoint = new Uri(llmOptions.Endpoint);
+        builder.Services.AddChatClient(new OllamaChatClient(ollamaEndpoint, llmOptions.ModelId));
+        builder.Services.AddEmbeddingGenerator(new OllamaEmbeddingGenerator(ollamaEndpoint, embeddingModelId));
+        break;
+
+    case "foundrylocal":
+        // FoundryLocal uses an OpenAI-compatible API. Local servers do not validate
+        // the API key, but the SDK requires a non-null value. Use a placeholder if
+        // none is configured; production deployments should set LLM:ApiKey explicitly.
+        var foundryClient = new OpenAIClient(
+            new ApiKeyCredential(llmOptions.ApiKey ?? "local"),
+            new OpenAIClientOptions { Endpoint = new Uri(llmOptions.Endpoint) });
+        builder.Services.AddChatClient(foundryClient.GetChatClient(llmOptions.ModelId).AsIChatClient());
+        builder.Services.AddEmbeddingGenerator(foundryClient.GetEmbeddingClient(embeddingModelId).AsIEmbeddingGenerator());
+        break;
+
+    case "azureopenai":
+        var azureClient = new AzureOpenAIClient(
+            new Uri(llmOptions.Endpoint),
+            new ApiKeyCredential(llmOptions.ApiKey ?? throw new InvalidOperationException("LLM:ApiKey is required for AzureOpenAI provider.")));
+        builder.Services.AddChatClient(azureClient.GetChatClient(llmOptions.ModelId).AsIChatClient());
+        builder.Services.AddEmbeddingGenerator(azureClient.GetEmbeddingClient(embeddingModelId).AsIEmbeddingGenerator());
+        break;
+
+    default:
+        throw new InvalidOperationException($"Unsupported LLM provider: '{llmOptions.Provider}'. Supported values: Ollama, FoundryLocal, AzureOpenAI.");
+}
 
 var app = builder.Build();
 
@@ -43,6 +87,36 @@ app.MapGet("/weatherforecast", () =>
     return forecast;
 })
 .WithName("GetWeatherForecast");
+
+app.MapGet("/llm/status", async (IChatClient chatClient, IOptions<LlmOptions> options) =>
+{
+    var opts = options.Value;
+    bool reachable;
+    string? error = null;
+
+    try
+    {
+        // Send a minimal prompt with a short timeout to test reachability.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var response = await chatClient.GetResponseAsync("ping", new ChatOptions { MaxOutputTokens = 1 }, cts.Token);
+        reachable = response is not null;
+    }
+    catch (Exception ex)
+    {
+        reachable = false;
+        error = ex.Message;
+    }
+
+    return Results.Ok(new
+    {
+        provider = opts.Provider,
+        modelId = opts.ModelId,
+        endpoint = opts.Endpoint,
+        reachable,
+        error
+    });
+})
+.WithName("GetLlmStatus");
 
 app.MapDefaultEndpoints();
 

@@ -1,6 +1,6 @@
 # 003 — Config-Driven LLM Endpoint Selection
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 3
 **Dependencies:** 001 (MongoDB must be available for later integration, but LLM config itself is independent)
 
