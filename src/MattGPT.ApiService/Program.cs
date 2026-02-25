@@ -40,6 +40,31 @@ app.MapGet("/weatherforecast", () =>
 })
 .WithName("GetWeatherForecast");
 
+// Stub endpoint for conversation file upload (full processing wired in issue 006).
+app.MapPost("/conversations/upload", async (HttpRequest request) =>
+{
+    if (!request.HasFormContentType)
+        return Results.BadRequest("Expected multipart/form-data.");
+
+    var form = await request.ReadFormAsync();
+    var file = form.Files.GetFile("file");
+
+    if (file is null)
+        return Results.BadRequest("No file provided.");
+
+    if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        return Results.BadRequest("Only .json files are accepted.");
+
+    // Drain the stream to simulate receiving the full file.
+    await using var stream = file.OpenReadStream();
+    await stream.CopyToAsync(Stream.Null);
+
+    return Results.Accepted("/conversations/upload", new { message = "File received. Processing will begin shortly.", fileName = file.FileName, sizeBytes = file.Length });
+})
+.WithName("UploadConversations")
+.DisableAntiforgery();
+
+
 app.MapDefaultEndpoints();
 
 app.Run();

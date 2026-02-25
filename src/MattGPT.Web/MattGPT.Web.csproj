@@ -14,4 +14,8 @@
     <PackageReference Include="LumexUI" Version="2.2.1" />
   </ItemGroup>
 
+  <Target Name="BuildTailwindCSS" BeforeTargets="Build">
+    <Exec Command="npm run css:build" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
 </Project>
