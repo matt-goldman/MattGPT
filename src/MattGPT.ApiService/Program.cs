@@ -38,6 +38,7 @@ builder.Services.AddSingleton(Channel.CreateBounded<ImportJobRequest>(new Bounde
 }));
 builder.Services.AddHostedService<ImportProcessingService>();
 builder.Services.AddScoped<SummarisationService>();
+builder.Services.AddScoped<EmbeddingService>();
 
 // Allow large multipart form uploads on this service.
 builder.Services.Configure<FormOptions>(options =>
@@ -215,6 +216,19 @@ app.MapPost("/conversations/summarise", async (SummarisationService summariser, 
     });
 })
 .WithName("SummariseConversations");
+
+// Trigger embedding generation for all summarised conversations.
+app.MapPost("/conversations/embed", async (EmbeddingService embedder, CancellationToken ct) =>
+{
+    var result = await embedder.EmbedAsync(ct);
+    return Results.Ok(new
+    {
+        embedded = result.Embedded,
+        errors = result.Errors,
+        skipped = result.Skipped,
+    });
+})
+.WithName("EmbedConversations");
 
 app.MapGet("/llm/status", async (IChatClient chatClient, IOptions<LlmOptions> options) =>
 {
