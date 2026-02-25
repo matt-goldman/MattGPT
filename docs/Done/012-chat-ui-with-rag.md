@@ -1,6 +1,6 @@
 # 012 — Create Chat UI Page for LLM Interaction with RAG Memory
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 12
 **Dependencies:** 011 (RAG pipeline)
 
@@ -22,11 +22,11 @@ Add a Blazor page to the web frontend that provides a chat interface for interac
 
 ## Acceptance Criteria
 
-- [ ] A `/chat` page exists and is accessible from the nav menu.
-- [ ] Users can type messages and receive LLM responses augmented with RAG memory.
-- [ ] Retrieved source conversations are displayed alongside each response.
-- [ ] The chat supports multi-turn conversation within a session.
-- [ ] Loading states and errors are handled gracefully in the UI.
+- [x] A `/chat` page exists and is accessible from the nav menu.
+- [x] Users can type messages and receive LLM responses augmented with RAG memory.
+- [x] Retrieved source conversations are displayed alongside each response.
+- [x] The chat supports multi-turn conversation within a session.
+- [x] Loading states and errors are handled gracefully in the UI.
 
 ## Notes
 
