@@ -1,0 +1,1136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ChatGPT Conversation Export",
+  "description": "Schema for the conversations.json file exported from OpenAI's ChatGPT. The root is an array of Conversation objects. ~148MB / ~2213 conversations in this export.",
+  "type": "array",
+  "items": {
+    "$ref": "#/definitions/Conversation"
+  },
+  "definitions": {
+    "Conversation": {
+      "type": "object",
+      "description": "A single conversation (chat thread). Messages are stored in a tree structure via the 'mapping' field, not a flat list — this supports branching (edits/regenerations).",
+      "required": ["title", "mapping", "id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique conversation identifier (UUID)."
+        },
+        "conversation_id": {
+          "type": "string",
+          "description": "Conversation identifier (often matches 'id')."
+        },
+        "title": {
+          "type": ["string", "null"],
+          "description": "Human-readable title for the conversation, typically auto-generated from the first user message."
+        },
+        "create_time": {
+          "type": ["number", "null"],
+          "description": "Unix timestamp (float) when the conversation was created."
+        },
+        "update_time": {
+          "type": ["number", "null"],
+          "description": "Unix timestamp (float) when the conversation was last updated."
+        },
+        "mapping": {
+          "type": "object",
+          "description": "A tree of message nodes keyed by node ID (UUID strings). Each node contains an optional message and parent/children pointers, forming a directed tree. The root node typically has id 'client-created-root' with a null message.",
+          "additionalProperties": {
+            "$ref": "#/definitions/MappingNode"
+          }
+        },
+        "current_node": {
+          "type": ["string", "null"],
+          "description": "The ID of the currently active leaf node in the conversation tree (the end of the visible thread)."
+        },
+        "moderation_results": {
+          "type": "array",
+          "description": "Moderation/content-policy results. Typically empty.",
+          "items": {}
+        },
+        "plugin_ids": {
+          "type": ["array", "null"],
+          "description": "IDs of plugins enabled for this conversation.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conversation_template_id": {
+          "type": ["string", "null"],
+          "description": "Template ID if the conversation was started from a template/prompt."
+        },
+        "gizmo_id": {
+          "type": ["string", "null"],
+          "description": "ID of the custom GPT (Gizmo) used, if any."
+        },
+        "gizmo_type": {
+          "type": ["string", "null"],
+          "description": "Type of GPT. Observed values: 'gpt' (custom GPT), 'snorlax', or null (default ChatGPT).",
+          "enum": ["gpt", "snorlax", null]
+        },
+        "is_archived": {
+          "type": ["boolean", "null"],
+          "description": "Whether the conversation has been archived by the user."
+        },
+        "is_starred": {
+          "type": ["boolean", "null"],
+          "description": "Whether the conversation has been starred/favorited."
+        },
+        "safe_urls": {
+          "type": ["array", "null"],
+          "description": "URLs that have been marked safe in this conversation context.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "blocked_urls": {
+          "type": ["array", "null"],
+          "description": "URLs that have been blocked in this conversation.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "default_model_slug": {
+          "type": ["string", "null"],
+          "description": "The default model used for this conversation (e.g. 'gpt-5-2', 'gpt-4o', 'o1-pro', etc.)."
+        },
+        "conversation_origin": {
+          "description": "Origin/source metadata for the conversation. Can be null or an object.",
+          "type": ["object", "null"]
+        },
+        "is_read_only": {
+          "type": ["boolean", "null"],
+          "description": "Whether the conversation is read-only."
+        },
+        "voice": {
+          "type": ["string", "null"],
+          "description": "Voice setting for audio conversations."
+        },
+        "async_status": {
+          "type": ["integer", "null"],
+          "description": "Status of async tasks in the conversation. Observed values: null, 2, 3, 4."
+        },
+        "disabled_tool_ids": {
+          "type": ["array", "null"],
+          "description": "List of tool IDs that have been disabled for this conversation.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "is_do_not_remember": {
+          "type": ["boolean", "null"],
+          "description": "Whether memory/recall has been disabled for this conversation."
+        },
+        "memory_scope": {
+          "type": ["string", "null"],
+          "description": "Memory scope setting. Observed values: 'global_enabled', 'project_enabled'.",
+          "enum": ["global_enabled", "project_enabled", null]
+        },
+        "context_scopes": {
+          "description": "Context scope configuration. Typically null or an object.",
+          "type": ["object", "array", "null"]
+        },
+        "sugar_item_id": {
+          "type": ["string", "null"],
+          "description": "ID for a 'sugar' UI item association, if any."
+        },
+        "sugar_item_visible": {
+          "type": ["boolean", "null"],
+          "description": "Whether the sugar item is visible."
+        },
+        "pinned_time": {
+          "type": ["number", "null"],
+          "description": "Unix timestamp when the conversation was pinned, or null."
+        },
+        "is_study_mode": {
+          "type": ["boolean", "null"],
+          "description": "Whether study mode is active for this conversation."
+        },
+        "owner": {
+          "type": ["string", "null"],
+          "description": "Owner identifier for the conversation."
+        }
+      }
+    },
+
+    "MappingNode": {
+      "type": "object",
+      "description": "A node in the conversation tree. The tree structure supports branching when users edit messages or regenerate responses — each branch is a different child path.",
+      "required": ["id", "children"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique node identifier (UUID or 'client-created-root')."
+        },
+        "message": {
+          "oneOf": [
+            { "$ref": "#/definitions/Message" },
+            { "type": "null" }
+          ],
+          "description": "The message at this node, or null for the root node."
+        },
+        "parent": {
+          "type": ["string", "null"],
+          "description": "ID of the parent node, or null for the root."
+        },
+        "children": {
+          "type": "array",
+          "description": "IDs of child nodes. Multiple children indicate branching (edits/regenerations).",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+
+    "Message": {
+      "type": "object",
+      "description": "A single message in the conversation.",
+      "required": ["id", "author", "content"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique message identifier (UUID)."
+        },
+        "author": {
+          "$ref": "#/definitions/Author"
+        },
+        "create_time": {
+          "type": ["number", "null"],
+          "description": "Unix timestamp (float) when the message was created."
+        },
+        "update_time": {
+          "type": ["number", "null"],
+          "description": "Unix timestamp (float) when the message was last updated."
+        },
+        "content": {
+          "$ref": "#/definitions/Content",
+          "description": "The message content. Structure varies by content_type."
+        },
+        "status": {
+          "type": ["string", "null"],
+          "description": "Message completion status.",
+          "enum": ["finished_successfully", "in_progress", null]
+        },
+        "end_turn": {
+          "type": ["boolean", "null"],
+          "description": "Whether this message ends a turn in the conversation."
+        },
+        "weight": {
+          "type": ["number", "null"],
+          "description": "Weight/priority of this message. Typically 0.0 for system messages, 1.0 for visible messages."
+        },
+        "metadata": {
+          "$ref": "#/definitions/MessageMetadata",
+          "description": "Extensive metadata that varies by author role. Contains model info, tool invocation details, citations, attachments, and more."
+        },
+        "recipient": {
+          "type": ["string", "null"],
+          "description": "The intended recipient of this message. 'all' for normal messages, or a tool/plugin name for tool calls (e.g. 'python', 'dalle.text2im', 'web.search', 'canmore.create_textdoc', 'computer.do', etc.)."
+        },
+        "channel": {
+          "type": ["string", "null"],
+          "description": "Message channel. Observed values: null, 'final', 'commentary'."
+        }
+      }
+    },
+
+    "Author": {
+      "type": "object",
+      "description": "The author of a message.",
+      "required": ["role"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "The role of the message author.",
+          "enum": ["system", "user", "assistant", "tool"]
+        },
+        "name": {
+          "type": ["string", "null"],
+          "description": "Optional name for the author. For tool messages, this may identify the specific tool (e.g. 'python', 'dalle.text2im', 'browser', etc.)."
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Author-level metadata. Typically empty."
+        }
+      }
+    },
+
+    "Content": {
+      "type": "object",
+      "description": "Message content. The structure varies significantly based on content_type. The 'text' and 'multimodal_text' types use 'parts'; other types use type-specific fields.",
+      "required": ["content_type"],
+      "properties": {
+        "content_type": {
+          "type": "string",
+          "description": "Discriminator for the content structure.",
+          "enum": [
+            "text",
+            "multimodal_text",
+            "code",
+            "execution_output",
+            "tether_browsing_display",
+            "tether_quote",
+            "system_error",
+            "reasoning_recap",
+            "thoughts",
+            "user_editable_context",
+            "citable_code_output",
+            "computer_output"
+          ]
+        },
+        "parts": {
+          "type": "array",
+          "description": "Used by 'text' and 'multimodal_text' content types. Each part is either a string (text) or an object (e.g. image_asset_pointer).",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              { "$ref": "#/definitions/ImageAssetPointer" }
+            ]
+          }
+        },
+        "language": {
+          "type": ["string", "null"],
+          "description": "Programming language for 'code' content type (e.g. 'python', 'unknown')."
+        },
+        "response_format_name": {
+          "type": ["string", "null"],
+          "description": "Response format name for code content."
+        },
+        "text": {
+          "type": ["string", "null"],
+          "description": "Text content used by 'code', 'execution_output', 'system_error', and 'tether_quote' content types."
+        },
+        "result": {
+          "type": ["string", "null"],
+          "description": "Result text for 'tether_browsing_display'."
+        },
+        "summary": {
+          "type": ["string", "null"],
+          "description": "Summary for 'tether_browsing_display'."
+        },
+        "assets": {
+          "type": ["array", "null"],
+          "description": "Assets associated with browsing display content."
+        },
+        "tether_id": {
+          "type": ["string", "integer", "null"],
+          "description": "Tether identifier for browsing/quote content."
+        },
+        "url": {
+          "type": ["string", "null"],
+          "description": "URL for tether_quote content (may be a file ID or web URL)."
+        },
+        "domain": {
+          "type": ["string", "null"],
+          "description": "Domain or filename for tether_quote content."
+        },
+        "title": {
+          "type": ["string", "null"],
+          "description": "Title for tether_quote content."
+        },
+        "name": {
+          "type": ["string", "null"],
+          "description": "Error name for 'system_error' content type."
+        },
+        "content": {
+          "type": ["string", "null"],
+          "description": "Content string for 'reasoning_recap' (e.g. 'Thought for a couple of seconds')."
+        },
+        "thoughts": {
+          "type": ["array", "null"],
+          "description": "Array of thought objects for 'thoughts' content type."
+        },
+        "source_analysis_msg_id": {
+          "type": ["string", "null"],
+          "description": "Source message ID for 'thoughts' content type."
+        },
+        "user_profile": {
+          "type": ["string", "null"],
+          "description": "User profile text for 'user_editable_context'. This is the 'About me' custom instruction."
+        },
+        "user_instructions": {
+          "type": ["string", "null"],
+          "description": "User instructions text for 'user_editable_context'. This is the 'How should ChatGPT respond' custom instruction."
+        },
+        "output_str": {
+          "type": ["string", "null"],
+          "description": "Output string for 'citable_code_output' (often JSON-encoded)."
+        },
+        "unprocessed_output": {
+          "type": ["string", "null"],
+          "description": "Raw unprocessed output for 'citable_code_output'."
+        },
+        "metadata": {
+          "type": ["object", "null"],
+          "description": "Content-level metadata (distinct from message metadata)."
+        },
+        "computer_id": {
+          "type": ["string", "null"],
+          "description": "Computer ID for 'computer_output' content type."
+        },
+        "screenshot": {
+          "oneOf": [
+            { "$ref": "#/definitions/ImageAssetPointer" },
+            { "type": "null" }
+          ],
+          "description": "Screenshot for 'computer_output' content type."
+        },
+        "state": {
+          "type": ["object", "null"],
+          "description": "Computer state object for 'computer_output' (contains type, id, os_type, os_name, installed_software, etc.)."
+        },
+        "is_ephemeral": {
+          "type": ["boolean", "null"],
+          "description": "Whether the computer output is ephemeral."
+        }
+      }
+    },
+
+    "ImageAssetPointer": {
+      "type": "object",
+      "description": "A reference to an image asset (uploaded image, DALL-E generation, screenshot, etc.).",
+      "required": ["content_type", "asset_pointer"],
+      "properties": {
+        "content_type": {
+          "type": "string",
+          "const": "image_asset_pointer",
+          "description": "Always 'image_asset_pointer'."
+        },
+        "asset_pointer": {
+          "type": "string",
+          "description": "Pointer to the image asset, typically a 'sediment://' URI (e.g. 'sediment://file_00000000663871faa333e6fa451f0535')."
+        },
+        "size_bytes": {
+          "type": ["integer", "null"],
+          "description": "File size in bytes."
+        },
+        "width": {
+          "type": ["integer", "null"],
+          "description": "Image width in pixels."
+        },
+        "height": {
+          "type": ["integer", "null"],
+          "description": "Image height in pixels."
+        },
+        "fovea": {
+          "type": ["integer", "null"],
+          "description": "Fovea value (related to image processing/focus)."
+        },
+        "metadata": {
+          "type": ["object", "null"],
+          "description": "Image-specific metadata including dalle, gizmo, generation info, watermarking, sanitization status, etc.",
+          "properties": {
+            "dalle": { "description": "DALL-E generation metadata, if applicable." },
+            "gizmo": { "description": "Custom GPT metadata, if applicable." },
+            "generation": { "description": "Generation details." },
+            "sanitized": { "type": ["boolean", "null"] },
+            "asset_pointer_link": { "type": ["string", "null"] },
+            "watermarked_asset_pointer": { "type": ["string", "null"] },
+            "is_no_auth_placeholder": { "type": ["boolean", "null"] }
+          }
+        }
+      }
+    },
+
+    "MessageMetadata": {
+      "type": "object",
+      "description": "Metadata attached to a message. The available fields vary significantly by author role (system, user, assistant, tool). All fields are optional.",
+      "properties": {
+        "model_slug": {
+          "type": ["string", "null"],
+          "description": "The model that generated this response (e.g. 'gpt-5-2', 'gpt-4o', 'o1-pro')."
+        },
+        "default_model_slug": {
+          "type": ["string", "null"],
+          "description": "The default model for the conversation at the time of this message."
+        },
+        "message_type": {
+          "type": ["string", "null"],
+          "description": "Type of message (e.g. 'next', 'variant')."
+        },
+        "request_id": {
+          "type": ["string", "null"],
+          "description": "Request identifier for tracking."
+        },
+        "turn_exchange_id": {
+          "type": ["string", "null"],
+          "description": "Groups request/response pairs within a single turn."
+        },
+        "parent_id": {
+          "type": ["string", "null"],
+          "description": "Parent message ID in the metadata context."
+        },
+        "can_save": {
+          "type": ["boolean", "null"],
+          "description": "Whether this message can be saved."
+        },
+        "timestamp_": {
+          "type": ["string", "null"],
+          "description": "ISO timestamp string."
+        },
+        "is_visually_hidden_from_conversation": {
+          "type": ["boolean", "null"],
+          "description": "Whether this message is hidden in the UI (common for system messages)."
+        },
+        "is_complete": {
+          "type": ["boolean", "null"],
+          "description": "Whether the message generation is complete."
+        },
+
+        "finish_details": {
+          "type": ["object", "null"],
+          "description": "Details about why generation stopped.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Stop reason type (e.g. 'stop', 'max_tokens')."
+            },
+            "stop_tokens": {
+              "type": "array",
+              "items": { "type": "integer" }
+            }
+          }
+        },
+
+        "attachments": {
+          "type": ["array", "null"],
+          "description": "File attachments on this message (common on user and system messages).",
+          "items": {
+            "$ref": "#/definitions/Attachment"
+          }
+        },
+
+        "citations": {
+          "type": ["array", "null"],
+          "description": "Citations in assistant/tool messages referencing files or web sources.",
+          "items": {
+            "$ref": "#/definitions/Citation"
+          }
+        },
+
+        "content_references": {
+          "type": ["array", "null"],
+          "description": "Rich content references (file citations, web links) with positional info.",
+          "items": {
+            "$ref": "#/definitions/ContentReference"
+          }
+        },
+
+        "search_result_groups": {
+          "type": ["array", "null"],
+          "description": "Grouped web search results."
+        },
+        "search_queries": {
+          "type": ["array", "null"],
+          "description": "Search queries generated by the model."
+        },
+
+        "canvas": {
+          "$ref": "#/definitions/CanvasMetadata",
+          "description": "Canvas (collaborative document) metadata."
+        },
+
+        "aggregate_result": {
+          "$ref": "#/definitions/AggregateResult",
+          "description": "Result of code execution (Python tool)."
+        },
+
+        "serialization_metadata": {
+          "type": ["object", "null"],
+          "description": "Metadata about content serialization.",
+          "properties": {
+            "custom_symbol_offsets": {
+              "type": "array",
+              "items": {}
+            }
+          }
+        },
+
+        "selected_sources": {
+          "type": ["array", "null"],
+          "description": "Sources selected by the user for context."
+        },
+        "selected_github_repos": {
+          "type": ["array", "null"],
+          "description": "GitHub repositories selected for context."
+        },
+        "selected_mcp_sources": {
+          "type": ["array", "null"],
+          "description": "MCP (Model Context Protocol) sources selected."
+        },
+        "developer_mode_connector_ids": {
+          "type": ["array", "null"],
+          "description": "Developer mode connector IDs."
+        },
+
+        "message_source": {
+          "type": ["string", "null"],
+          "description": "Source of the message."
+        },
+        "stop_reason": {
+          "type": ["string", "null"],
+          "description": "Reason generation stopped."
+        },
+
+        "rebase_system_message": {
+          "type": ["boolean", "null"],
+          "description": "Whether this is a rebased system message."
+        },
+        "rebase_developer_message": {
+          "type": ["boolean", "null"],
+          "description": "Whether this is a rebased developer message."
+        },
+        "is_user_system_message": {
+          "type": ["boolean", "null"],
+          "description": "Whether this is a user-provided system message (custom instructions)."
+        },
+
+        "dalle": {
+          "type": ["object", "null"],
+          "description": "DALL-E image generation metadata."
+        },
+        "image_results": {
+          "type": ["array", "null"],
+          "description": "Image generation results."
+        },
+        "image_gen_title": {
+          "type": ["string", "null"],
+          "description": "Title for image generation."
+        },
+        "image_gen_async": {
+          "type": ["boolean", "null"],
+          "description": "Whether image generation was async."
+        },
+
+        "invoked_plugin": {
+          "type": ["object", "null"],
+          "description": "Details about a plugin that was invoked."
+        },
+        "jit_plugin_data": {
+          "type": ["object", "null"],
+          "description": "JIT (just-in-time) plugin data."
+        },
+
+        "reasoning_group_id": {
+          "type": ["string", "null"],
+          "description": "Groups reasoning/thinking messages together."
+        },
+        "reasoning_status": {
+          "type": ["string", "null"],
+          "description": "Status of reasoning process."
+        },
+        "reasoning_title": {
+          "type": ["string", "null"],
+          "description": "Title for the reasoning block."
+        },
+        "skip_reasoning_title": {
+          "type": ["boolean", "null"],
+          "description": "Whether to skip displaying the reasoning title."
+        },
+        "thinking_effort": {
+          "type": ["string", "null"],
+          "description": "Thinking effort level for reasoning models."
+        },
+
+        "async_task_id": {
+          "type": ["string", "null"],
+          "description": "Async task identifier (deep research, etc.)."
+        },
+        "async_task_title": {
+          "type": ["string", "null"],
+          "description": "Title of the async task."
+        },
+        "async_task_type": {
+          "type": ["string", "null"],
+          "description": "Type of async task."
+        },
+        "async_task_status_messages": {
+          "type": ["array", "null"],
+          "description": "Status messages from async task execution."
+        },
+        "async_task_prompt": {
+          "type": ["string", "null"],
+          "description": "The prompt sent to the async task."
+        },
+        "async_task_conversation_id": {
+          "type": ["string", "null"],
+          "description": "Conversation ID for the async task."
+        },
+        "async_task_created_at": {
+          "type": ["string", "null"],
+          "description": "When the async task was created."
+        },
+        "is_async_task_result_message": {
+          "type": ["boolean", "null"],
+          "description": "Whether this message contains the async task result."
+        },
+        "trigger_async_ux": {
+          "type": ["boolean", "null"],
+          "description": "Whether to trigger async UX rendering."
+        },
+
+        "is_error": {
+          "type": ["boolean", "null"],
+          "description": "Whether this tool message represents an error."
+        },
+        "status": {
+          "type": ["string", "null"],
+          "description": "Tool execution status."
+        },
+        "command": {
+          "type": ["string", "null"],
+          "description": "Tool command that was executed."
+        },
+        "args": {
+          "type": ["array", "null"],
+          "description": "Arguments passed to the tool."
+        },
+        "kwargs": {
+          "type": ["object", "null"],
+          "description": "Keyword arguments passed to the tool."
+        },
+
+        "ada_visualizations": {
+          "type": ["array", "null"],
+          "description": "Visualization outputs from the code interpreter."
+        },
+        "classifier_response": {
+          "type": ["object", "null"],
+          "description": "Internal classifier response."
+        },
+        "category_suggestions": {
+          "type": ["array", "null"],
+          "description": "Suggested categories for the conversation."
+        },
+        "system_hints": {
+          "type": ["array", "null"],
+          "description": "System hints provided to the model."
+        },
+        "user_settings_updates": {
+          "type": ["object", "null"],
+          "description": "Updates to user settings triggered by this message."
+        },
+        "writing_blocks": {
+          "type": ["array", "null"],
+          "description": "Writing block metadata."
+        },
+        "dictation": {
+          "type": ["boolean", "null"],
+          "description": "Whether this message was dictated via voice."
+        },
+        "dictation_asset_pointer": {
+          "type": ["string", "null"],
+          "description": "Pointer to the audio asset for dictation."
+        },
+        "dictation_asset_format": {
+          "type": ["string", "null"],
+          "description": "Audio format of the dictation asset."
+        },
+        "targeted_reply": {
+          "type": ["object", "null"],
+          "description": "Metadata for targeted replies to specific messages."
+        },
+        "targeted_reply_label": {
+          "type": ["string", "null"],
+          "description": "Label for a targeted reply."
+        },
+        "memory_percentage_used": {
+          "type": ["number", "null"],
+          "description": "Percentage of memory capacity used."
+        },
+        "pad": {
+          "type": ["string", "null"],
+          "description": "Padding/alignment metadata."
+        },
+        "gizmo_id": {
+          "type": ["string", "null"],
+          "description": "Custom GPT ID associated with this message."
+        },
+        "is_loading_message": {
+          "type": ["boolean", "null"],
+          "description": "Whether this is a loading/placeholder message."
+        },
+        "message_locale": {
+          "type": ["string", "null"],
+          "description": "Locale of the message."
+        },
+        "finished_duration_sec": {
+          "type": ["number", "null"],
+          "description": "Time taken to generate the response in seconds."
+        },
+
+        "user_context_message_data": {
+          "type": ["object", "null"],
+          "description": "User context message data (projects, custom instructions injected as system context)."
+        },
+        "contextual_answers_message_type": {
+          "type": ["string", "null"],
+          "description": "Type for contextual answers messages."
+        },
+        "is_contextual_answers_system_message": {
+          "type": ["boolean", "null"],
+          "description": "Whether this is a contextual answers system message."
+        },
+        "is_contextual_answers_supported": {
+          "type": ["boolean", "null"],
+          "description": "Whether contextual answers are supported."
+        },
+        "contextual_answers_available_sources": {
+          "type": ["array", "null"],
+          "description": "Available sources for contextual answers."
+        },
+
+        "exclusive_key": {
+          "type": ["string", "null"],
+          "description": "Exclusive key for deduplication."
+        },
+        "paragen_variants_info": {
+          "type": ["object", "null"],
+          "description": "Parallel generation variant information."
+        },
+        "paragen_variant_choice": {
+          "type": ["object", "null"],
+          "description": "User's choice among parallel generation variants."
+        },
+        "augmented_paragen_prompt_label": {
+          "type": ["string", "null"],
+          "description": "Label for augmented parallel generation prompt."
+        },
+
+        "deep_research_version": {
+          "type": ["string", "null"],
+          "description": "Version of the deep research system."
+        },
+        "agent_entrypoint": {
+          "type": ["string", "null"],
+          "description": "Entry point for agent-based tasks."
+        },
+        "agent_kickoff_source": {
+          "type": ["string", "null"],
+          "description": "Source that kicked off the agent."
+        },
+        "needs_startup": {
+          "type": ["boolean", "null"],
+          "description": "Whether a tool needs startup initialization."
+        },
+        "permissions": {
+          "type": ["object", "null"],
+          "description": "Permission settings for tools."
+        },
+        "cloud_doc_urls": {
+          "type": ["array", "null"],
+          "description": "Cloud document URLs referenced."
+        },
+        "retrieval_file_index": {
+          "type": ["integer", "null"],
+          "description": "Index of the file in retrieval context."
+        },
+        "retrieval_search_sources": {
+          "type": ["array", "null"],
+          "description": "Sources used for retrieval search."
+        },
+        "retrieval_turn_number": {
+          "type": ["integer", "null"],
+          "description": "Turn number for retrieval."
+        },
+        "search_model_queries": {
+          "type": ["array", "null"],
+          "description": "Queries generated by the search model."
+        },
+        "search_source": {
+          "type": ["string", "null"],
+          "description": "Source of the search."
+        },
+        "search_turns_count": {
+          "type": ["integer", "null"],
+          "description": "Number of search turns."
+        },
+        "search_display_string": {
+          "type": ["string", "null"],
+          "description": "Display string for search activity."
+        },
+        "searched_display_string": {
+          "type": ["string", "null"],
+          "description": "Display string after search completion."
+        },
+        "client_reported_search_source": {
+          "type": ["string", "null"],
+          "description": "Search source reported by the client."
+        },
+        "content_references_by_file": {
+          "type": ["object", "null"],
+          "description": "Content references grouped by file."
+        },
+        "response_message_id": {
+          "type": ["string", "null"],
+          "description": "ID of the response message this tool output corresponds to."
+        },
+        "tool_invoked_message": {
+          "type": ["string", "null"],
+          "description": "Message about which tool was invoked."
+        },
+        "tool_invoking_message": {
+          "type": ["string", "null"],
+          "description": "Message about invoking a tool."
+        },
+        "invoked_resource": {
+          "type": ["object", "null"],
+          "description": "Resource that was invoked."
+        },
+        "has_sensitive_connector_data": {
+          "type": ["boolean", "null"],
+          "description": "Whether the message contains sensitive connector data."
+        },
+        "default_view": {
+          "type": ["string", "null"],
+          "description": "Default view mode."
+        },
+        "real_time_audio_has_video": {
+          "type": ["boolean", "null"],
+          "description": "Whether real-time audio includes video."
+        },
+        "open_in_canvas_view": {
+          "type": ["boolean", "null"],
+          "description": "Whether to open in canvas view."
+        },
+        "caterpillar_selected_sources": {
+          "type": ["array", "null"],
+          "description": "Sources selected through caterpillar interface."
+        },
+        "prompt_expansion_predictions": {
+          "type": ["array", "null"],
+          "description": "Predictions for prompt expansion."
+        },
+        "suggested_connector_ids": {
+          "type": ["array", "null"],
+          "description": "Suggested connector IDs."
+        },
+        "cta_by_suggested_connector_id": {
+          "type": ["object", "null"],
+          "description": "Call-to-action by suggested connector ID."
+        },
+        "safe_urls": {
+          "type": ["array", "null"],
+          "description": "Safe URLs at the message level."
+        },
+        "debug_sonic_thread_id": {
+          "type": ["string", "null"],
+          "description": "Debug thread identifier."
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "Attachment": {
+      "type": "object",
+      "description": "A file attachment on a message.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "File identifier (e.g. 'file-3Sio1TWibFZFPmi4vkR9Tk')."
+        },
+        "name": {
+          "type": "string",
+          "description": "Original filename."
+        },
+        "mimeType": {
+          "type": ["string", "null"],
+          "description": "MIME type (camelCase variant)."
+        },
+        "mime_type": {
+          "type": ["string", "null"],
+          "description": "MIME type (snake_case variant)."
+        },
+        "fileSizeTokens": {
+          "type": ["integer", "null"],
+          "description": "Size of the file in tokens (camelCase variant)."
+        },
+        "file_token_size": {
+          "type": ["integer", "null"],
+          "description": "Size of the file in tokens (snake_case variant)."
+        },
+        "size": {
+          "type": ["integer", "null"],
+          "description": "File size in bytes."
+        },
+        "width": {
+          "type": ["integer", "null"],
+          "description": "Image width (for image attachments)."
+        },
+        "height": {
+          "type": ["integer", "null"],
+          "description": "Image height (for image attachments)."
+        },
+        "source": {
+          "type": ["string", "null"],
+          "description": "Source of the attachment."
+        },
+        "is_big_paste": {
+          "type": ["boolean", "null"],
+          "description": "Whether this attachment is a large paste."
+        }
+      }
+    },
+
+    "Citation": {
+      "type": "object",
+      "description": "A citation within a message, referencing a file or web source.",
+      "properties": {
+        "start_ix": {
+          "type": "integer",
+          "description": "Start character index of the citation in the message text."
+        },
+        "end_ix": {
+          "type": "integer",
+          "description": "End character index of the citation in the message text."
+        },
+        "citation_format_type": {
+          "type": "string",
+          "description": "Format type of the citation (e.g. 'berry_file_search')."
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Citation metadata including type, name, id, source, text, and extra retrieval info.",
+          "properties": {
+            "type": { "type": "string", "description": "Citation type (e.g. 'file')." },
+            "name": { "type": ["string", "null"], "description": "Name of the cited file/source." },
+            "id": { "type": ["string", "null"], "description": "ID of the cited file." },
+            "source": { "type": ["string", "null"], "description": "Source category (e.g. 'my_files')." },
+            "text": { "type": ["string", "null"], "description": "Cited text excerpt." },
+            "extra": {
+              "type": ["object", "null"],
+              "description": "Extra metadata: retrieval_turn, retrieval_file_index, cited_message_idx, cited_message_id, etc."
+            }
+          }
+        },
+        "invalid_reason": {
+          "type": ["string", "null"],
+          "description": "Reason the citation is invalid, if applicable."
+        }
+      }
+    },
+
+    "ContentReference": {
+      "type": "object",
+      "description": "A rich content reference (file citation, web link, etc.) with position info.",
+      "properties": {
+        "matched_text": {
+          "type": ["string", "null"],
+          "description": "The matched text in the message that this reference replaces."
+        },
+        "start_idx": {
+          "type": ["integer", "null"],
+          "description": "Start character index."
+        },
+        "end_idx": {
+          "type": ["integer", "null"],
+          "description": "End character index."
+        },
+        "alt": {
+          "type": ["string", "null"],
+          "description": "Alternative text."
+        },
+        "type": {
+          "type": ["string", "null"],
+          "description": "Reference type (e.g. 'file')."
+        },
+        "name": {
+          "type": ["string", "null"],
+          "description": "Name of the referenced resource."
+        },
+        "id": {
+          "type": ["string", "null"],
+          "description": "ID of the referenced resource."
+        },
+        "source": {
+          "type": ["string", "null"],
+          "description": "Source of the reference."
+        },
+        "snippet": {
+          "type": ["string", "null"],
+          "description": "Text snippet from the referenced resource."
+        },
+        "cloud_doc_url": {
+          "type": ["string", "null"],
+          "description": "Cloud document URL."
+        },
+        "input_pointer": {
+          "type": ["object", "null"],
+          "description": "Pointer back to the input that generated this reference."
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "CanvasMetadata": {
+      "type": ["object", "null"],
+      "description": "Metadata for Canvas (collaborative document editing) features.",
+      "properties": {
+        "textdoc_id": {
+          "type": "string",
+          "description": "Canvas text document ID."
+        },
+        "textdoc_type": {
+          "type": "string",
+          "description": "Type of canvas document (e.g. 'document', 'code')."
+        },
+        "version": {
+          "type": "integer",
+          "description": "Document version number."
+        },
+        "title": {
+          "type": ["string", "null"],
+          "description": "Document title."
+        },
+        "create_source": {
+          "type": ["string", "null"],
+          "description": "Source of creation (e.g. 'model', 'user')."
+        }
+      }
+    },
+
+    "AggregateResult": {
+      "type": ["object", "null"],
+      "description": "Result of a code execution (Python/Code Interpreter tool).",
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "Execution status (e.g. 'success', 'error')."
+        },
+        "run_id": {
+          "type": ["string", "null"],
+          "description": "Execution run identifier."
+        },
+        "start_time": {
+          "type": ["number", "null"],
+          "description": "Unix timestamp when execution started."
+        },
+        "update_time": {
+          "type": ["number", "null"],
+          "description": "Unix timestamp of last update."
+        },
+        "code": {
+          "type": ["string", "null"],
+          "description": "The code that was executed."
+        },
+        "end_time": {
+          "type": ["number", "null"],
+          "description": "Unix timestamp when execution finished."
+        },
+        "final_expression_output": {
+          "type": ["string", "null"],
+          "description": "Output of the final expression."
+        },
+        "jupyter_messages": {
+          "type": ["array", "null"],
+          "description": "Jupyter kernel messages from execution."
+        },
+        "messages": {
+          "type": ["array", "null"],
+          "description": "Execution output messages."
+        }
+      }
+    }
+  }
+}
