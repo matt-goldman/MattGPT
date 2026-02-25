@@ -17,17 +17,20 @@ public class ImportProcessingService : BackgroundService
     private readonly Channel<ImportJobRequest> _channel;
     private readonly ImportJobStore _jobStore;
     private readonly ConversationParser _parser;
+    private readonly IConversationRepository _repository;
     private readonly ILogger<ImportProcessingService> _logger;
 
     public ImportProcessingService(
         Channel<ImportJobRequest> channel,
         ImportJobStore jobStore,
         ConversationParser parser,
+        IConversationRepository repository,
         ILogger<ImportProcessingService> logger)
     {
         _channel = channel;
         _jobStore = jobStore;
         _parser = parser;
+        _repository = repository;
         _logger = logger;
     }
 
@@ -54,7 +57,8 @@ public class ImportProcessingService : BackgroundService
                 {
                     try
                     {
-                        // Conversation is already linearised by the parser; count it.
+                        // Upsert the conversation into MongoDB, then count it.
+                        await _repository.UpsertAsync(StoredConversation.From(conversation), stoppingToken);
                         job.ProcessedConversations++;
                     }
                     catch (Exception ex)
