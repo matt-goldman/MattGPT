@@ -3,7 +3,7 @@ using MongoDB.Bson.Serialization.Attributes;
 namespace MattGPT.ApiService.Models;
 
 /// <summary>Processing status of a stored conversation.</summary>
-public enum ConversationProcessingStatus { Imported, Summarised, Embedded, SummaryError }
+public enum ConversationProcessingStatus { Imported, Summarised, Embedded, SummaryError, EmbeddingError }
 
 /// <summary>
 /// A single message as stored in MongoDB, with parts normalised to strings.
@@ -56,6 +56,9 @@ public class StoredConversation
 
     /// <summary>LLM-generated summary of this conversation. Populated after summarisation.</summary>
     public string? Summary { get; set; }
+
+    /// <summary>Embedding vector generated from the summary. Populated after embedding generation.</summary>
+    public float[]? Embedding { get; set; }
 
     internal static StoredConversation From(ParsedConversation conversation) => new()
     {

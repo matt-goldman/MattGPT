@@ -18,4 +18,7 @@ public interface IConversationRepository
 
     /// <summary>Update the summary text and processing status of a single conversation.</summary>
     Task UpdateSummaryAsync(string conversationId, string? summary, ConversationProcessingStatus status, CancellationToken ct = default);
+
+    /// <summary>Update the embedding vector and processing status of a single conversation.</summary>
+    Task UpdateEmbeddingAsync(string conversationId, float[]? embedding, ConversationProcessingStatus status, CancellationToken ct = default);
 }

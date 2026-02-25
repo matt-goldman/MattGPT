@@ -70,4 +70,15 @@ public class ConversationRepository : IConversationRepository
             .Set(x => x.ProcessingStatus, status);
         await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
     }
+
+    /// <inheritdoc/>
+    public async Task UpdateEmbeddingAsync(
+        string conversationId, float[]? embedding, ConversationProcessingStatus status, CancellationToken ct = default)
+    {
+        var filter = Builders<StoredConversation>.Filter.Eq(x => x.ConversationId, conversationId);
+        var update = Builders<StoredConversation>.Update
+            .Set(x => x.Embedding, embedding)
+            .Set(x => x.ProcessingStatus, status);
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
 }
