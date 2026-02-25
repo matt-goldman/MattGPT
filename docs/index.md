@@ -36,7 +36,7 @@ This document is the **system of record** for project planning and issue trackin
 | 3 | 003-configure-llm-endpoint.md | Config-driven LLM endpoint selection | Done | Done/ | Depends on 1 |
 | 4 | 004-chatgpt-json-parser.md | Build ChatGPT JSON parser & conversation lineariser | Done | Done/ | |
 | 5 | 005-file-upload-ui.md | Create file upload UI page with progress tracking | Done | Done/ | |
-| 6 | 006-background-processing-service.md | Implement background processing service for import | TODO | TODO/ | Depends on 4, 5 |
+| 6 | 006-background-processing-service.md | Implement background processing service for import | Done | Done/ | Depends on 4, 5 |
 | 7 | 007-store-conversations-in-mongodb.md | Store parsed conversations in MongoDB | TODO | TODO/ | Depends on 1, 4, 6 |
 | 8 | 008-generate-conversation-summaries.md | Generate conversation summaries using LLM | TODO | TODO/ | Depends on 3, 7 |
 | 9 | 009-generate-embeddings.md | Generate embeddings from summaries | TODO | TODO/ | Depends on 8 |

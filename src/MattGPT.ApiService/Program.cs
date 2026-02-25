@@ -1,11 +1,21 @@
 using Azure.AI.OpenAI;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using MattGPT.ApiService;
+using MattGPT.ApiService.Models;
+using MattGPT.ApiService.Services;
 using OpenAI;
 using System.ClientModel;
+using System.Threading.Channels;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure Kestrel for large file uploads (up to 250 MB).
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 262_144_000; // 250 MB
+});
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
@@ -18,7 +28,20 @@ builder.AddQdrantClient("qdrant");
 
 // Add services to the container.
 builder.Services.AddProblemDetails();
-builder.Services.AddSingleton<MattGPT.ApiService.Services.ConversationParser>();
+builder.Services.AddSingleton<ConversationParser>();
+builder.Services.AddSingleton<ImportJobStore>();
+builder.Services.AddSingleton(Channel.CreateBounded<ImportJobRequest>(new BoundedChannelOptions(50)
+{
+    FullMode = BoundedChannelFullMode.Wait,
+    SingleReader = true,
+}));
+builder.Services.AddHostedService<ImportProcessingService>();
+
+// Allow large multipart form uploads on this service.
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 262_144_000; // 250 MB
+});
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -88,8 +111,8 @@ app.MapGet("/weatherforecast", () =>
 })
 .WithName("GetWeatherForecast");
 
-// Stub endpoint for conversation file upload (full processing wired in issue 006).
-app.MapPost("/conversations/upload", async (HttpRequest request) =>
+// Conversation file upload endpoint — enqueues file for background processing.
+app.MapPost("/conversations/upload", async (HttpRequest request, ImportJobStore jobStore, Channel<ImportJobRequest> channel) =>
 {
     if (!request.HasFormContentType)
         return Results.BadRequest("Expected multipart/form-data.");
@@ -103,14 +126,53 @@ app.MapPost("/conversations/upload", async (HttpRequest request) =>
     if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
         return Results.BadRequest("Only .json files are accepted.");
 
-    // Drain the stream to simulate receiving the full file.
-    await using var stream = file.OpenReadStream();
-    await stream.CopyToAsync(Stream.Null);
+    // Save to a temp file so the HTTP request can complete independently of processing.
+    var tempPath = Path.GetTempFileName();
+    try
+    {
+        await using var tempStream = File.OpenWrite(tempPath);
+        await using var uploadStream = file.OpenReadStream();
+        await uploadStream.CopyToAsync(tempStream);
+    }
+    catch
+    {
+        File.Delete(tempPath);
+        throw;
+    }
 
-    return Results.Accepted("/conversations/upload", new { message = "File received. Processing will begin shortly.", fileName = file.FileName, sizeBytes = file.Length });
+    var job = jobStore.CreateJob();
+    await channel.Writer.WriteAsync(new ImportJobRequest(job.JobId, tempPath));
+
+    return Results.Accepted($"/conversations/status/{job.JobId}", new
+    {
+        jobId = job.JobId,
+        message = "File received. Processing has been queued.",
+        fileName = file.FileName,
+        sizeBytes = file.Length,
+    });
 })
 .WithName("UploadConversations")
 .DisableAntiforgery();
+
+// Polling endpoint for import job progress.
+app.MapGet("/conversations/status/{jobId}", (string jobId, ImportJobStore jobStore) =>
+{
+    var job = jobStore.GetJob(jobId);
+    if (job is null)
+        return Results.NotFound(new { message = $"Job '{jobId}' not found." });
+
+    return Results.Ok(new
+    {
+        jobId = job.JobId,
+        status = job.Status.ToString(),
+        processedConversations = job.ProcessedConversations,
+        errorCount = job.ErrorCount,
+        errorMessage = job.ErrorMessage,
+        createdAt = job.CreatedAt,
+        completedAt = job.CompletedAt,
+    });
+})
+.WithName("GetConversationImportStatus");
 
 app.MapGet("/llm/status", async (IChatClient chatClient, IOptions<LlmOptions> options) =>
 {
