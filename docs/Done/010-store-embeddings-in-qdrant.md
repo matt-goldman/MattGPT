@@ -1,6 +1,6 @@
 # 010 — Store Embeddings in Qdrant with Metadata
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 10
 **Dependencies:** 002 (Qdrant in AppHost), 009 (embeddings generated)
 
@@ -25,10 +25,10 @@ Store the generated embedding vectors in Qdrant alongside metadata that enables 
 
 ## Acceptance Criteria
 
-- [ ] Embedding vectors are stored in Qdrant with the specified metadata.
-- [ ] Upsert logic prevents duplicate points on re-import.
-- [ ] The `/search` endpoint returns relevant results for a free-text query.
-- [ ] Qdrant data is visible via the Qdrant dashboard or API.
+- [x] Embedding vectors are stored in Qdrant with the specified metadata.
+- [x] Upsert logic prevents duplicate points on re-import.
+- [x] The `/search` endpoint returns relevant results for a free-text query.
+- [x] Qdrant data is visible via the Qdrant dashboard or API.
 
 ## Notes
 
