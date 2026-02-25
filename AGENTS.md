@@ -4,7 +4,7 @@ Instructions for AI coding agents working on this repository.
 
 ## Project Overview
 
-**MattGPT** is a .NET Aspire application that imports ChatGPT conversation history and makes it available as RAG memory for any LLM. See [README.md](README.md) for goals and [conversation-restore-outline.md](conversation-restore-outline.md) for the technical approach.
+**MattGPT** is a .NET Aspire application that imports ChatGPT conversation history and makes it available as RAG memory for any LLM. See [README.md](README.md) for goals and [conversation-restore-outline.md](docs/conversation-restore-outline.md) for the technical approach.
 
 ## Quick Start
 
@@ -49,22 +49,22 @@ Aspire-specific guidance (running, debugging, MCP tools, integrations) is in [`s
 
 ```
 MattGPT/
-├── AGENTS.md                          ← You are here (global agent instructions)
-├── README.md                          ← Project goals and vision
-├── conversation-restore-outline.md    ← Technical approach for RAG pipeline
-├── conversations.schema.json          ← Full JSON schema for ChatGPT export
-├── MattGPT.slnx                       ← Solution file
+├── AGENTS.md                               ← You are here (global agent instructions)
+├── README.md                               ← Project goals and vision
+├── conversations.schema.json               ← Full JSON schema for ChatGPT export
+├── MattGPT.slnx                            ← Solution file
 ├── docs/
-│   ├── index.md                       ← Backlog & project tracking (system of record)
-│   ├── TODO/                          ← Issue files awaiting implementation
-│   ├── Done/                          ← Completed issue files
-│   └── Decisions/                     ← Architecture Decision Records (ADRs)
+│   ├── index.md                            ← Backlog & project tracking (system of record)
+│   ├── conversation-restore-outline.md     ← Technical approach for RAG pipeline
+│   ├── TODO/                               ← Issue files awaiting implementation
+│   ├── Done/                               ← Completed issue files
+│   └── Decisions/                          ← Architecture Decision Records (ADRs)
 └── src/
-    ├── AGENTS.md                      ← Aspire-specific agent instructions
-    ├── MattGPT.AppHost/               ← Aspire orchestration (entry point)
-    ├── MattGPT.ApiService/            ← API service (business logic)
-    ├── MattGPT.Web/                   ← Blazor web frontend
-    └── MattGPT.ServiceDefaults/       ← Shared Aspire service configuration
+    ├── AGENTS.md                           ← Aspire-specific agent instructions
+    ├── MattGPT.AppHost/                    ← Aspire orchestration (entry point)
+    ├── MattGPT.ApiService/                 ← API service (business logic)
+    ├── MattGPT.Web/                        ← Blazor web frontend
+    └── MattGPT.ServiceDefaults/            ← Shared Aspire service configuration
 ```
 
 ## Tech Stack
