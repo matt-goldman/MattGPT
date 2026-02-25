@@ -113,7 +113,7 @@
         if (_selectedFile is null) return;
 
         _status = UploadStatus.Uploading;
-        _statusMessage = "Uploading file…";
+        _statusMessage = "Uploading file...";
         _uploadProgress = 0;
 
         try
@@ -125,7 +125,7 @@
             content.Add(streamContent, "file", _selectedFile.Name);
 
             _uploadProgress = 10;
-            _statusMessage = "Sending to API…";
+            _statusMessage = "Sending to API...";
             StateHasChanged();
 
             var client = HttpClients.CreateClient("apiservice");
