@@ -61,9 +61,12 @@ var embeddingModelId = llmOptions.EmbeddingModelId ?? llmOptions.ModelId;
 switch (llmOptions.Provider.ToLowerInvariant())
 {
     case "ollama":
-        var ollamaEndpoint = new Uri(llmOptions.Endpoint);
-        builder.Services.AddChatClient(new OllamaChatClient(ollamaEndpoint, llmOptions.ModelId));
-        builder.Services.AddEmbeddingGenerator(new OllamaEmbeddingGenerator(ollamaEndpoint, embeddingModelId));
+        var chatConnectionName = llmOptions.ChatConnectionName
+            ?? throw new InvalidOperationException("LLM:ChatConnectionName must be set for Ollama provider (normally injected by the AppHost).");
+        var embeddingConnectionName = llmOptions.EmbeddingConnectionName
+            ?? throw new InvalidOperationException("LLM:EmbeddingConnectionName must be set for Ollama provider (normally injected by the AppHost).");
+        builder.AddOllamaApiClient(chatConnectionName).AddChatClient();
+        builder.AddOllamaApiClient(embeddingConnectionName).AddEmbeddingGenerator();
         break;
 
     case "foundrylocal":

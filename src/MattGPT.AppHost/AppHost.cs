@@ -19,18 +19,28 @@ var apiService = builder.AddProject<Projects.MattGPT_ApiService>("apiservice")
 if (llmProvider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
 {
     var ollama = builder.AddOllama("ollama");
-    ollama.AddModel(llmModelId);
-
-    if (!string.Equals(llmEmbeddingModelId, llmModelId, StringComparison.OrdinalIgnoreCase))
-        ollama.AddModel(llmEmbeddingModelId);
+    var chatModel = ollama.AddModel(llmModelId);
 
     apiService
-        .WithReference(ollama)
-        .WaitFor(ollama)
+        .WithReference(chatModel)
+        .WaitFor(chatModel)
         .WithEnvironment("LLM__Provider", "Ollama")
         .WithEnvironment("LLM__ModelId", llmModelId)
         .WithEnvironment("LLM__EmbeddingModelId", llmEmbeddingModelId)
-        .WithEnvironment("LLM__Endpoint", ollama.Resource.ConnectionStringExpression);
+        .WithEnvironment("LLM__ChatConnectionName", chatModel.Resource.Name);
+
+    if (!string.Equals(llmEmbeddingModelId, llmModelId, StringComparison.OrdinalIgnoreCase))
+    {
+        var embeddingModel = ollama.AddModel(llmEmbeddingModelId);
+        apiService
+            .WithReference(embeddingModel)
+            .WaitFor(embeddingModel)
+            .WithEnvironment("LLM__EmbeddingConnectionName", embeddingModel.Resource.Name);
+    }
+    else
+    {
+        apiService.WithEnvironment("LLM__EmbeddingConnectionName", chatModel.Resource.Name);
+    }
 }
 else
 {
