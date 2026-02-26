@@ -151,7 +151,7 @@ ollama pull nomic-embed-text
 
 ### Upload format
 
-- The file must be named `conversations.json` (or any `.json` file) and follow the [ChatGPT export schema](conversations.schema.json).
+- The file must be named `conversations.json` (or any `.json` file) and follow the [ChatGPT export schema](docs/conversations.schema.json).
 - Maximum file size: **200 MB** (the typical full export is ~148 MB for a large history).
 
 ### Uploading via the UI
