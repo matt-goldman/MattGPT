@@ -49,6 +49,9 @@ This document is the **system of record** for project planning and issue trackin
 | 15 | 015-clickable-citation-links.md | Clickable citation links in chat UI | TODO | TODO/ | Depends on 12 |
 | 16 | 016-multi-file-import.md | Support importing multiple files | TODO | TODO/ | Depends on 5, 6 |
 | 17 | 017-export-content-analysis.md | Fully analyse export content for missing import detail | TODO | TODO/ | Depends on 4, 7 |
+| 18 | 018-multi-turn-chat-with-rolling-summaries.md | Multi-turn chat with rolling summaries | TODO | TODO/ | Depends on 11, 12 |
+| 19 | 019-persist-and-embed-chat-conversations.md | Persist and embed chat conversations | TODO | TODO/ | Depends on 18, 7, 9, 10 |
+| 20 | 020-tool-calling-rag-retrieval.md | Tool-calling RAG retrieval | TODO | TODO/ | Depends on 18, 11; exploratory — ADR first |
 
 ---
 
