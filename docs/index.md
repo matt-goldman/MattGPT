@@ -45,13 +45,13 @@ This document is the **system of record** for project planning and issue trackin
 | 11 | 011-rag-retrieval-pipeline.md | Build RAG retrieval pipeline | Done | Done/ | Depends on 10 |
 | 12 | 012-chat-ui-with-rag.md | Create chat UI page for LLM interaction with RAG memory | Done | Done/ | Depends on 11; OpenWebUI evaluated and deferred — see ADR-002 |
 | 13 | 013-end-to-end-testing-and-docs.md | End-to-end testing and documentation | Done | Done/ | Depends on all |
-| 14 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | TODO | TODO/ | Depends on 3; first step is choosing the approach |
-| 15 | 015-clickable-citation-links.md | Clickable citation links in chat UI | TODO | TODO/ | Depends on 12 |
-| 16 | 016-multi-file-import.md | Support importing multiple files | TODO | TODO/ | Depends on 5, 6 |
-| 17 | 017-export-content-analysis.md | Fully analyse export content for missing import detail | TODO | TODO/ | Depends on 4, 7 |
-| 18 | 018-multi-turn-chat-with-rolling-summaries.md | Multi-turn chat with rolling summaries | TODO | TODO/ | Depends on 11, 12 |
-| 19 | 019-persist-and-embed-chat-conversations.md | Persist and embed chat conversations | TODO | TODO/ | Depends on 18, 7, 9, 10 |
-| 20 | 020-tool-calling-rag-retrieval.md | Tool-calling RAG retrieval | TODO | TODO/ | Depends on 18, 11; exploratory — ADR first |
+| 14 | 016-multi-file-import.md | Support importing multiple files | TODO | TODO/ | Depends on 5, 6 |
+| 15 | 018-multi-turn-chat-with-rolling-summaries.md | Multi-turn chat with rolling summaries | TODO | TODO/ | Depends on 11, 12 |
+| 16 | 019-persist-and-embed-chat-conversations.md | Persist and embed chat conversations | TODO | TODO/ | Depends on 15, 7, 9, 10 |
+| 17 | 020-tool-calling-rag-retrieval.md | Tool-calling RAG retrieval | TODO | TODO/ | Depends on 15, 11; exploratory — ADR first |
+| 18 | 015-clickable-citation-links.md | Clickable citation links in chat UI | TODO | TODO/ | Depends on 12 |
+| 19 | 017-export-content-analysis.md | Fully analyse export content for missing import detail | TODO | TODO/ | Depends on 4, 7 |
+| 20 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | Deferred | TODO/ | Depends on 3; first step is choosing the approach. Very low priority and can come later as gold plating. |
 
 ---
 
