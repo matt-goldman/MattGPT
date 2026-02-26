@@ -270,6 +270,13 @@ MattGPT runs LLM inference locally by default (Ollama). Performance varies **dra
 You may need to tweak the configuration for your specific hardware. The defaults are tuned for a Windows machine with an NVIDIA GPU.
 
 
+## Project Tracking
+
+Planning and issue tracking lives in the [`docs/`](docs/) folder — [`docs/index.md`](docs/index.md) is the system of record. This file-based backlog exists so that AI coding agents (both online and offline) can pick up work autonomously. Completed issues are archived in `docs/Done/` with full context of what was built and why.
+
+If you'd like to suggest a feature or report a bug, please [open a GitHub Issue](https://github.com/matt-goldman/MattGPT/issues). Approved items will be promoted into the docs backlog for implementation.
+
+
 ## Future Enhancements
 
 - **Runtime configuration wizard** — a guided setup experience so new users can configure the LLM provider and model without editing config files (see [issue #14](docs/TODO/014-runtime-llm-configuration-wizard.md)).
