@@ -51,11 +51,11 @@ Aspire-specific guidance (running, debugging, MCP tools, integrations) is in [`s
 MattGPT/
 ├── AGENTS.md                               ← You are here (global agent instructions)
 ├── README.md                               ← Project goals and vision
-├── conversations.schema.json               ← Full JSON schema for ChatGPT export
 ├── MattGPT.slnx                            ← Solution file
 ├── docs/
 │   ├── index.md                            ← Backlog & project tracking (system of record)
 │   ├── conversation-restore-outline.md     ← Technical approach for RAG pipeline
+│   ├── conversations.schema.json           ← Full JSON schema for ChatGPT export
 │   ├── TODO/                               ← Issue files awaiting implementation
 │   ├── Done/                               ← Completed issue files
 │   └── Decisions/                          ← Architecture Decision Records (ADRs)
