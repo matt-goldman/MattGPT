@@ -47,6 +47,8 @@ This document is the **system of record** for project planning and issue trackin
 | 13 | 013-end-to-end-testing-and-docs.md | End-to-end testing and documentation | Done | Done/ | Depends on all |
 | 14 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | TODO | TODO/ | Depends on 3; first step is choosing the approach |
 | 15 | 015-clickable-citation-links.md | Clickable citation links in chat UI | TODO | TODO/ | Depends on 12 |
+| 16 | 016-multi-file-import.md | Support importing multiple files | TODO | TODO/ | Depends on 5, 6 |
+| 17 | 017-export-content-analysis.md | Fully analyse export content for missing import detail | TODO | TODO/ | Depends on 4, 7 |
 
 ---
 
