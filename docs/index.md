@@ -46,6 +46,7 @@ This document is the **system of record** for project planning and issue trackin
 | 12 | 012-chat-ui-with-rag.md | Create chat UI page for LLM interaction with RAG memory | Done | Done/ | Depends on 11; OpenWebUI evaluated and deferred — see ADR-002 |
 | 13 | 013-end-to-end-testing-and-docs.md | End-to-end testing and documentation | Done | Done/ | Depends on all |
 | 14 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | TODO | TODO/ | Depends on 3; first step is choosing the approach |
+| 15 | 015-clickable-citation-links.md | Clickable citation links in chat UI | TODO | TODO/ | Depends on 12 |
 
 ---
 
