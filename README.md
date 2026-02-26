@@ -1,7 +1,4 @@
-<table><tr>
-<td><img src="assets/logo.png" alt="MattGPT logo" height="64"></td>
-<td><h1>MattGPT</h1></td>
-</tr></table>
+# <img src="assets/logo.png" alt="MattGPT logo" height="48" align="center"> MattGPT
 
 A .NET Aspire application that imports your entire ChatGPT conversation history and makes it available as RAG (Retrieval-Augmented Generation) memory for any LLM.
 
