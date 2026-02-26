@@ -6,12 +6,12 @@ A .NET Aspire application that imports your entire ChatGPT conversation history 
 
 <table>
   <tr>
-    <td><img src="assets/screenshot-pre-upload.png" alt="Upload page" width="100%"></td>
-    <td><img src="assets/screenshot-importing.png" alt="Import in progress" width="100%"></td>
+    <td><img src="assets/screenshot-pre-upload.png" alt="Upload page" width="500"></td>
+    <td><img src="assets/screenshot-importing.png" alt="Import in progress" width="500"></td>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-post-upload.png" alt="Upload complete" width="100%"></td>
-    <td><img src="assets/screenshot-chat.png" alt="Chat UI with RAG sources" width="100%"></td>
+    <td><img src="assets/screenshot-post-upload.png" alt="Upload complete" width="500"></td>
+    <td><img src="assets/screenshot-chat.png" alt="Chat UI with RAG sources" width="500"></td>
   </tr>
 </table>
 
@@ -160,12 +160,12 @@ ollama pull nomic-embed-text
 2. Select your `conversations.json` file.
 3. Click **Upload & Process**.
 
-   ![Import in progress](assets/screenshot-importing.png)
+   <img src="assets/screenshot-importing.png" alt="Upload and process" width="400"/>
 
 4. The UI will show upload progress, then switch to processing status.
 5. Processing runs in the background. The UI polls for progress and shows the number of conversations processed.
 
-   ![Upload complete](assets/screenshot-post-upload.png)
+    <img src="assets/screenshot-post-upload.png" alt="Upload complete" width="400"/>
 
 6. When complete, a success message is shown.
 
@@ -191,7 +191,7 @@ The background pipeline performs the following steps automatically:
 5. Below each response, click **"N source(s) used"** to expand the list of retrieved conversations that informed the response, including their titles and relevance scores.
 6. Continue the conversation — each new message is processed independently with fresh RAG retrieval.
 
-![Chat UI with RAG sources](assets/screenshot-chat.png)
+    <img src="assets/screenshot-chat.png" alt="Chat UI with RAG sources" width="400"/>
 
 ### Switching LLM providers
 
