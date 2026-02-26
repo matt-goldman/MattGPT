@@ -2,6 +2,19 @@
 
 A .NET Aspire application that imports your entire ChatGPT conversation history and makes it available as RAG (Retrieval-Augmented Generation) memory for any LLM.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="assets/screenshot-pre-upload.png" alt="Upload page" width="100%"></td>
+    <td><img src="assets/screenshot-importing.png" alt="Import in progress" width="100%"></td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshot-post-upload.png" alt="Upload complete" width="100%"></td>
+    <td><img src="assets/screenshot-chat.png" alt="Chat UI with RAG sources" width="100%"></td>
+  </tr>
+</table>
+
 ## Goals
 
 Enable users to import their entire ChatGPT conversation history into a format that can be used as RAG memory for any Large Language Model. This allows users to leverage their past interactions with ChatGPT to enhance responses from other LLMs.
@@ -146,8 +159,14 @@ ollama pull nomic-embed-text
 1. Navigate to the **Upload** page from the nav bar.
 2. Select your `conversations.json` file.
 3. Click **Upload & Process**.
+
+   ![Import in progress](assets/screenshot-importing.png)
+
 4. The UI will show upload progress, then switch to processing status.
 5. Processing runs in the background. The UI polls for progress and shows the number of conversations processed.
+
+   ![Upload complete](assets/screenshot-post-upload.png)
+
 6. When complete, a success message is shown.
 
 ### What happens during processing
@@ -171,6 +190,8 @@ The background pipeline performs the following steps automatically:
 4. The LLM response is displayed in the chat window.
 5. Below each response, click **"N source(s) used"** to expand the list of retrieved conversations that informed the response, including their titles and relevance scores.
 6. Continue the conversation — each new message is processed independently with fresh RAG retrieval.
+
+![Chat UI with RAG sources](assets/screenshot-chat.png)
 
 ### Switching LLM providers
 
