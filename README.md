@@ -1,4 +1,7 @@
-# MattGPT
+<div style="display:flex;flex-direction:row;align-items:middle;justify-content:start;">
+<img src="/assets/logo.png">
+<h1>MattGPT</h1>
+</div>
 
 A .NET Aspire application that imports your entire ChatGPT conversation history and makes it available as RAG (Retrieval-Augmented Generation) memory for any LLM.
 
@@ -16,7 +19,6 @@ A fully local .NET Aspire application consisting of:
 - **Qdrant** — stores embeddings for semantic search
 - **LLM** — config-driven: Ollama, Foundry Local, or Azure OpenAI
 
----
 
 ## Running Locally
 
@@ -128,7 +130,6 @@ ollama pull nomic-embed-text
 }
 ```
 
----
 
 ## Uploading and Processing Conversations
 
@@ -162,7 +163,6 @@ The background pipeline performs the following steps automatically:
 4. **Embed** — each summary is converted to a vector embedding.
 5. **Index** — embeddings are stored in Qdrant for semantic search.
 
----
 
 ## Testing LLM Interaction
 
@@ -201,7 +201,6 @@ The RAG pipeline is controlled by the `RAG` section in `appsettings.json`:
 
 Increase `TopK` for richer context. Lower `MinScore` to include less similar results (may add noise). Raise `MinScore` to require higher relevance.
 
----
 
 ## Troubleshooting
 
@@ -240,7 +239,6 @@ Increase `TopK` for richer context. Lower `MinScore` to include less similar res
 - Re-embed by calling `POST /conversations/embed` (the service re-embeds any conversation in the `Summarised` state).
 - If needed, re-import conversations to reset processing state.
 
----
 
 ## Performance Notes
 
@@ -253,7 +251,6 @@ MattGPT runs LLM inference locally by default (Ollama). Performance varies **dra
 
 You may need to tweak the configuration for your specific hardware. The defaults are tuned for a Windows machine with an NVIDIA GPU.
 
----
 
 ## Future Enhancements
 
