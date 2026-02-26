@@ -242,8 +242,22 @@ Increase `TopK` for richer context. Lower `MinScore` to include less similar res
 
 ---
 
+## Performance Notes
+
+MattGPT runs LLM inference locally by default (Ollama). Performance varies **dramatically** depending on hardware:
+
+- **GPU acceleration is strongly recommended.** On Windows with a CUDA-capable GPU, the AppHost enables GPU passthrough for the Ollama container via `.WithGPUSupport()`. This makes summarisation, embedding, and chat responses significantly faster.
+- **CPU-only inference is very slow.** On macOS (or any machine without a supported GPU), expect long processing times — especially for the summarisation and embedding pipeline across thousands of conversations. The HTTP client timeout is set to 10 minutes per request to accommodate this, but individual operations may still feel sluggish.
+- **Model choice matters.** Smaller models (e.g. `llama3.2` 3B, `nomic-embed-text`) are much faster than larger ones. If you're experimenting or running on limited hardware, start with the defaults.
+- **Cloud providers are an alternative.** If local performance is unacceptable, switch to `AzureOpenAI` in the LLM configuration to offload inference to the cloud.
+
+You may need to tweak the configuration for your specific hardware. The defaults are tuned for a Windows machine with an NVIDIA GPU.
+
+---
+
 ## Future Enhancements
 
+- **Runtime configuration wizard** — a guided setup experience so new users can configure the LLM provider and model without editing config files (see [issue #14](docs/TODO/014-runtime-llm-configuration-wizard.md)).
 - Support for additional vector databases (Pinecone, Weaviate) and LLM endpoints.
 - Advanced parsing: sentiment analysis, topic modelling, entity extraction.
 - Import of other file types (images, PDFs) shared in conversations.
