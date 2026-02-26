@@ -1,6 +1,8 @@
 @page "/chat"
 @rendermode InteractiveServer
+@implements IAsyncDisposable
 @inject IHttpClientFactory HttpClients
+@inject IJSRuntime JS
 @using System.IO
 @using System.Text.Json
 
@@ -94,7 +96,9 @@
     @* Input area *@
     <LumexCard Class="p-3">
         <div class="flex gap-2 items-end">
-            <textarea @bind="_inputText"
+            <textarea @ref="_textareaRef"
+                      @bind="_inputText"
+                      @bind:event="oninput"
                       @onkeydown="HandleKeyDown"
                       rows="1"
                       placeholder="Ask a question..."
@@ -116,6 +120,25 @@
     private string _inputText = string.Empty;
     private bool _isThinking;
     private string _errorMessage = string.Empty;
+    private ElementReference _textareaRef;
+    private IJSObjectReference? _jsModule;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/chat.js");
+            await _jsModule.InvokeVoidAsync("preventEnterNewline", _textareaRef);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_jsModule is not null)
+        {
+            await _jsModule.DisposeAsync();
+        }
+    }
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
