@@ -67,7 +67,7 @@ public class StoredConversation
         CreateTime = conversation.CreateTime,
         UpdateTime = conversation.UpdateTime,
         DefaultModelSlug = conversation.DefaultModelSlug,
-        LinearisedMessages = conversation.Messages.Select(StoredMessage.From).ToList(),
+        LinearisedMessages = [.. conversation.Messages.Select(StoredMessage.From)],
         ImportTimestamp = DateTimeOffset.UtcNow,
         ProcessingStatus = ConversationProcessingStatus.Imported,
     };

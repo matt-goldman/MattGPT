@@ -58,15 +58,18 @@ public class RagServiceTests
         IReadOnlyList<QdrantSearchResult> searchResults,
         string llmResponse = "Test answer.",
         RagOptions? ragOptions = null,
-        FakeConversationRepository? repository = null)
+        FakeConversationRepository? repository = null,
+        ChatSessionOptions? chatOptions = null)
     {
         var options = Options.Create(ragOptions ?? new RagOptions { TopK = 5, MinScore = 0.5f });
+        var chatOpts = Options.Create(chatOptions ?? new ChatSessionOptions());
         return new RagService(
             new FakeEmbeddingGenerator(TestVector),
             new FakeSearchQdrantService(searchResults),
             repository ?? new FakeConversationRepository(),
             new FakeChatClient(llmResponse),
             options,
+            chatOpts,
             NullLogger<RagService>.Instance);
     }
 
@@ -264,20 +267,147 @@ public class RagServiceTests
         {
             ConversationId = "long",
             Title = "Long conv",
-            LinearisedMessages = Enumerable.Range(0, 200)
+            LinearisedMessages = [.. Enumerable.Range(0, 200)
                 .Select(i => new StoredMessage
                 {
                     Id = $"m{i}",
                     Role = i % 2 == 0 ? "user" : "assistant",
                     ContentType = "text",
                     Parts = [$"This is a moderately long message number {i} that should eventually cause truncation when enough messages accumulate."],
-                })
-                .ToList(),
+                })],
         };
 
         var excerpt = RagService.BuildConversationExcerpt(conv);
 
         Assert.True(excerpt.Length <= RagService.MaxExcerptCharsPerConversation + 100); // small buffer for final line
         Assert.Contains("[conversation truncated]", excerpt);
+    }
+
+    // --- Multi-turn / session-aware BuildMessages tests ---
+
+    [Fact]
+    public void BuildMessages_WithSession_IncludesRecentMessagesBeforeUserQuery()
+    {
+        var session = new ChatSession();
+        session.Messages.Add(new ChatSessionMessage { Role = "user", Content = "First question" });
+        session.Messages.Add(new ChatSessionMessage { Role = "assistant", Content = "First answer" });
+        session.Messages.Add(new ChatSessionMessage { Role = "user", Content = "Follow-up question" });
+
+        var messages = RagService.BuildMessages("Follow-up question", [], session: session);
+
+        // Should be: System, User("First question"), Assistant("First answer"), User("Follow-up question")
+        Assert.Equal(4, messages.Count);
+        Assert.Equal(ChatRole.System, messages[0].Role);
+        Assert.Equal(ChatRole.User, messages[1].Role);
+        Assert.Equal("First question", messages[1].Text);
+        Assert.Equal(ChatRole.Assistant, messages[2].Role);
+        Assert.Equal("First answer", messages[2].Text);
+        Assert.Equal(ChatRole.User, messages[3].Role);
+        Assert.Equal("Follow-up question", messages[3].Text);
+    }
+
+    [Fact]
+    public void BuildMessages_WithRollingSummary_IncludesSummaryBlock()
+    {
+        var session = new ChatSession
+        {
+            RollingSummary = "User asked about Qdrant integration. Decisions were made about vector sizes.",
+        };
+        session.Messages.Add(new ChatSessionMessage { Role = "user", Content = "Current question" });
+
+        var messages = RagService.BuildMessages("Current question", [], session: session);
+
+        // System + Summary system message + User
+        Assert.True(messages.Count >= 3);
+        var summaryMsg = messages[1];
+        Assert.Equal(ChatRole.System, summaryMsg.Role);
+        Assert.Contains("CONVERSATION SO FAR", summaryMsg.Text!);
+        Assert.Contains("Qdrant integration", summaryMsg.Text!);
+    }
+
+    [Fact]
+    public void BuildMessages_WithSessionAndRag_CombinesAllTiers()
+    {
+        var context = new List<QdrantSearchResult>
+        {
+            new("c1", 0.9f, "RAG Title", "RAG Summary"),
+        };
+
+        var session = new ChatSession
+        {
+            RollingSummary = "Prior conversation summary.",
+        };
+        session.Messages.Add(new ChatSessionMessage { Role = "user", Content = "Earlier question" });
+        session.Messages.Add(new ChatSessionMessage { Role = "assistant", Content = "Earlier answer" });
+        session.Messages.Add(new ChatSessionMessage { Role = "user", Content = "New question" });
+
+        var messages = RagService.BuildMessages("New question", context, session: session);
+
+        // System (with RAG) + System (summary) + User + Assistant + User (current)
+        var systemTexts = messages.Where(m => m.Role == ChatRole.System).Select(m => m.Text!).ToList();
+        Assert.Contains(systemTexts, t => t.Contains("YOUR MEMORIES"));
+        Assert.Contains(systemTexts, t => t.Contains("CONVERSATION SO FAR"));
+
+        var userMessages = messages.Where(m => m.Role == ChatRole.User).ToList();
+        Assert.Equal(2, userMessages.Count);
+        Assert.Equal("Earlier question", userMessages[0].Text);
+        Assert.Equal("New question", userMessages[1].Text);
+    }
+
+    [Fact]
+    public void BuildMessages_NullSession_BehavesAsBefore()
+    {
+        var messages = RagService.BuildMessages("Simple query", []);
+
+        Assert.Equal(2, messages.Count);
+        Assert.Equal(ChatRole.System, messages[0].Role);
+        Assert.Equal(ChatRole.User, messages[1].Role);
+        Assert.Equal("Simple query", messages[1].Text);
+    }
+
+    [Fact]
+    public void BuildMessages_SingleMessageSession_OnlyIncludesUserQuery()
+    {
+        // When there's only one message (the current user query), there should be
+        // no prior messages — just system + user.
+        var session = new ChatSession();
+        session.Messages.Add(new ChatSessionMessage { Role = "user", Content = "Just one message" });
+
+        var messages = RagService.BuildMessages("Just one message", [], session: session);
+
+        Assert.Equal(2, messages.Count); // System + User
+        Assert.Equal(ChatRole.System, messages[0].Role);
+        Assert.Equal(ChatRole.User, messages[1].Role);
+        Assert.Equal("Just one message", messages[1].Text);
+    }
+
+    [Fact]
+    public void BuildMessages_WithManyMessages_OnlyIncludesRecentWindow()
+    {
+        // 10 exchanges (20 messages) + current query = 21 messages total.
+        // With recentMessageCount=2, only the last 2 prior messages should appear verbatim.
+        var session = new ChatSession();
+        for (int i = 0; i < 10; i++)
+        {
+            session.Messages.Add(new ChatSessionMessage { Role = "user", Content = $"User msg {i}" });
+            session.Messages.Add(new ChatSessionMessage { Role = "assistant", Content = $"Asst msg {i}" });
+        }
+        session.Messages.Add(new ChatSessionMessage { Role = "user", Content = "Current query" });
+
+        var messages = RagService.BuildMessages("Current query", [], session: session, recentMessageCount: 2);
+
+        // System + 2 recent prior messages + final user = 4
+        Assert.Equal(4, messages.Count);
+        Assert.Equal(ChatRole.System, messages[0].Role);
+        Assert.Equal(ChatRole.User, messages[1].Role);
+        Assert.Equal("User msg 9", messages[1].Text);
+        Assert.Equal(ChatRole.Assistant, messages[2].Role);
+        Assert.Equal("Asst msg 9", messages[2].Text);
+        Assert.Equal(ChatRole.User, messages[3].Role);
+        Assert.Equal("Current query", messages[3].Text);
+
+        // Older messages (e.g. "User msg 0") should NOT appear
+        Assert.DoesNotContain(messages, m => m.Text == "User msg 0");
+        Assert.DoesNotContain(messages, m => m.Text == "Asst msg 0");
     }
 }
