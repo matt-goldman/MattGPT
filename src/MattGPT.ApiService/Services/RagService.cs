@@ -40,6 +40,7 @@ public class RagService
     private readonly IConversationRepository _repository;
     private readonly IChatClient _chatClient;
     private readonly RagOptions _options;
+    private readonly ChatSessionOptions _chatOptions;
     private readonly ILogger<RagService> _logger;
 
     public RagService(
@@ -48,6 +49,7 @@ public class RagService
         IConversationRepository repository,
         IChatClient chatClient,
         IOptions<RagOptions> options,
+        IOptions<ChatSessionOptions> chatOptions,
         ILogger<RagService> logger)
     {
         _embeddingGenerator = embeddingGenerator;
@@ -55,6 +57,7 @@ public class RagService
         _repository = repository;
         _chatClient = chatClient;
         _options = options.Value;
+        _chatOptions = chatOptions.Value;
         _logger = logger;
     }
 
@@ -117,7 +120,7 @@ public class RagService
             fullConversations.Count, relevant.Count);
 
         // 5. Build the augmented prompt using proper chat message roles.
-        var messages = BuildMessages(query, relevant, conversationLookup, session);
+        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount);
 
         var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
         _logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
@@ -197,7 +200,7 @@ public class RagService
             fullConversations.Count, relevant.Count);
 
         // 5. Build the augmented prompt using proper chat message roles.
-        var messages = BuildMessages(query, relevant, conversationLookup, session);
+        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount);
 
         var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
         _logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
@@ -228,7 +231,8 @@ public class RagService
         string query,
         IReadOnlyList<QdrantSearchResult> context,
         IReadOnlyDictionary<string, StoredConversation>? fullConversations = null,
-        ChatSession? session = null)
+        ChatSession? session = null,
+        int recentMessageCount = 6)
     {
         var messages = new List<AIChatMessage>();
 
@@ -299,9 +303,14 @@ public class RagService
         // only include messages prior to the current query as context).
         if (session is { Messages.Count: > 0 })
         {
-            // Include all messages from the session except the last one (current user query),
-            // since the current query is added as the final user message below.
-            var historyMessages = session.Messages.SkipLast(1);
+            // Only include RECENT messages verbatim — older messages are already
+            // compressed into the rolling summary above.  We take the recent window
+            // (recentMessageCount) plus the current query, then SkipLast(1) to
+            // exclude the current query which is added as the final user message below.
+            var recentWindow = recentMessageCount + 1; // +1 for current query
+            var historyMessages = session.Messages
+                .TakeLast(recentWindow)
+                .SkipLast(1);
             foreach (var msg in historyMessages)
             {
                 var role = msg.Role switch

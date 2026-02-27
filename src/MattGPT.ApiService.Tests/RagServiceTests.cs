@@ -58,15 +58,18 @@ public class RagServiceTests
         IReadOnlyList<QdrantSearchResult> searchResults,
         string llmResponse = "Test answer.",
         RagOptions? ragOptions = null,
-        FakeConversationRepository? repository = null)
+        FakeConversationRepository? repository = null,
+        ChatSessionOptions? chatOptions = null)
     {
         var options = Options.Create(ragOptions ?? new RagOptions { TopK = 5, MinScore = 0.5f });
+        var chatOpts = Options.Create(chatOptions ?? new ChatSessionOptions());
         return new RagService(
             new FakeEmbeddingGenerator(TestVector),
             new FakeSearchQdrantService(searchResults),
             repository ?? new FakeConversationRepository(),
             new FakeChatClient(llmResponse),
             options,
+            chatOpts,
             NullLogger<RagService>.Instance);
     }
 
@@ -376,5 +379,35 @@ public class RagServiceTests
         Assert.Equal(ChatRole.System, messages[0].Role);
         Assert.Equal(ChatRole.User, messages[1].Role);
         Assert.Equal("Just one message", messages[1].Text);
+    }
+
+    [Fact]
+    public void BuildMessages_WithManyMessages_OnlyIncludesRecentWindow()
+    {
+        // 10 exchanges (20 messages) + current query = 21 messages total.
+        // With recentMessageCount=2, only the last 2 prior messages should appear verbatim.
+        var session = new ChatSession();
+        for (int i = 0; i < 10; i++)
+        {
+            session.Messages.Add(new ChatSessionMessage { Role = "user", Content = $"User msg {i}" });
+            session.Messages.Add(new ChatSessionMessage { Role = "assistant", Content = $"Asst msg {i}" });
+        }
+        session.Messages.Add(new ChatSessionMessage { Role = "user", Content = "Current query" });
+
+        var messages = RagService.BuildMessages("Current query", [], session: session, recentMessageCount: 2);
+
+        // System + 2 recent prior messages + final user = 4
+        Assert.Equal(4, messages.Count);
+        Assert.Equal(ChatRole.System, messages[0].Role);
+        Assert.Equal(ChatRole.User, messages[1].Role);
+        Assert.Equal("User msg 9", messages[1].Text);
+        Assert.Equal(ChatRole.Assistant, messages[2].Role);
+        Assert.Equal("Asst msg 9", messages[2].Text);
+        Assert.Equal(ChatRole.User, messages[3].Role);
+        Assert.Equal("Current query", messages[3].Text);
+
+        // Older messages (e.g. "User msg 0") should NOT appear
+        Assert.DoesNotContain(messages, m => m.Text == "User msg 0");
+        Assert.DoesNotContain(messages, m => m.Text == "Asst msg 0");
     }
 }
