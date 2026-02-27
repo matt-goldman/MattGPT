@@ -46,13 +46,13 @@ public class SearchMemoriesTool(
     /// that the LLM can use to formulate its response.
     /// </summary>
     /// <param name="query">The search query describing what to look for in past conversations.</param>
-    /// <param name="maxResults">Maximum number of conversations to return (1–10, default from config).</param>
+    /// <param name="maxResults">Maximum number of conversations to return (1–10). Pass 0 to use the default from config.</param>
     [Description("Search the user's past conversation history by topic or query.")]
     public async Task<string> SearchMemoriesAsync(
         [Description("The search query describing what to look for in past conversations.")] string query,
-        [Description("Maximum number of conversations to return (1-10).")] int? maxResults = null)
+        [Description("Maximum number of conversations to return (1-10). Defaults to 5 if omitted or 0.")] int maxResults = 0)
     {
-        var limit = Math.Clamp(maxResults ?? _options.ToolMaxResults, 1, 10);
+        var limit = Math.Clamp(maxResults > 0 ? maxResults : _options.ToolMaxResults, 1, 10);
 
         logger.LogInformation(
             "search_memories tool invoked. Query: {Query}, MaxResults: {MaxResults}",

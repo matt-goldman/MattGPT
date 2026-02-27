@@ -41,7 +41,10 @@ if (!string.IsNullOrEmpty(ragMode))
 // --- Ollama (only when configured as the provider) ---
 if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
 {
-    var ollama = builder.AddOllama("ollama").WithGPUSupport();
+    var ollama = builder.AddOllama("ollama")
+        .WithDataVolume()
+        .WithGPUSupport();
+        
     var chatModel = ollama.AddModel(modelId);
 
     apiService
