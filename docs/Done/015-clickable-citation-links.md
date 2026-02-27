@@ -1,6 +1,6 @@
 # 015 — Clickable Citation Links in Chat UI
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 15
 **Dependencies:** 12 (chat UI with RAG)
 
@@ -46,12 +46,12 @@ The `ConversationId` is available but not currently exposed to the user in any a
 
 ## Acceptance Criteria
 
-- [ ] A new API endpoint exists that returns a stored conversation by its `ConversationId`.
-- [ ] Each source citation in the chat UI is clickable (link, button, or similar affordance).
-- [ ] Clicking a citation displays the full conversation content in a readable format (modal, inline panel, or downloaded Markdown file).
-- [ ] The conversation viewer shows the title, message roles, and message content in order.
-- [ ] The chat interface remains responsive while loading conversation content (no UI blocking).
-- [ ] Conversations that are not found (e.g. deleted) show a graceful error message rather than crashing.
+- [x] A new API endpoint exists that returns a stored conversation by its `ConversationId`.
+- [x] Each source citation in the chat UI is clickable (link, button, or similar affordance).
+- [x] Clicking a citation displays the full conversation content in a readable format (modal, inline panel, or downloaded Markdown file).
+- [x] The conversation viewer shows the title, message roles, and message content in order.
+- [x] The chat interface remains responsive while loading conversation content (no UI blocking).
+- [x] Conversations that are not found (e.g. deleted) show a graceful error message rather than crashing.
 
 ## Notes
 
