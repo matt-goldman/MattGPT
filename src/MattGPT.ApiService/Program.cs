@@ -178,6 +178,7 @@ app.MapPost("/conversations/upload", async (HttpRequest request, ImportJobStore 
     }
 
     var job = jobStore.CreateJob();
+    job.FileName = file.FileName;
     await channel.Writer.WriteAsync(new ImportJobRequest(job.JobId, tempPath));
 
     return Results.Accepted($"/conversations/status/{job.JobId}", new
@@ -201,6 +202,7 @@ app.MapGet("/conversations/status/{jobId}", (string jobId, ImportJobStore jobSto
     return Results.Ok(new
     {
         jobId = job.JobId,
+        fileName = job.FileName,
         status = job.Status.ToString(),
         processedConversations = job.ProcessedConversations,
         errorCount = job.ErrorCount,

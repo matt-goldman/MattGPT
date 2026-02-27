@@ -11,6 +11,7 @@ public enum EmbeddingJobStatus { NotStarted, InProgress, Complete, Failed }
 public class ImportJob
 {
     public string JobId { get; init; } = Guid.NewGuid().ToString("N");
+    public string? FileName { get; set; }
     public ImportJobStatus Status { get; set; } = ImportJobStatus.Queued;
     public int ProcessedConversations { get; set; }
     public int ErrorCount { get; set; }
