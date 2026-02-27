@@ -1,9 +1,11 @@
 @page "/chat"
+@page "/chat/conversation/{ConversationId}"
 @layout MattGPT.Web.Components.Layout.ChatLayout
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 @inject IHttpClientFactory HttpClients
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 @using System.IO
 @using System.Text.Json
 
@@ -88,7 +90,10 @@
                                         @foreach (var src in msg.Sources)
                                         {
                                             <div class="text-xs">
-                                                <span class="font-medium text-default-600">@(src.Title ?? "Untitled")</span>
+                                                <a href="/chat/conversation/@src.ConversationId"
+                                                   class="font-medium text-primary hover:underline cursor-pointer"
+                                                   @onclick="() => LoadImportedConversation(src.ConversationId)"
+                                                   @onclick:preventDefault>@(src.Title ?? "Untitled")</a>
                                                 <span class="text-default-400 ml-1">(score: @src.Score.ToString("F2"))</span>
                                                 @if (!string.IsNullOrWhiteSpace(src.Summary))
                                                 {
@@ -174,6 +179,8 @@
 </div>
 
 @code {
+    [Parameter] public string? ConversationId { get; set; }
+
     private readonly List<ChatMessage> _messages = [];
     private readonly System.Text.StringBuilder _streamingContent = new();
     private string _inputText = string.Empty;
@@ -190,6 +197,22 @@
     // When viewing an imported conversation read-only.
     private string? _viewingConversationId;
     private string? _viewingTitle;
+
+    // Track the last loaded conversation to avoid redundant reloads on re-render.
+    private string? _lastLoadedConversationId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ConversationId is not null && ConversationId != _lastLoadedConversationId)
+        {
+            _lastLoadedConversationId = ConversationId;
+            await LoadImportedConversation(ConversationId);
+        }
+        else if (ConversationId is null && _lastLoadedConversationId is not null)
+        {
+            _lastLoadedConversationId = null;
+        }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -229,8 +252,10 @@
         _sessionTitle = null;
         _viewingConversationId = null;
         _viewingTitle = null;
+        _lastLoadedConversationId = null;
         _errorMessage = string.Empty;
         _streamingContent.Clear();
+        Navigation.NavigateTo("/chat", replace: true);
         StateHasChanged();
     }
 
@@ -276,10 +301,15 @@
         {
             var client = HttpClients.CreateClient("apiservice");
             var conv = await client.GetFromJsonAsync<ImportedConversationDetail>($"/conversations/{conversationId}", _jsonOptions);
-            if (conv is null) return;
+            if (conv is null)
+            {
+                _errorMessage = "Conversation not found.";
+                return;
+            }
 
             _viewingConversationId = conv.ConversationId;
             _viewingTitle = conv.Title;
+            _lastLoadedConversationId = conversationId;
 
             foreach (var msg in conv.Messages)
             {
@@ -297,6 +327,13 @@
                     _messages.Add(new ChatMessage(role, msg.Content, null));
                 }
             }
+
+            // Update the URL to reflect the viewed conversation.
+            Navigation.NavigateTo($"/chat/conversation/{conversationId}", replace: true);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _errorMessage = "This conversation could not be found. It may have been deleted.";
         }
         catch (Exception ex)
         {
