@@ -89,6 +89,21 @@ public class SummarisationService(
         try
         {
             var prompt = BuildPrompt(conversation);
+
+            if (prompt is null)
+            {
+                logger.LogDebug(
+                    "Conversation {Id} has no visible messages after filtering; marking as Summarised with empty summary.",
+                    conversation.ConversationId);
+
+                await repository.UpdateSummaryAsync(
+                    conversation.ConversationId,
+                    summary: null,
+                    ConversationProcessingStatus.Summarised,
+                    ct);
+                return SummariseOutcome.Skipped;
+            }
+
             var response = await chatClient.GetResponseAsync(prompt, cancellationToken: ct);
             var summary = response.Text;
 
@@ -132,7 +147,7 @@ public class SummarisationService(
         }
     }
 
-    public static string BuildPrompt(StoredConversation conversation)
+    public static string? BuildPrompt(StoredConversation conversation)
     {
         var sb = new StringBuilder();
         sb.AppendLine("You are summarising a ChatGPT conversation to capture its key information for future reference.");
@@ -147,6 +162,7 @@ public class SummarisationService(
         int headerLen = sb.Length;
         int remaining = MaxPromptChars - headerLen - 300; // reserve chars for the instruction footer
         bool truncated = false;
+        bool anyVisible = false;
 
         foreach (var msg in conversation.LinearisedMessages)
         {
@@ -166,7 +182,12 @@ public class SummarisationService(
 
             sb.Append(line);
             remaining -= line.Length;
+            anyVisible = true;
         }
+
+        // If every message was filtered out, there's nothing meaningful to summarise.
+        if (!anyVisible)
+            return null;
 
         if (truncated)
             sb.AppendLine("[... earlier messages truncated ...]");
