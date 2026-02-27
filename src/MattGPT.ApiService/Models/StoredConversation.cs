@@ -30,6 +30,18 @@ public class StoredMessage
     /// <summary>Source page title for tether_quote content type.</summary>
     public string? SourceTitle { get; set; }
 
+    /// <summary>
+    /// Weight/priority from the ChatGPT export. 0.0 indicates system/scaffolding messages;
+    /// 1.0 indicates normal visible messages. Null if not present in the export.
+    /// </summary>
+    public double? Weight { get; set; }
+
+    /// <summary>
+    /// Whether this message should be excluded from embedding and summarisation.
+    /// Derived from <c>metadata.is_visually_hidden_from_conversation</c> in the export.
+    /// </summary>
+    public bool IsHidden { get; set; }
+
     internal static StoredMessage From(Message message)
     {
         var stored = new StoredMessage
@@ -38,6 +50,8 @@ public class StoredMessage
             Role = message.Author.Role,
             ContentType = message.Content.ContentType,
             CreateTime = message.CreateTime,
+            Weight = message.Weight,
+            IsHidden = message.Metadata?.IsVisuallyHiddenFromConversation == true,
         };
 
         ExtractContent(message.Content, stored);

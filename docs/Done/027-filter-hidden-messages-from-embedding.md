@@ -1,6 +1,6 @@
 # 027 — Filter Hidden and System Messages from Embedding
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 27  
 **Dependencies:** 17 (export content analysis), 23 (handle non-text content types)
 
@@ -33,11 +33,11 @@ Including these in embedding text wastes the limited embedding context window (8
 
 ## Acceptance Criteria
 
-- [ ] `Weight` and `IsHidden` fields are captured on `StoredMessage`.
-- [ ] `BuildEmbeddingText()` excludes weight-0 and hidden messages.
-- [ ] `BuildPrompt()` excludes hidden messages.
-- [ ] Hidden messages are still stored in MongoDB for display purposes.
-- [ ] Existing tests pass; new tests for filtering logic.
+- [x] `Weight` and `IsHidden` fields are captured on `StoredMessage`.
+- [x] `BuildEmbeddingText()` excludes weight-0 and hidden messages.
+- [x] `BuildPrompt()` excludes hidden messages.
+- [x] Hidden messages are still stored in MongoDB for display purposes.
+- [x] Existing tests pass; new tests for filtering logic.
 
 ## Notes
 
