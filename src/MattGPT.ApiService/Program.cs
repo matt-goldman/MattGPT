@@ -44,8 +44,8 @@ builder.Services.AddScoped<RagService>();
 builder.Services.Configure<RagOptions>(builder.Configuration.GetSection(RagOptions.SectionName));
 var ragOptions = builder.Configuration.GetSection(RagOptions.SectionName).Get<RagOptions>() ?? new RagOptions();
 
-// Register the search_memories tool when RAG mode supports tool calling (hybrid or tools).
-if (ragOptions.Mode is RagMode.Hybrid or RagMode.Tools)
+// Register the search_memories tool when RAG mode supports tool calling (Auto or ToolsOnly).
+if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
 {
     builder.Services.AddScoped<SearchMemoriesTool>();
 }
@@ -89,14 +89,14 @@ switch (llmOptions.Provider.ToLowerInvariant())
         if (llmOptions.ChatConnectionName is { } chatConnectionName)
         {
             var chatBuilder = builder.AddOllamaApiClient(chatConnectionName).AddChatClient();
-            if (ragOptions.Mode is RagMode.Hybrid or RagMode.Tools)
+            if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
                 chatBuilder.UseFunctionInvocation();
         }
         else
         {
             var chatEndpoint = new Uri(llmOptions.Endpoint);
             var chatBuilder = builder.Services.AddChatClient(new OllamaSharp.OllamaApiClient(chatEndpoint, llmOptions.ModelId));
-            if (ragOptions.Mode is RagMode.Hybrid or RagMode.Tools)
+            if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
                 chatBuilder.UseFunctionInvocation();
         }
 
@@ -121,7 +121,7 @@ switch (llmOptions.Provider.ToLowerInvariant())
             new OpenAIClientOptions { Endpoint = new Uri(llmOptions.Endpoint) });
         {
             var chatBuilder = builder.Services.AddChatClient(foundryClient.GetChatClient(llmOptions.ModelId).AsIChatClient());
-            if (ragOptions.Mode is RagMode.Hybrid or RagMode.Tools)
+            if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
                 chatBuilder.UseFunctionInvocation();
         }
         builder.Services.AddEmbeddingGenerator(foundryClient.GetEmbeddingClient(embeddingModelId).AsIEmbeddingGenerator());
@@ -133,7 +133,7 @@ switch (llmOptions.Provider.ToLowerInvariant())
             new ApiKeyCredential(llmOptions.ApiKey ?? throw new InvalidOperationException("LLM:ApiKey is required for AzureOpenAI provider.")));
         {
             var chatBuilder = builder.Services.AddChatClient(azureClient.GetChatClient(llmOptions.ModelId).AsIChatClient());
-            if (ragOptions.Mode is RagMode.Hybrid or RagMode.Tools)
+            if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
                 chatBuilder.UseFunctionInvocation();
         }
         builder.Services.AddEmbeddingGenerator(azureClient.GetEmbeddingClient(embeddingModelId).AsIEmbeddingGenerator());
@@ -411,7 +411,7 @@ app.MapGet("/rag/diagnostics", async (
     {
         healthy,
         issues,
-        ragConfig = new { mode = opts.Mode.ToString(), topK = opts.TopK, minScore = opts.MinScore, hybridTopK = opts.HybridTopK, hybridMinScore = opts.HybridMinScore, toolMaxResults = opts.ToolMaxResults },
+        ragConfig = new { mode = opts.Mode.ToString(), topK = opts.TopK, minScore = opts.MinScore, autoTopK = opts.AutoTopK, autoMinScore = opts.AutoMinScore, toolMaxResults = opts.ToolMaxResults },
         llmConfig = new { provider = llm.Provider, modelId = llm.ModelId, embeddingModelId = llm.EmbeddingModelId },
         mongodb = new
         {

@@ -8,12 +8,15 @@ var modelId = builder.Configuration["LLM:ModelId"] ?? "llama3.2";
 var embeddingModelId = builder.Configuration["LLM:EmbeddingModelId"] ?? modelId;
 var endpoint = builder.Configuration["LLM:Endpoint"] ?? string.Empty;
 var apiKey = builder.Configuration["LLM:ApiKey"];
+var ragMode = builder.Configuration["RAG:Mode"];
 
 // --- Infrastructure resources ---
 var mongodb = builder.AddMongoDB("mongodb")
+    .WithDataVolume()
     .AddDatabase("mattgptdb");
 
-var qdrant = builder.AddQdrant("qdrant");
+var qdrant = builder.AddQdrant("qdrant")
+    .WithDataVolume();
 
 // --- API service ---
 var apiService = builder.AddProject<Projects.MattGPT_ApiService>("apiservice")
@@ -31,6 +34,9 @@ if (!string.IsNullOrEmpty(endpoint))
 
 if (!string.IsNullOrEmpty(apiKey))
     apiService.WithEnvironment("LLM__ApiKey", apiKey);
+
+if (!string.IsNullOrEmpty(ragMode))
+    apiService.WithEnvironment("RAG__Mode", ragMode);
 
 // --- Ollama (only when configured as the provider) ---
 if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))

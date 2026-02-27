@@ -51,7 +51,8 @@
         </div>
 
         @* Message history *@
-        <div class="flex-1 overflow-y-auto space-y-4 px-4 py-4" id="chat-messages">
+        <div class="flex-1 overflow-y-auto px-4 py-4" id="chat-messages">
+            <div class="max-w-4xl mx-auto space-y-4">
             @if (_messages.Count == 0 && _viewingConversationId is null)
             {
                 <div class="flex items-center justify-center h-full text-default-400 text-sm">
@@ -73,8 +74,8 @@
                 {
                     <div class="space-y-2">
                         <div class="flex justify-start">
-                            <div class="max-w-2xl bg-default-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm whitespace-pre-wrap">
-                                @msg.Content
+                            <div class="max-w-2xl bg-default-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm">
+                                <MarkdownContent Content="@msg.Content" />
                             </div>
                         </div>
 
@@ -115,7 +116,9 @@
                         }
                         else
                         {
-                            <div class="max-w-2xl text-sm whitespace-pre-wrap">@_streamingContent.ToString()</div>
+                            <div class="max-w-2xl text-sm">
+                                <MarkdownContent Content="@_streamingContent.ToString()" />
+                            </div>
                         }
                     </div>
                 </div>
@@ -127,12 +130,14 @@
                     @_errorMessage
                 </LumexAlert>
             }
+            </div>
         </div>
 
         @* Input area — hidden when viewing imported conversation *@
         @if (_viewingConversationId is null)
         {
             <div class="px-4 pb-4 pt-2">
+                <div class="max-w-4xl mx-auto">
                 <LumexCard Class="p-3">
                     <div class="flex gap-2 items-end">
                         <textarea @ref="_textareaRef"
@@ -151,17 +156,20 @@
                         </LumexButton>
                     </div>
                 </LumexCard>
+                </div>
             </div>
         }
         else
         {
             <div class="px-4 pb-4 pt-2">
+                <div class="max-w-4xl mx-auto">
                 <LumexCard Class="p-3 text-center">
                     <p class="text-sm text-default-400 mb-2">This is a read-only view of an imported conversation.</p>
                     <LumexButton Color="@ThemeColor.Primary" Variant="@Variant.Flat" OnClick="StartNewChat">
                         Start a New Chat
                     </LumexButton>
                 </LumexCard>
+                </div>
             </div>
         }
     </div>

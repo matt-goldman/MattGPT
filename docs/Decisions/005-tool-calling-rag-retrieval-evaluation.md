@@ -74,15 +74,15 @@ search_memories(query: string, maxResults?: int)
 
 | Mode | Behaviour | When to use |
 |------|-----------|-------------|
-| `auto` (default) | Full automatic RAG injection on every message. Current behaviour. No tools registered. | Models that don't support tool calling (llama3.2 3B). |
-| `hybrid` | Light auto-RAG (top-2, higher threshold) + `search_memories` tool registered. | Models with reliable tool calling (llama3.1 8B+, GPT-4o). |
-| `tools` | No automatic RAG injection. `search_memories` tool only. LLM must explicitly search. | High-capability models (GPT-4o) where users want minimal context waste. |
+| `WithPrompt` (default) | Full automatic RAG injection on every message. Current behaviour. No tools registered. | Models that don't support tool calling (llama3.2 3B). |
+| `Auto` | Light auto-RAG (top-2, higher threshold) + `search_memories` tool registered. | Models with reliable tool calling (llama3.1 8B+, GPT-4o). |
+| `ToolsOnly` | No automatic RAG injection. `search_memories` tool only. LLM must explicitly search. | High-capability models (GPT-4o) where users want minimal context waste. |
 
 The mode is set via configuration (`RAG:Mode`). This is deliberately a static configuration setting rather than auto-detection in v1 — auto-detecting model capabilities is fragile and would require maintaining a model capability registry.
 
 #### 4. Graceful degradation
 
-- If `Mode` is `hybrid` or `tools` but the LLM never calls the tool (because the model is too small or confused), the `hybrid` mode's light auto-RAG still provides some context. In `tools` mode, the response simply won't have memory context — acceptable as a conscious user configuration choice.
+- If `Mode` is `Auto` or `ToolsOnly` but the LLM never calls the tool (because the model is too small or confused), the `Auto` mode's light auto-RAG still provides some context. In `ToolsOnly` mode, the response simply won't have memory context — acceptable as a conscious user configuration choice.
 - If the tool call fails (Qdrant down, embedding error), the tool returns an error message to the LLM which can then respond without memory context.
 - The streaming response path needs to handle the tool-call round-trip. M.E.AI's `GetStreamingResponseAsync` handles this when automatic function invocation is enabled, but the extra round-trip adds latency (~2–5s on CPU for the tool-call response generation).
 

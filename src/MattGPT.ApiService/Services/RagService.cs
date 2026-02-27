@@ -24,9 +24,9 @@ public record RagStreamChunk(string? Text, IReadOnlyList<ChatSource>? Sources = 
 /// Implements the retrieval-augmented generation (RAG) pipeline.
 /// Supports three modes configured via <see cref="RagOptions.Mode"/>:
 /// <list type="bullet">
-/// <item><see cref="RagMode.Auto"/> — full automatic RAG injection on every message (no tools).</item>
-/// <item><see cref="RagMode.Hybrid"/> — light auto-RAG plus a <c>search_memories</c> tool for deeper retrieval.</item>
-/// <item><see cref="RagMode.Tools"/> — no auto-RAG; the LLM must use the <c>search_memories</c> tool explicitly.</item>
+/// <item><see cref="RagMode.WithPrompt"/> — full automatic RAG injection on every message (no tools).</item>
+/// <item><see cref="RagMode.Auto"/> — light auto-RAG plus a <c>search_memories</c> tool for deeper retrieval.</item>
+/// <item><see cref="RagMode.ToolsOnly"/> — no auto-RAG; the LLM must use the <c>search_memories</c> tool explicitly.</item>
 /// </list>
 /// </summary>
 public class RagService(
@@ -49,12 +49,12 @@ public class RagService(
 
     /// <summary>
     /// Returns the effective TopK for the current mode's automatic retrieval pass.
-    /// Returns 0 for <see cref="RagMode.Tools"/> (no automatic retrieval).
+    /// Returns 0 for <see cref="RagMode.ToolsOnly"/> (no automatic retrieval).
     /// </summary>
     internal int EffectiveTopK => _options.Mode switch
     {
-        RagMode.Hybrid => _options.HybridTopK,
-        RagMode.Tools => 0,
+        RagMode.Auto => _options.AutoTopK,
+        RagMode.ToolsOnly => 0,
         _ => _options.TopK,
     };
 
@@ -63,17 +63,17 @@ public class RagService(
     /// </summary>
     internal float EffectiveMinScore => _options.Mode switch
     {
-        RagMode.Hybrid => _options.HybridMinScore,
+        RagMode.Auto => _options.AutoMinScore,
         _ => _options.MinScore,
     };
 
     /// <summary>
     /// Builds <see cref="ChatOptions"/> with tool definitions when the mode supports it.
-    /// Returns null for <see cref="RagMode.Auto"/> (no tools).
+    /// Returns null for <see cref="RagMode.WithPrompt"/> (no tools).
     /// </summary>
     internal ChatOptions? BuildToolChatOptions()
     {
-        if (_options.Mode == RagMode.Auto || searchMemoriesTool is null)
+        if (_options.Mode == RagMode.WithPrompt || searchMemoriesTool is null)
             return null;
 
         return new ChatOptions
@@ -149,8 +149,8 @@ public class RagService(
 
     /// <summary>
     /// Performs the automatic retrieval pass: embed → Qdrant search → MongoDB fetch.
-    /// In <see cref="RagMode.Tools"/> mode, skips retrieval entirely.
-    /// In <see cref="RagMode.Hybrid"/> mode, uses lighter parameters (fewer results, higher threshold).
+    /// In <see cref="RagMode.ToolsOnly"/> mode, skips retrieval entirely.
+    /// In <see cref="RagMode.Auto"/> mode, uses lighter parameters (fewer results, higher threshold).
     /// </summary>
     private async Task<(IReadOnlyList<QdrantSearchResult> Relevant, IReadOnlyDictionary<string, StoredConversation> ConversationLookup)> AutoRetrieveAsync(
         string query, CancellationToken ct)

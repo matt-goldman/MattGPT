@@ -413,50 +413,50 @@ public class RagServiceTests
     [Fact]
     public void EffectiveTopK_AutoMode_ReturnsFullTopK()
     {
-        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Auto, TopK = 5 });
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.WithPrompt, TopK = 5 });
         Assert.Equal(5, service.EffectiveTopK);
     }
 
     [Fact]
     public void EffectiveTopK_HybridMode_ReturnsHybridTopK()
     {
-        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Hybrid, HybridTopK = 2 });
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Auto, AutoTopK = 2 });
         Assert.Equal(2, service.EffectiveTopK);
     }
 
     [Fact]
     public void EffectiveTopK_ToolsMode_ReturnsZero()
     {
-        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Tools });
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.ToolsOnly });
         Assert.Equal(0, service.EffectiveTopK);
     }
 
     [Fact]
     public void EffectiveMinScore_AutoMode_ReturnsStandardMinScore()
     {
-        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Auto, MinScore = 0.5f });
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.WithPrompt, MinScore = 0.5f });
         Assert.Equal(0.5f, service.EffectiveMinScore);
     }
 
     [Fact]
     public void EffectiveMinScore_HybridMode_ReturnsHybridMinScore()
     {
-        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Hybrid, HybridMinScore = 0.65f });
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Auto, AutoMinScore = 0.65f });
         Assert.Equal(0.65f, service.EffectiveMinScore);
     }
 
     [Fact]
     public void BuildToolChatOptions_AutoMode_ReturnsNull()
     {
-        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Auto });
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.WithPrompt });
         Assert.Null(service.BuildToolChatOptions());
     }
 
     [Fact]
     public void BuildToolChatOptions_HybridMode_WithoutTool_ReturnsNull()
     {
-        // No SearchMemoriesTool injected — should return null even in hybrid mode.
-        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Hybrid });
+        // No SearchMemoriesTool injected — should return null even in Auto mode.
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Auto });
         Assert.Null(service.BuildToolChatOptions());
     }
 
@@ -464,7 +464,7 @@ public class RagServiceTests
     public void BuildToolChatOptions_HybridMode_WithTool_ReturnsChatOptions()
     {
         var tool = CreateSearchMemoriesTool();
-        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Hybrid }, searchMemoriesTool: tool);
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Auto }, searchMemoriesTool: tool);
 
         var chatOptions = service.BuildToolChatOptions();
 
@@ -477,7 +477,7 @@ public class RagServiceTests
     public void BuildToolChatOptions_ToolsMode_WithTool_ReturnsChatOptions()
     {
         var tool = CreateSearchMemoriesTool();
-        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Tools }, searchMemoriesTool: tool);
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.ToolsOnly }, searchMemoriesTool: tool);
 
         var chatOptions = service.BuildToolChatOptions();
 
@@ -488,14 +488,14 @@ public class RagServiceTests
     [Fact]
     public async Task ChatAsync_ToolsMode_SkipsAutoRetrieval()
     {
-        // In tools mode, even if Qdrant has results, auto-retrieval should be skipped
+        // In ToolsOnly mode, even if Qdrant has results, auto-retrieval should be skipped
         // (EffectiveTopK = 0), so sources should be empty (no tool was actually called
         // since our FakeChatClient doesn't call tools).
         var results = new List<QdrantSearchResult>
         {
             new("c1", 0.9f, "Title 1", "Summary 1"),
         };
-        var service = CreateService(results, ragOptions: new RagOptions { Mode = RagMode.Tools });
+        var service = CreateService(results, ragOptions: new RagOptions { Mode = RagMode.ToolsOnly });
 
         var result = await service.ChatAsync("query");
 
@@ -505,21 +505,21 @@ public class RagServiceTests
     [Fact]
     public async Task ChatAsync_HybridMode_UsesLighterParameters()
     {
-        // Hybrid mode uses HybridTopK=2 and HybridMinScore=0.65.
+        // Auto mode uses AutoTopK=2 and AutoMinScore=0.65.
         // A result with score 0.6 should be excluded (below 0.65 threshold).
         var results = new List<QdrantSearchResult>
         {
             new("c1", 0.9f, "Title 1", "Summary 1"),
-            new("c2", 0.6f, "Title 2", "Summary 2"), // below hybrid threshold of 0.65
+            new("c2", 0.6f, "Title 2", "Summary 2"), // below auto threshold of 0.65
         };
         var repo = new FakeConversationRepository();
         repo.Seed([MakeConversation("c1", "Title 1", "Summary 1"), MakeConversation("c2", "Title 2", "Summary 2")]);
 
         var service = CreateService(results, ragOptions: new RagOptions
         {
-            Mode = RagMode.Hybrid,
-            HybridTopK = 2,
-            HybridMinScore = 0.65f,
+            Mode = RagMode.Auto,
+            AutoTopK = 2,
+            AutoMinScore = 0.65f,
         }, repository: repo);
 
         var result = await service.ChatAsync("query");
@@ -531,19 +531,19 @@ public class RagServiceTests
     [Fact]
     public async Task ChatAsync_AutoMode_UsesFullParameters()
     {
-        // Auto mode uses TopK=5 and MinScore=0.5.
+        // WithPrompt mode uses TopK=5 and MinScore=0.5.
         // A result with score 0.6 should be included (above 0.5 threshold).
         var results = new List<QdrantSearchResult>
         {
             new("c1", 0.9f, "Title 1", "Summary 1"),
-            new("c2", 0.6f, "Title 2", "Summary 2"), // above auto threshold of 0.5
+            new("c2", 0.6f, "Title 2", "Summary 2"), // above WithPrompt threshold of 0.5
         };
         var repo = new FakeConversationRepository();
         repo.Seed([MakeConversation("c1", "Title 1", "Summary 1"), MakeConversation("c2", "Title 2", "Summary 2")]);
 
         var service = CreateService(results, ragOptions: new RagOptions
         {
-            Mode = RagMode.Auto,
+            Mode = RagMode.WithPrompt,
             TopK = 5,
             MinScore = 0.5f,
         }, repository: repo);

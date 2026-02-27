@@ -59,7 +59,7 @@ Potential tools to register:
    - Reduce automatic RAG injection to a lighter touch (fewer results, higher threshold).
    - Register a `search_memories` tool via `Microsoft.Extensions.AI` function calling.
    - Handle the tool call loop (LLM calls tool → execute search → return results → LLM generates final answer).
-3. Make the behaviour configurable: `RagMode = "auto" | "tools" | "hybrid"`.
+3. Make the behaviour configurable: `RagMode = "WithPrompt" | "Auto" | "ToolsOnly"`.
 4. Ensure graceful fallback when the model doesn't support tools.
 
 ## Acceptance Criteria

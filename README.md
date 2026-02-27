@@ -206,18 +206,36 @@ The RAG pipeline is controlled by the `RAG` section in `appsettings.json`:
 ```json
 {
   "RAG": {
+    "Mode": "Auto",
     "TopK": 5,
-    "MinScore": 0.5
+    "MinScore": 0.5,
+    "AutoTopK": 2,
+    "AutoMinScore": 0.65,
+    "ToolMaxResults": 5
   }
 }
 ```
 
+#### Modes
+
+| Mode | Behaviour |
+|------|-----------|
+| `WithPrompt` | Full automatic RAG injection on every message. No tools registered. Best for models that don't support tool calling (e.g. llama3.2 3B). |
+| `Auto` (default) | Light auto-RAG (uses `AutoTopK`/`AutoMinScore`) plus a `search_memories` tool the LLM can call for deeper retrieval. Best for tool-capable models (e.g. llama3.1 8B+, GPT-4o). |
+| `ToolsOnly` | No automatic RAG injection. The LLM must explicitly call the `search_memories` tool to retrieve context. Best for high-capability models where you want minimal context waste. |
+
+#### Settings
+
 | Setting | Description |
 |---------|-------------|
-| `TopK` | Number of conversations retrieved per query (default: 5) |
-| `MinScore` | Minimum cosine similarity score (0.0–1.0) to include a result (default: 0.5) |
+| `Mode` | RAG mode (see above). Default: `Auto` |
+| `TopK` | Number of conversations retrieved per query in `WithPrompt` mode (default: 5) |
+| `MinScore` | Minimum cosine similarity (0.0–1.0) in `WithPrompt` mode (default: 0.5) |
+| `AutoTopK` | Conversations retrieved in the light auto-pass of `Auto` mode (default: 2) |
+| `AutoMinScore` | Minimum similarity for the `Auto` mode light pass (default: 0.65) |
+| `ToolMaxResults` | Maximum results the `search_memories` tool returns per invocation (default: 5) |
 
-Increase `TopK` for richer context. Lower `MinScore` to include less similar results (may add noise). Raise `MinScore` to require higher relevance.
+Increase `TopK`/`AutoTopK` for richer context. Lower `MinScore`/`AutoMinScore` to include less similar results (may add noise). Raise them to require higher relevance.
 
 
 ## Troubleshooting
