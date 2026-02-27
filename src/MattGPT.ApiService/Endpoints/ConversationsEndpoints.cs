@@ -132,11 +132,19 @@ public static class ConversationsEndpoints
         .WithName("EmbedConversations");
 
         // Get a single imported conversation with full message history.
-        app.MapGet("/conversations/{conversationId}", async (string conversationId, IConversationRepository repository) =>
+        // Hidden/scaffolding messages (e.g. user profile prompts) are excluded by default.
+        // Pass ?includeHidden=true to include them.
+        app.MapGet("/conversations/{conversationId}", async (string conversationId, bool? includeHidden, IConversationRepository repository) =>
         {
             var conversation = await repository.GetByIdAsync(conversationId);
             if (conversation is null)
                 return Results.NotFound(new { message = $"Conversation '{conversationId}' not found." });
+
+            var messages = conversation.LinearisedMessages.AsEnumerable();
+            if (includeHidden != true)
+            {
+                messages = messages.Where(m => !m.IsHidden && m.Weight != 0.0);
+            }
 
             return Results.Ok(new
             {
@@ -146,7 +154,7 @@ public static class ConversationsEndpoints
                 updateTime = conversation.UpdateTime,
                 defaultModelSlug = conversation.DefaultModelSlug,
                 processingStatus = conversation.ProcessingStatus.ToString(),
-                messages = conversation.LinearisedMessages.Select(m => new
+                messages = messages.Select(m => new
                 {
                     role = m.Role,
                     content = string.Join("\n", m.Parts),
@@ -156,6 +164,94 @@ public static class ConversationsEndpoints
         })
         .WithName("GetConversation");
 
+        // Get all project groups (conversations grouped by ConversationTemplateId for snorlax gizmo type).
+        // Merges user-assigned project names when available.
+        app.MapGet("/conversations/projects", async (IConversationRepository repository, IProjectNameRepository projectNames) =>
+        {
+            var projectsTask = repository.GetProjectsAsync();
+            var namesTask = projectNames.GetAllNamesAsync();
+            await Task.WhenAll(projectsTask, namesTask);
+
+            var projects = projectsTask.Result;
+            var names = namesTask.Result;
+
+            return Results.Ok(projects.Select(p => new
+            {
+                templateId = p.TemplateId,
+                conversationCount = p.ConversationCount,
+                mostRecentTitle = p.MostRecentTitle,
+                latestUpdateTime = p.LatestUpdateTime,
+                earliestCreateTime = p.EarliestCreateTime,
+                userName = names.GetValueOrDefault(p.TemplateId),
+            }));
+        })
+        .WithName("GetProjects");
+
+        // Set or update a user-assigned project display name.
+        app.MapPatch("/conversations/projects/{templateId}/name", async (
+            string templateId, ProjectNameRequest request, IProjectNameRepository projectNames) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Name))
+                return Results.BadRequest(new { message = "Name is required." });
+            await projectNames.SetNameAsync(templateId, request.Name.Trim());
+            return Results.Ok(new { templateId, name = request.Name.Trim() });
+        })
+        .WithName("SetProjectName");
+
+        // Get conversations within a specific project, paginated.
+        app.MapGet("/conversations/projects/{templateId}", async (
+            string templateId, IConversationRepository repository, int page = 1, int pageSize = 50) =>
+        {
+            if (page < 1) page = 1;
+            if (pageSize is < 1 or > 100) pageSize = 50;
+
+            var (items, total) = await repository.GetProjectConversationsAsync(templateId, page, pageSize);
+            return Results.Ok(new
+            {
+                templateId,
+                page,
+                pageSize,
+                total,
+                items = items.Select(c => new
+                {
+                    conversationId = c.ConversationId,
+                    title = c.Title,
+                    createTime = c.CreateTime,
+                    updateTime = c.UpdateTime,
+                    messageCount = c.LinearisedMessages.Count,
+                }),
+            });
+        })
+        .WithName("GetProjectConversations");
+
+        // Get non-project conversations (imported conversations not belonging to any project), paginated.
+        app.MapGet("/conversations/standalone", async (
+            IConversationRepository repository, int page = 1, int pageSize = 50) =>
+        {
+            if (page < 1) page = 1;
+            if (pageSize is < 1 or > 100) pageSize = 50;
+
+            var (items, total) = await repository.GetNonProjectConversationsAsync(page, pageSize);
+            return Results.Ok(new
+            {
+                page,
+                pageSize,
+                total,
+                items = items.Select(c => new
+                {
+                    conversationId = c.ConversationId,
+                    title = c.Title,
+                    createTime = c.CreateTime,
+                    updateTime = c.UpdateTime,
+                    messageCount = c.LinearisedMessages.Count,
+                }),
+            });
+        })
+        .WithName("GetStandaloneConversations");
+
         return app;
     }
 }
+
+/// <summary>Request body for setting a project display name.</summary>
+public record ProjectNameRequest(string Name);

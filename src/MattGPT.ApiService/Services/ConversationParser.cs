@@ -43,6 +43,7 @@ public class ConversationParser
                 UpdateTime = conversation.UpdateTime,
                 DefaultModelSlug = conversation.DefaultModelSlug,
                 GizmoId = conversation.GizmoId,
+                GizmoType = conversation.GizmoType,
                 ConversationTemplateId = conversation.ConversationTemplateId,
                 IsDoNotRemember = conversation.IsDoNotRemember,
                 MemoryScope = conversation.MemoryScope,

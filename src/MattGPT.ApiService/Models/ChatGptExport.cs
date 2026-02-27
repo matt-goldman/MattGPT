@@ -32,6 +32,10 @@ public class Conversation
     [JsonPropertyName("gizmo_id")]
     public string? GizmoId { get; set; }
 
+    /// <summary>Type of GPT: "gpt" (custom GPT), "snorlax" (project), or null (standard ChatGPT).</summary>
+    [JsonPropertyName("gizmo_type")]
+    public string? GizmoType { get; set; }
+
     /// <summary>Project/template association for the conversation.</summary>
     [JsonPropertyName("conversation_template_id")]
     public string? ConversationTemplateId { get; set; }
