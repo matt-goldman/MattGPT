@@ -33,4 +33,22 @@ public interface IConversationRepository
 
     /// <summary>Return the count of conversations grouped by processing status.</summary>
     Task<Dictionary<ConversationProcessingStatus, long>> GetStatusCountsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Return project groups (conversations grouped by ConversationTemplateId where GizmoType is "snorlax").
+    /// Each group contains the template ID, conversation count, and a representative title.
+    /// </summary>
+    Task<List<ConversationProject>> GetProjectsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Return a page of conversations belonging to a specific project (by ConversationTemplateId).
+    /// </summary>
+    Task<(List<StoredConversation> Items, long Total)> GetProjectConversationsAsync(
+        string templateId, int page, int pageSize, CancellationToken ct = default);
+
+    /// <summary>
+    /// Return a page of conversations that do not belong to any project.
+    /// </summary>
+    Task<(List<StoredConversation> Items, long Total)> GetNonProjectConversationsAsync(
+        int page, int pageSize, CancellationToken ct = default);
 }

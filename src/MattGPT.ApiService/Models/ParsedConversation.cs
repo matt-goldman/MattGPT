@@ -23,6 +23,9 @@ public class ParsedConversation
     /// <summary>Identifies which custom GPT was used (null for standard conversations).</summary>
     public string? GizmoId { get; set; }
 
+    /// <summary>Type of GPT: "gpt" (custom GPT), "snorlax" (project), or null (standard ChatGPT).</summary>
+    public string? GizmoType { get; set; }
+
     /// <summary>Project/template association for the conversation.</summary>
     public string? ConversationTemplateId { get; set; }
 

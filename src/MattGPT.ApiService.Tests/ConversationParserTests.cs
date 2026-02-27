@@ -274,6 +274,7 @@ public class ConversationParserTests
                 "create_time": 1700000000.0,
                 "update_time": 1700000100.0,
                 "gizmo_id": "g-abc123",
+                "gizmo_type": "snorlax",
                 "conversation_template_id": "tmpl-xyz",
                 "is_do_not_remember": true,
                 "memory_scope": "project_enabled",
@@ -305,6 +306,7 @@ public class ConversationParserTests
         Assert.Single(results);
         var conv = results[0];
         Assert.Equal("g-abc123", conv.GizmoId);
+        Assert.Equal("snorlax", conv.GizmoType);
         Assert.Equal("tmpl-xyz", conv.ConversationTemplateId);
         Assert.True(conv.IsDoNotRemember);
         Assert.Equal("project_enabled", conv.MemoryScope);
@@ -345,6 +347,7 @@ public class ConversationParserTests
         Assert.Single(results);
         var conv = results[0];
         Assert.Null(conv.GizmoId);
+        Assert.Null(conv.GizmoType);
         Assert.Null(conv.ConversationTemplateId);
         Assert.Null(conv.IsDoNotRemember);
         Assert.Null(conv.MemoryScope);
@@ -359,6 +362,7 @@ public class ConversationParserTests
             Id = "conv-meta",
             Title = "Test",
             GizmoId = "g-test",
+            GizmoType = "gpt",
             ConversationTemplateId = "tmpl-test",
             IsDoNotRemember = true,
             MemoryScope = "global_enabled",
@@ -369,6 +373,7 @@ public class ConversationParserTests
         var stored = StoredConversation.From(parsed);
 
         Assert.Equal("g-test", stored.GizmoId);
+        Assert.Equal("gpt", stored.GizmoType);
         Assert.Equal("tmpl-test", stored.ConversationTemplateId);
         Assert.True(stored.IsDoNotRemember);
         Assert.Equal("global_enabled", stored.MemoryScope);
