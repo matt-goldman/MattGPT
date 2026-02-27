@@ -42,6 +42,11 @@ public class ConversationParser
                 CreateTime = conversation.CreateTime,
                 UpdateTime = conversation.UpdateTime,
                 DefaultModelSlug = conversation.DefaultModelSlug,
+                GizmoId = conversation.GizmoId,
+                ConversationTemplateId = conversation.ConversationTemplateId,
+                IsDoNotRemember = conversation.IsDoNotRemember,
+                MemoryScope = conversation.MemoryScope,
+                IsArchived = conversation.IsArchived,
                 Messages = Linearise(conversation),
             };
         }

@@ -264,6 +264,118 @@ public class ConversationParserTests
     }
 
     [Fact]
+    public async Task ParseAsync_ConversationWithMetadataFields_CapturesAllFields()
+    {
+        var json = """
+            [
+              {
+                "id": "meta-conv",
+                "title": "Custom GPT conversation",
+                "create_time": 1700000000.0,
+                "update_time": 1700000100.0,
+                "gizmo_id": "g-abc123",
+                "conversation_template_id": "tmpl-xyz",
+                "is_do_not_remember": true,
+                "memory_scope": "project_enabled",
+                "is_archived": true,
+                "current_node": "node1",
+                "mapping": {
+                  "node1": {
+                    "id": "node1",
+                    "parent": null,
+                    "children": [],
+                    "message": {
+                      "id": "node1",
+                      "author": { "role": "user" },
+                      "content": { "content_type": "text", "parts": ["Hello!"] },
+                      "create_time": 1700000000.0
+                    }
+                  }
+                }
+              }
+            ]
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var parser = new ConversationParser();
+
+        var results = new List<ParsedConversation>();
+        await foreach (var c in parser.ParseAsync(stream))
+            results.Add(c);
+
+        Assert.Single(results);
+        var conv = results[0];
+        Assert.Equal("g-abc123", conv.GizmoId);
+        Assert.Equal("tmpl-xyz", conv.ConversationTemplateId);
+        Assert.True(conv.IsDoNotRemember);
+        Assert.Equal("project_enabled", conv.MemoryScope);
+        Assert.True(conv.IsArchived);
+    }
+
+    [Fact]
+    public async Task ParseAsync_ConversationWithoutOptionalMetadata_NullFields()
+    {
+        var json = """
+            [
+              {
+                "id": "plain-conv",
+                "title": "Standard conversation",
+                "current_node": "node1",
+                "mapping": {
+                  "node1": {
+                    "id": "node1",
+                    "parent": null,
+                    "children": [],
+                    "message": {
+                      "id": "node1",
+                      "author": { "role": "user" },
+                      "content": { "content_type": "text", "parts": ["Hello!"] }
+                    }
+                  }
+                }
+              }
+            ]
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var parser = new ConversationParser();
+
+        var results = new List<ParsedConversation>();
+        await foreach (var c in parser.ParseAsync(stream))
+            results.Add(c);
+
+        Assert.Single(results);
+        var conv = results[0];
+        Assert.Null(conv.GizmoId);
+        Assert.Null(conv.ConversationTemplateId);
+        Assert.Null(conv.IsDoNotRemember);
+        Assert.Null(conv.MemoryScope);
+        Assert.Null(conv.IsArchived);
+    }
+
+    [Fact]
+    public void StoredConversation_From_MapsMetadataFields()
+    {
+        var parsed = new ParsedConversation
+        {
+            Id = "conv-meta",
+            Title = "Test",
+            GizmoId = "g-test",
+            ConversationTemplateId = "tmpl-test",
+            IsDoNotRemember = true,
+            MemoryScope = "global_enabled",
+            IsArchived = false,
+            Messages = [],
+        };
+
+        var stored = StoredConversation.From(parsed);
+
+        Assert.Equal("g-test", stored.GizmoId);
+        Assert.Equal("tmpl-test", stored.ConversationTemplateId);
+        Assert.True(stored.IsDoNotRemember);
+        Assert.Equal("global_enabled", stored.MemoryScope);
+        Assert.False(stored.IsArchived);
+    }
+
+    [Fact]
     public async Task ParseAsync_MultipleConversations_YieldsAll()
     {
         var json = """
