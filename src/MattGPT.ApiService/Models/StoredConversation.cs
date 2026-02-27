@@ -229,6 +229,9 @@ public class StoredConversation
     /// <summary>Identifies which custom GPT was used (null for standard conversations).</summary>
     public string? GizmoId { get; set; }
 
+    /// <summary>Type of GPT: "gpt" (custom GPT), "snorlax" (project), or null (standard ChatGPT).</summary>
+    public string? GizmoType { get; set; }
+
     /// <summary>Project/template association for the conversation.</summary>
     public string? ConversationTemplateId { get; set; }
 
@@ -267,6 +270,7 @@ public class StoredConversation
         UpdateTime = conversation.UpdateTime,
         DefaultModelSlug = conversation.DefaultModelSlug,
         GizmoId = conversation.GizmoId,
+        GizmoType = conversation.GizmoType,
         ConversationTemplateId = conversation.ConversationTemplateId,
         IsDoNotRemember = conversation.IsDoNotRemember,
         MemoryScope = conversation.MemoryScope,

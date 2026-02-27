@@ -91,6 +91,17 @@ internal sealed class FakeConversationRepository : IConversationRepository
             .ToDictionary(g => g.Key, g => (long)g.Count());
         return Task.FromResult(counts);
     }
+
+    public Task<List<ConversationProject>> GetProjectsAsync(CancellationToken ct = default)
+        => Task.FromResult(new List<ConversationProject>());
+
+    public Task<(List<StoredConversation> Items, long Total)> GetProjectConversationsAsync(
+        string templateId, int page, int pageSize, CancellationToken ct = default)
+        => Task.FromResult((new List<StoredConversation>(), 0L));
+
+    public Task<(List<StoredConversation> Items, long Total)> GetNonProjectConversationsAsync(
+        int page, int pageSize, CancellationToken ct = default)
+        => Task.FromResult((_conversations.ToList(), (long)_conversations.Count));
 }
 
 public class ImportJobStoreTests

@@ -25,6 +25,8 @@ public class ConversationRepository : IConversationRepository
             new CreateIndexModel<StoredConversation>(keys.Ascending(x => x.CreateTime)),
             new CreateIndexModel<StoredConversation>(keys.Descending(x => x.UpdateTime)),
             new CreateIndexModel<StoredConversation>(keys.Ascending(x => x.ProcessingStatus)),
+            new CreateIndexModel<StoredConversation>(keys.Ascending(x => x.ConversationTemplateId)),
+            new CreateIndexModel<StoredConversation>(keys.Ascending(x => x.GizmoType)),
         ]);
     }
 
@@ -121,5 +123,69 @@ public class ConversationRepository : IConversationRepository
             counts[status] = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
         }
         return counts;
+    }
+
+    /// <inheritdoc/>
+    public async Task<List<ConversationProject>> GetProjectsAsync(CancellationToken ct = default)
+    {
+        // Aggregate conversations where GizmoType is "snorlax" and ConversationTemplateId is set,
+        // grouping by template ID to produce project summaries.
+        var filter = Builders<StoredConversation>.Filter.And(
+            Builders<StoredConversation>.Filter.Eq(x => x.GizmoType, "snorlax"),
+            Builders<StoredConversation>.Filter.Ne(x => x.ConversationTemplateId, null));
+
+        var pipeline = _collection.Aggregate()
+            .Match(filter)
+            .Group(
+                x => x.ConversationTemplateId,
+                g => new ConversationProject
+                {
+                    TemplateId = g.Key!,
+                    ConversationCount = g.Count(),
+                    MostRecentTitle = g.OrderByDescending(c => c.UpdateTime).First().Title,
+                    LatestUpdateTime = g.Max(c => c.UpdateTime),
+                    EarliestCreateTime = g.Min(c => c.CreateTime),
+                })
+            .SortByDescending(p => p.LatestUpdateTime);
+
+        return await pipeline.ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<(List<StoredConversation> Items, long Total)> GetProjectConversationsAsync(
+        string templateId, int page, int pageSize, CancellationToken ct = default)
+    {
+        var filter = Builders<StoredConversation>.Filter.Eq(x => x.ConversationTemplateId, templateId);
+        var projection = Builders<StoredConversation>.Projection.Exclude(x => x.Embedding);
+        var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
+        var items = await _collection
+            .Find(filter)
+            .Project<StoredConversation>(projection)
+            .SortByDescending(x => x.UpdateTime)
+            .Skip((page - 1) * pageSize)
+            .Limit(pageSize)
+            .ToListAsync(ct);
+        return (items, total);
+    }
+
+    /// <inheritdoc/>
+    public async Task<(List<StoredConversation> Items, long Total)> GetNonProjectConversationsAsync(
+        int page, int pageSize, CancellationToken ct = default)
+    {
+        // Conversations that don't belong to a project:
+        // either GizmoType is not "snorlax" or ConversationTemplateId is null.
+        var filter = Builders<StoredConversation>.Filter.Or(
+            Builders<StoredConversation>.Filter.Ne(x => x.GizmoType, "snorlax"),
+            Builders<StoredConversation>.Filter.Eq(x => x.ConversationTemplateId, null));
+        var projection = Builders<StoredConversation>.Projection.Exclude(x => x.Embedding);
+        var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
+        var items = await _collection
+            .Find(filter)
+            .Project<StoredConversation>(projection)
+            .SortByDescending(x => x.UpdateTime)
+            .Skip((page - 1) * pageSize)
+            .Limit(pageSize)
+            .ToListAsync(ct);
+        return (items, total);
     }
 }

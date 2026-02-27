@@ -156,6 +156,72 @@ public static class ConversationsEndpoints
         })
         .WithName("GetConversation");
 
+        // Get all project groups (conversations grouped by ConversationTemplateId for snorlax gizmo type).
+        app.MapGet("/conversations/projects", async (IConversationRepository repository) =>
+        {
+            var projects = await repository.GetProjectsAsync();
+            return Results.Ok(projects.Select(p => new
+            {
+                templateId = p.TemplateId,
+                conversationCount = p.ConversationCount,
+                mostRecentTitle = p.MostRecentTitle,
+                latestUpdateTime = p.LatestUpdateTime,
+                earliestCreateTime = p.EarliestCreateTime,
+            }));
+        })
+        .WithName("GetProjects");
+
+        // Get conversations within a specific project, paginated.
+        app.MapGet("/conversations/projects/{templateId}", async (
+            string templateId, IConversationRepository repository, int page = 1, int pageSize = 50) =>
+        {
+            if (page < 1) page = 1;
+            if (pageSize is < 1 or > 100) pageSize = 50;
+
+            var (items, total) = await repository.GetProjectConversationsAsync(templateId, page, pageSize);
+            return Results.Ok(new
+            {
+                templateId,
+                page,
+                pageSize,
+                total,
+                items = items.Select(c => new
+                {
+                    conversationId = c.ConversationId,
+                    title = c.Title,
+                    createTime = c.CreateTime,
+                    updateTime = c.UpdateTime,
+                    messageCount = c.LinearisedMessages.Count,
+                }),
+            });
+        })
+        .WithName("GetProjectConversations");
+
+        // Get non-project conversations (imported conversations not belonging to any project), paginated.
+        app.MapGet("/conversations/standalone", async (
+            IConversationRepository repository, int page = 1, int pageSize = 50) =>
+        {
+            if (page < 1) page = 1;
+            if (pageSize is < 1 or > 100) pageSize = 50;
+
+            var (items, total) = await repository.GetNonProjectConversationsAsync(page, pageSize);
+            return Results.Ok(new
+            {
+                page,
+                pageSize,
+                total,
+                items = items.Select(c => new
+                {
+                    conversationId = c.ConversationId,
+                    title = c.Title,
+                    createTime = c.CreateTime,
+                    updateTime = c.UpdateTime,
+                    messageCount = c.LinearisedMessages.Count,
+                }),
+            });
+        })
+        .WithName("GetStandaloneConversations");
+
         return app;
     }
 }
