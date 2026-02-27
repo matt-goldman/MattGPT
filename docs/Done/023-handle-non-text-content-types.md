@@ -1,6 +1,6 @@
 # 023 — Handle Non-Text Content Types in Parser
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 23  
 **Dependencies:** 4 (ChatGPT JSON parser), 7 (store conversations in MongoDB), 17 (export content analysis)
 
@@ -44,13 +44,13 @@ The export analysis (issue 017, `docs/export-analysis.md` §3) found that 6 of 1
 
 ## Acceptance Criteria
 
-- [ ] All 12 content types produce meaningful text in `StoredMessage.Parts` (or equivalent field).
-- [ ] `image_asset_pointer` objects in parts produce descriptive placeholders, not raw JSON.
-- [ ] `tether_quote` messages retain URL, domain, and title information.
-- [ ] `code` messages retain the code text and language.
-- [ ] `tether_browsing_display` messages include browse result/summary text.
-- [ ] Existing tests continue to pass.
-- [ ] New unit tests cover each content type.
+- [x] All 12 content types produce meaningful text in `StoredMessage.Parts` (or equivalent field).
+- [x] `image_asset_pointer` objects in parts produce descriptive placeholders, not raw JSON.
+- [x] `tether_quote` messages retain URL, domain, and title information.
+- [x] `code` messages retain the code text and language.
+- [x] `tether_browsing_display` messages include browse result/summary text.
+- [x] Existing tests continue to pass.
+- [x] New unit tests cover each content type.
 
 ## Notes
 

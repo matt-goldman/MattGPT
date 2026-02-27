@@ -51,7 +51,7 @@ This document is the **system of record** for project planning and issue trackin
 | 17 | 020-tool-calling-rag-retrieval.md | Tool-calling RAG retrieval | Done | Done/ | Depends on 15, 11; see ADR-005 |
 | 18 | 015-clickable-citation-links.md | Clickable citation links in chat UI | Done | Done/ | Depends on 12 |
 | 19 | 017-export-content-analysis.md | Fully analyse export content for missing import detail | Done | Done/ | Depends on 4, 7. Analysed 2,913 conversations / 79,910 messages; created issues 023–028. |
-| 20 | 023-handle-non-text-content-types.md | Handle non-text content types in parser | In Progress | TODO/ | Depends on 4, 7, 17. Highest-impact parser fix — 11K messages with lost content. |
+| 20 | 023-handle-non-text-content-types.md | Handle non-text content types in parser | Done | Done/ | Depends on 4, 7, 17. Highest-impact parser fix — 11K messages with lost content. |
 | 21 | 027-filter-hidden-messages-from-embedding.md | Filter hidden/system messages from embedding | TODO | TODO/ | Depends on 17, 20. Improve RAG quality by excluding scaffolding. |
 | 22 | 022-chat-history-sidebar.md | Chat history sidebar with imported conversations | Done | Done/ | Part of 019 scope. Depends on 18, 7, 12. Shows both native chat sessions and imported ChatGPT conversations in a collapsible sidebar. |
 | 23 | 024-capture-attachments-and-tool-metadata.md | Capture file attachments and author/tool metadata | TODO | TODO/ | Depends on 4, 7, 17. 7,999 attachments and 11,719 tool names currently invisible. |
