@@ -1,6 +1,6 @@
 # 026 — Capture Conversation-Level Metadata
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 26  
 **Dependencies:** 4 (ChatGPT JSON parser), 7 (store conversations in MongoDB), 17 (export content analysis)
 
@@ -38,10 +38,10 @@ The export analysis (issue 017, `docs/export-analysis.md` §2, §5) found severa
 
 ## Acceptance Criteria
 
-- [ ] `gizmo_id`, `conversation_template_id`, `is_do_not_remember`, `memory_scope`, `is_archived` are captured and stored.
-- [ ] `is_do_not_remember` conversations are handled appropriately (at minimum, flagged).
-- [ ] New fields are included in Qdrant payload for filtering.
-- [ ] Existing tests pass; new field-mapping tests added.
+- [x] `gizmo_id`, `conversation_template_id`, `is_do_not_remember`, `memory_scope`, `is_archived` are captured and stored.
+- [x] `is_do_not_remember` conversations are handled appropriately (at minimum, flagged).
+- [x] New fields are included in Qdrant payload for filtering.
+- [x] Existing tests pass; new field-mapping tests added.
 
 ## Notes
 

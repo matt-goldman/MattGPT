@@ -53,6 +53,8 @@ public class QdrantService(QdrantClient client, ILogger<QdrantService> logger) :
                 ["create_time"] = conversation.CreateTime ?? 0.0,
                 ["update_time"] = conversation.UpdateTime ?? 0.0,
                 ["default_model_slug"] = conversation.DefaultModelSlug ?? string.Empty,
+                ["gizmo_id"] = conversation.GizmoId ?? string.Empty,
+                ["is_archived"] = conversation.IsArchived ?? false,
             }
         };
 

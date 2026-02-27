@@ -27,6 +27,26 @@ public class Conversation
 
     [JsonPropertyName("default_model_slug")]
     public string? DefaultModelSlug { get; set; }
+
+    /// <summary>Identifies which custom GPT was used (null for standard conversations).</summary>
+    [JsonPropertyName("gizmo_id")]
+    public string? GizmoId { get; set; }
+
+    /// <summary>Project/template association for the conversation.</summary>
+    [JsonPropertyName("conversation_template_id")]
+    public string? ConversationTemplateId { get; set; }
+
+    /// <summary>Whether the user opted out of memory for this conversation.</summary>
+    [JsonPropertyName("is_do_not_remember")]
+    public bool? IsDoNotRemember { get; set; }
+
+    /// <summary>Memory scope for this conversation (e.g. "global_enabled", "project_enabled").</summary>
+    [JsonPropertyName("memory_scope")]
+    public string? MemoryScope { get; set; }
+
+    /// <summary>Whether this conversation has been archived.</summary>
+    [JsonPropertyName("is_archived")]
+    public bool? IsArchived { get; set; }
 }
 
 /// <summary>
