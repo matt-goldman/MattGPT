@@ -22,10 +22,12 @@ public record RagStreamChunk(string? Text, IReadOnlyList<ChatSource>? Sources = 
 
 /// <summary>
 /// Implements the retrieval-augmented generation (RAG) pipeline.
-/// Given a user query, generates an embedding, retrieves the most relevant past
-/// conversations from Qdrant, fetches full conversation content from MongoDB,
-/// constructs an augmented LLM prompt with system/user roles, and returns
-/// the LLM's answer together with the sources used.
+/// Supports three modes configured via <see cref="RagOptions.Mode"/>:
+/// <list type="bullet">
+/// <item><see cref="RagMode.Auto"/> — full automatic RAG injection on every message (no tools).</item>
+/// <item><see cref="RagMode.Hybrid"/> — light auto-RAG plus a <c>search_memories</c> tool for deeper retrieval.</item>
+/// <item><see cref="RagMode.Tools"/> — no auto-RAG; the LLM must use the <c>search_memories</c> tool explicitly.</item>
+/// </list>
 /// </summary>
 public class RagService
 {
@@ -41,6 +43,7 @@ public class RagService
     private readonly IChatClient _chatClient;
     private readonly RagOptions _options;
     private readonly ChatSessionOptions _chatOptions;
+    private readonly SearchMemoriesTool? _searchMemoriesTool;
     private readonly ILogger<RagService> _logger;
 
     public RagService(
@@ -50,7 +53,8 @@ public class RagService
         IChatClient chatClient,
         IOptions<RagOptions> options,
         IOptions<ChatSessionOptions> chatOptions,
-        ILogger<RagService> logger)
+        ILogger<RagService> logger,
+        SearchMemoriesTool? searchMemoriesTool = null)
     {
         _embeddingGenerator = embeddingGenerator;
         _qdrantService = qdrantService;
@@ -59,6 +63,43 @@ public class RagService
         _options = options.Value;
         _chatOptions = chatOptions.Value;
         _logger = logger;
+        _searchMemoriesTool = searchMemoriesTool;
+    }
+
+    /// <summary>
+    /// Returns the effective TopK for the current mode's automatic retrieval pass.
+    /// Returns 0 for <see cref="RagMode.Tools"/> (no automatic retrieval).
+    /// </summary>
+    internal int EffectiveTopK => _options.Mode switch
+    {
+        RagMode.Hybrid => _options.HybridTopK,
+        RagMode.Tools => 0,
+        _ => _options.TopK,
+    };
+
+    /// <summary>
+    /// Returns the effective MinScore for the current mode's automatic retrieval pass.
+    /// </summary>
+    internal float EffectiveMinScore => _options.Mode switch
+    {
+        RagMode.Hybrid => _options.HybridMinScore,
+        _ => _options.MinScore,
+    };
+
+    /// <summary>
+    /// Builds <see cref="ChatOptions"/> with tool definitions when the mode supports it.
+    /// Returns null for <see cref="RagMode.Auto"/> (no tools).
+    /// </summary>
+    internal ChatOptions? BuildToolChatOptions()
+    {
+        if (_options.Mode == RagMode.Auto || _searchMemoriesTool is null)
+            return null;
+
+        return new ChatOptions
+        {
+            Tools = [_searchMemoriesTool.CreateAIFunction()],
+            ToolMode = ChatToolMode.Auto,
+        };
     }
 
     /// <summary>
@@ -66,7 +107,80 @@ public class RagService
     /// </summary>
     public async Task<RagChatResponse> ChatAsync(string query, ChatSession? session = null, CancellationToken ct = default)
     {
-        _logger.LogInformation("RAG ChatAsync called. Query: {Query}", query);
+        _logger.LogInformation("RAG ChatAsync called. Query: {Query}, Mode: {Mode}", query, _options.Mode);
+
+        // 1. Automatic retrieval (full, light, or none depending on mode).
+        var (relevant, conversationLookup) = await AutoRetrieveAsync(query, ct);
+
+        // 2. Build the augmented prompt.
+        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount);
+
+        var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
+        _logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
+
+        // 3. Call the LLM (with tools if mode supports it).
+        var chatOptions = BuildToolChatOptions();
+        var response = await _chatClient.GetResponseAsync(messages, chatOptions, ct);
+
+        _logger.LogDebug("LLM response length: {ResponseLength} chars.", response.Text?.Length ?? 0);
+
+        // 4. Merge sources from auto-retrieval and any tool invocations.
+        var sources = CollectAllSources(relevant);
+
+        return new RagChatResponse(response.Text ?? string.Empty, sources);
+    }
+
+    /// <summary>
+    /// Streaming variant of <see cref="ChatAsync"/>. Yields text tokens as they arrive
+    /// from the LLM, then a final chunk containing the sources used.
+    /// </summary>
+    public async IAsyncEnumerable<RagStreamChunk> ChatStreamAsync(
+        string query,
+        ChatSession? session = null,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        _logger.LogInformation("RAG ChatStreamAsync called. Query: {Query}, Mode: {Mode}", query, _options.Mode);
+
+        // 1. Automatic retrieval (full, light, or none depending on mode).
+        var (relevant, conversationLookup) = await AutoRetrieveAsync(query, ct);
+
+        // 2. Build the augmented prompt.
+        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount);
+
+        var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
+        _logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
+
+        // 3. Stream from the LLM (with tools if mode supports it).
+        var chatOptions = BuildToolChatOptions();
+        await foreach (var update in _chatClient.GetStreamingResponseAsync(messages, chatOptions, ct))
+        {
+            if (!string.IsNullOrEmpty(update.Text))
+            {
+                yield return new RagStreamChunk(update.Text);
+            }
+        }
+
+        // 4. Final chunk carries the merged sources.
+        var sources = CollectAllSources(relevant);
+
+        yield return new RagStreamChunk(null, sources);
+    }
+
+    /// <summary>
+    /// Performs the automatic retrieval pass: embed → Qdrant search → MongoDB fetch.
+    /// In <see cref="RagMode.Tools"/> mode, skips retrieval entirely.
+    /// In <see cref="RagMode.Hybrid"/> mode, uses lighter parameters (fewer results, higher threshold).
+    /// </summary>
+    private async Task<(IReadOnlyList<QdrantSearchResult> Relevant, IReadOnlyDictionary<string, StoredConversation> ConversationLookup)> AutoRetrieveAsync(
+        string query, CancellationToken ct)
+    {
+        var topK = EffectiveTopK;
+
+        if (topK <= 0)
+        {
+            _logger.LogDebug("Mode={Mode}: skipping automatic retrieval.", _options.Mode);
+            return ([], new Dictionary<string, StoredConversation>());
+        }
 
         // 1. Embed the query.
         var embeddings = await _embeddingGenerator.GenerateAsync([query], cancellationToken: ct);
@@ -74,7 +188,7 @@ public class RagService
         _logger.LogDebug("Generated query embedding with {Dimensions} dimensions.", queryVector.Length);
 
         // 2. Retrieve top-K candidates from Qdrant.
-        var searchResults = await _qdrantService.SearchAsync(queryVector, _options.TopK, ct);
+        var searchResults = await _qdrantService.SearchAsync(queryVector, topK, ct);
 
         if (searchResults.Count == 0)
         {
@@ -93,133 +207,69 @@ public class RagService
         }
 
         // 3. Apply minimum similarity threshold.
+        var minScore = EffectiveMinScore;
         var relevant = searchResults
-            .Where(r => r.Score >= _options.MinScore)
+            .Where(r => r.Score >= minScore)
             .ToList();
 
         _logger.LogInformation(
-            "RAG query retrieved {Total} results from Qdrant; {Relevant} meet MinScore threshold of {Threshold:F2}.",
-            searchResults.Count, relevant.Count, _options.MinScore);
+            "RAG auto-retrieval (Mode={Mode}): {Total} results from Qdrant; {Relevant} meet MinScore threshold of {Threshold:F2}.",
+            _options.Mode, searchResults.Count, relevant.Count, minScore);
 
         if (searchResults.Count > 0 && relevant.Count == 0)
         {
             _logger.LogWarning(
                 "All {Total} Qdrant results were below MinScore={MinScore:F2}. " +
                 "Highest score was {MaxScore:F4}. Consider lowering RAG:MinScore in configuration.",
-                searchResults.Count, _options.MinScore, searchResults.Max(r => r.Score));
+                searchResults.Count, minScore, searchResults.Max(r => r.Score));
         }
 
         // 4. Fetch full conversations from MongoDB to enrich context.
-        var fullConversations = relevant.Count > 0
-            ? await _repository.GetByIdsAsync(relevant.Select(r => r.ConversationId), ct)
-            : [];
-        var conversationLookup = fullConversations.ToDictionary(c => c.ConversationId);
-
-        _logger.LogInformation(
-            "Fetched {Found}/{Requested} full conversations from MongoDB for context enrichment.",
-            fullConversations.Count, relevant.Count);
-
-        // 5. Build the augmented prompt using proper chat message roles.
-        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount);
-
-        var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
-        _logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
-
-        // 6. Call the LLM.
-        var response = await _chatClient.GetResponseAsync(messages, cancellationToken: ct);
-
-        _logger.LogDebug("LLM response length: {ResponseLength} chars.", response.Text?.Length ?? 0);
-
-        var sources = relevant
-            .Select(r => new ChatSource(r.ConversationId, r.Title, r.Summary, r.Score))
-            .ToList();
-
-        return new RagChatResponse(response.Text ?? string.Empty, sources);
-    }
-
-    /// <summary>
-    /// Streaming variant of <see cref="ChatAsync"/>. Yields text tokens as they arrive
-    /// from the LLM, then a final chunk containing the sources used.
-    /// </summary>
-    public async IAsyncEnumerable<RagStreamChunk> ChatStreamAsync(
-        string query,
-        ChatSession? session = null,
-        [EnumeratorCancellation] CancellationToken ct = default)
-    {
-        _logger.LogInformation("RAG ChatStreamAsync called. Query: {Query}", query);
-
-        // 1. Embed the query.
-        var embeddings = await _embeddingGenerator.GenerateAsync([query], cancellationToken: ct);
-        var queryVector = embeddings[0].Vector.ToArray();
-        _logger.LogDebug("Generated query embedding with {Dimensions} dimensions.", queryVector.Length);
-
-        // 2. Retrieve top-K candidates from Qdrant.
-        var searchResults = await _qdrantService.SearchAsync(queryVector, _options.TopK, ct);
-
-        if (searchResults.Count == 0)
+        IReadOnlyDictionary<string, StoredConversation> conversationLookup;
+        if (relevant.Count > 0)
         {
-            _logger.LogWarning(
-                "Qdrant returned 0 results for streaming query. Check that embeddings have been generated " +
-                "(POST /conversations/embed) and that the Qdrant collection is populated.");
+            var fullConversations = await _repository.GetByIdsAsync(relevant.Select(r => r.ConversationId), ct);
+            conversationLookup = fullConversations.ToDictionary(c => c.ConversationId);
+
+            _logger.LogInformation(
+                "Fetched {Found}/{Requested} full conversations from MongoDB for context enrichment.",
+                fullConversations.Count, relevant.Count);
         }
         else
         {
-            foreach (var r in searchResults)
+            conversationLookup = new Dictionary<string, StoredConversation>();
+        }
+
+        return (relevant, conversationLookup);
+    }
+
+    /// <summary>
+    /// Merges sources from automatic retrieval with any sources from tool invocations.
+    /// De-duplicates by conversation ID, preferring the higher score.
+    /// </summary>
+    private IReadOnlyList<ChatSource> CollectAllSources(IReadOnlyList<QdrantSearchResult> autoRetrieved)
+    {
+        var sourcesDict = new Dictionary<string, ChatSource>();
+
+        // Auto-retrieved sources.
+        foreach (var r in autoRetrieved)
+        {
+            sourcesDict[r.ConversationId] = new ChatSource(r.ConversationId, r.Title, r.Summary, r.Score);
+        }
+
+        // Tool-retrieved sources (may overlap with auto-retrieved).
+        if (_searchMemoriesTool is not null)
+        {
+            foreach (var s in _searchMemoriesTool.LastSources)
             {
-                _logger.LogDebug(
-                    "Qdrant result: ConversationId={ConversationId}, Score={Score:F4}, Title={Title}",
-                    r.ConversationId, r.Score, r.Title);
+                if (!sourcesDict.TryGetValue(s.ConversationId, out var existing) || s.Score > existing.Score)
+                {
+                    sourcesDict[s.ConversationId] = s;
+                }
             }
         }
 
-        // 3. Apply minimum similarity threshold.
-        var relevant = searchResults
-            .Where(r => r.Score >= _options.MinScore)
-            .ToList();
-
-        _logger.LogInformation(
-            "RAG streaming query retrieved {Total} results from Qdrant; {Relevant} meet MinScore threshold of {Threshold:F2}.",
-            searchResults.Count, relevant.Count, _options.MinScore);
-
-        if (searchResults.Count > 0 && relevant.Count == 0)
-        {
-            _logger.LogWarning(
-                "All {Total} Qdrant results were below MinScore={MinScore:F2}. " +
-                "Highest score was {MaxScore:F4}. Consider lowering RAG:MinScore in configuration.",
-                searchResults.Count, _options.MinScore, searchResults.Max(r => r.Score));
-        }
-
-        // 4. Fetch full conversations from MongoDB to enrich context.
-        var fullConversations = relevant.Count > 0
-            ? await _repository.GetByIdsAsync(relevant.Select(r => r.ConversationId), ct)
-            : [];
-        var conversationLookup = fullConversations.ToDictionary(c => c.ConversationId);
-
-        _logger.LogInformation(
-            "Fetched {Found}/{Requested} full conversations from MongoDB for context enrichment.",
-            fullConversations.Count, relevant.Count);
-
-        // 5. Build the augmented prompt using proper chat message roles.
-        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount);
-
-        var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
-        _logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
-
-        // 6. Stream from the LLM.
-        await foreach (var update in _chatClient.GetStreamingResponseAsync(messages, cancellationToken: ct))
-        {
-            if (!string.IsNullOrEmpty(update.Text))
-            {
-                yield return new RagStreamChunk(update.Text);
-            }
-        }
-
-        // 7. Final chunk carries the sources.
-        var sources = relevant
-            .Select(r => new ChatSource(r.ConversationId, r.Title, r.Summary, r.Score))
-            .ToList();
-
-        yield return new RagStreamChunk(null, sources);
+        return [.. sourcesDict.Values.OrderByDescending(s => s.Score)];
     }
 
     /// <summary>

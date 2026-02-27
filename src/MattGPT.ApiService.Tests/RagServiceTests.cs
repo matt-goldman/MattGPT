@@ -59,7 +59,8 @@ public class RagServiceTests
         string llmResponse = "Test answer.",
         RagOptions? ragOptions = null,
         FakeConversationRepository? repository = null,
-        ChatSessionOptions? chatOptions = null)
+        ChatSessionOptions? chatOptions = null,
+        SearchMemoriesTool? searchMemoriesTool = null)
     {
         var options = Options.Create(ragOptions ?? new RagOptions { TopK = 5, MinScore = 0.5f });
         var chatOpts = Options.Create(chatOptions ?? new ChatSessionOptions());
@@ -70,7 +71,8 @@ public class RagServiceTests
             new FakeChatClient(llmResponse),
             options,
             chatOpts,
-            NullLogger<RagService>.Instance);
+            NullLogger<RagService>.Instance,
+            searchMemoriesTool);
     }
 
     [Fact]
@@ -409,5 +411,162 @@ public class RagServiceTests
         // Older messages (e.g. "User msg 0") should NOT appear
         Assert.DoesNotContain(messages, m => m.Text == "User msg 0");
         Assert.DoesNotContain(messages, m => m.Text == "Asst msg 0");
+    }
+
+    // --- Mode-specific tests ---
+
+    [Fact]
+    public void EffectiveTopK_AutoMode_ReturnsFullTopK()
+    {
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Auto, TopK = 5 });
+        Assert.Equal(5, service.EffectiveTopK);
+    }
+
+    [Fact]
+    public void EffectiveTopK_HybridMode_ReturnsHybridTopK()
+    {
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Hybrid, HybridTopK = 2 });
+        Assert.Equal(2, service.EffectiveTopK);
+    }
+
+    [Fact]
+    public void EffectiveTopK_ToolsMode_ReturnsZero()
+    {
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Tools });
+        Assert.Equal(0, service.EffectiveTopK);
+    }
+
+    [Fact]
+    public void EffectiveMinScore_AutoMode_ReturnsStandardMinScore()
+    {
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Auto, MinScore = 0.5f });
+        Assert.Equal(0.5f, service.EffectiveMinScore);
+    }
+
+    [Fact]
+    public void EffectiveMinScore_HybridMode_ReturnsHybridMinScore()
+    {
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Hybrid, HybridMinScore = 0.65f });
+        Assert.Equal(0.65f, service.EffectiveMinScore);
+    }
+
+    [Fact]
+    public void BuildToolChatOptions_AutoMode_ReturnsNull()
+    {
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Auto });
+        Assert.Null(service.BuildToolChatOptions());
+    }
+
+    [Fact]
+    public void BuildToolChatOptions_HybridMode_WithoutTool_ReturnsNull()
+    {
+        // No SearchMemoriesTool injected — should return null even in hybrid mode.
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Hybrid });
+        Assert.Null(service.BuildToolChatOptions());
+    }
+
+    [Fact]
+    public void BuildToolChatOptions_HybridMode_WithTool_ReturnsChatOptions()
+    {
+        var tool = CreateSearchMemoriesTool();
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Hybrid }, searchMemoriesTool: tool);
+
+        var chatOptions = service.BuildToolChatOptions();
+
+        Assert.NotNull(chatOptions);
+        Assert.Single(chatOptions!.Tools!);
+        Assert.Equal(ChatToolMode.Auto, chatOptions.ToolMode);
+    }
+
+    [Fact]
+    public void BuildToolChatOptions_ToolsMode_WithTool_ReturnsChatOptions()
+    {
+        var tool = CreateSearchMemoriesTool();
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Tools }, searchMemoriesTool: tool);
+
+        var chatOptions = service.BuildToolChatOptions();
+
+        Assert.NotNull(chatOptions);
+        Assert.Single(chatOptions!.Tools!);
+    }
+
+    [Fact]
+    public async Task ChatAsync_ToolsMode_SkipsAutoRetrieval()
+    {
+        // In tools mode, even if Qdrant has results, auto-retrieval should be skipped
+        // (EffectiveTopK = 0), so sources should be empty (no tool was actually called
+        // since our FakeChatClient doesn't call tools).
+        var results = new List<QdrantSearchResult>
+        {
+            new("c1", 0.9f, "Title 1", "Summary 1"),
+        };
+        var service = CreateService(results, ragOptions: new RagOptions { Mode = RagMode.Tools });
+
+        var result = await service.ChatAsync("query");
+
+        Assert.Empty(result.Sources);
+    }
+
+    [Fact]
+    public async Task ChatAsync_HybridMode_UsesLighterParameters()
+    {
+        // Hybrid mode uses HybridTopK=2 and HybridMinScore=0.65.
+        // A result with score 0.6 should be excluded (below 0.65 threshold).
+        var results = new List<QdrantSearchResult>
+        {
+            new("c1", 0.9f, "Title 1", "Summary 1"),
+            new("c2", 0.6f, "Title 2", "Summary 2"), // below hybrid threshold of 0.65
+        };
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", "Title 1", "Summary 1"), MakeConversation("c2", "Title 2", "Summary 2")]);
+
+        var service = CreateService(results, ragOptions: new RagOptions
+        {
+            Mode = RagMode.Hybrid,
+            HybridTopK = 2,
+            HybridMinScore = 0.65f,
+        }, repository: repo);
+
+        var result = await service.ChatAsync("query");
+
+        Assert.Single(result.Sources);
+        Assert.Equal("c1", result.Sources[0].ConversationId);
+    }
+
+    [Fact]
+    public async Task ChatAsync_AutoMode_UsesFullParameters()
+    {
+        // Auto mode uses TopK=5 and MinScore=0.5.
+        // A result with score 0.6 should be included (above 0.5 threshold).
+        var results = new List<QdrantSearchResult>
+        {
+            new("c1", 0.9f, "Title 1", "Summary 1"),
+            new("c2", 0.6f, "Title 2", "Summary 2"), // above auto threshold of 0.5
+        };
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", "Title 1", "Summary 1"), MakeConversation("c2", "Title 2", "Summary 2")]);
+
+        var service = CreateService(results, ragOptions: new RagOptions
+        {
+            Mode = RagMode.Auto,
+            TopK = 5,
+            MinScore = 0.5f,
+        }, repository: repo);
+
+        var result = await service.ChatAsync("query");
+
+        Assert.Equal(2, result.Sources.Count);
+    }
+
+    private static SearchMemoriesTool CreateSearchMemoriesTool(
+        IReadOnlyList<QdrantSearchResult>? results = null,
+        FakeConversationRepository? repository = null)
+    {
+        return new SearchMemoriesTool(
+            new FakeEmbeddingGenerator(TestVector),
+            new FakeSearchQdrantService(results ?? []),
+            repository ?? new FakeConversationRepository(),
+            Options.Create(new RagOptions()),
+            NullLogger<SearchMemoriesTool>.Instance);
     }
 }
