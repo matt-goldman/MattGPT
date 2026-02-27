@@ -1,6 +1,7 @@
 @rendermode InteractiveServer
 @inject IHttpClientFactory HttpClients
 @using System.Text.Json
+@using System.Net.Http.Json
 
 <div class="flex flex-col h-full bg-default-50 border-r border-default-200">
     @* New chat button *@
@@ -26,141 +27,226 @@
         }
         else
         {
-            @* Chat sessions *@
+            @* ── Your Chats (collapsible) ── *@
             @if (_chatSessions.Count > 0)
             {
-                <div class="px-3 pt-3 pb-1">
+                <button class="w-full px-3 pt-3 pb-1 flex items-center justify-between hover:bg-default-100 transition-colors cursor-pointer"
+                        @onclick="@(() => _chatsCollapsed = !_chatsCollapsed)">
                     <span class="text-xs font-semibold text-default-400 uppercase tracking-wider">Your Chats</span>
-                </div>
-                @foreach (var session in _chatSessions)
-                {
-                    var isActive = ActiveSessionId == session.SessionId;
-                    <button class="@SidebarItemClass(isActive)"
-                            @onclick="@(() => OnSessionSelected.InvokeAsync(session.SessionId))">
-                        <div class="flex items-center gap-2 min-w-0">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                            </svg>
-                            <div class="min-w-0 flex-1 text-left">
-                                <div class="text-sm truncate">@(session.Title ?? "Untitled")</div>
-                                <div class="text-xs text-default-400">@FormatRelativeDate(session.UpdatedAt)</div>
-                            </div>
-                        </div>
-                    </button>
-                }
-            }
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         class="h-3 w-3 text-default-400 transition-transform @(_chatsCollapsed ? "" : "rotate-180")"
+                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
 
-            @* Project folders *@
-            @if (_projects.Count > 0)
-            {
-                <div class="px-3 pt-4 pb-1 flex items-center justify-between">
-                    <span class="text-xs font-semibold text-default-400 uppercase tracking-wider">Projects</span>
-                    <span class="text-xs text-default-400">@_projects.Count</span>
-                </div>
-
-                @foreach (var project in _projects)
+                @if (!_chatsCollapsed)
                 {
-                    var isExpanded = _expandedProjects.Contains(project.TemplateId);
-                    <div>
-                        <button class="w-full px-3 py-2 hover:bg-default-100 transition-colors cursor-pointer text-left"
-                                @onclick="@(() => ToggleProject(project.TemplateId))">
+                    @foreach (var session in _chatSessions)
+                    {
+                        var isActive = ActiveSessionId == session.SessionId;
+                        <button class="@SidebarItemClass(isActive)"
+                                @onclick="@(() => OnSessionSelected.InvokeAsync(session.SessionId))">
                             <div class="flex items-center gap-2 min-w-0">
-                                @* Folder icon with chevron *@
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-warning-500 transition-transform @(isExpanded ? "rotate-0" : "-rotate-90")"
-                                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                          d="@(isExpanded ? "M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" : "M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z")" />
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                                 </svg>
                                 <div class="min-w-0 flex-1 text-left">
-                                    <div class="text-sm truncate font-medium">@ProjectDisplayName(project)</div>
-                                    <div class="text-xs text-default-400">@project.ConversationCount conversations</div>
+                                    <div class="text-sm truncate">@(session.Title ?? "Untitled")</div>
+                                    <div class="text-xs text-default-400">@FormatRelativeDate(session.UpdatedAt)</div>
                                 </div>
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                     class="h-3 w-3 shrink-0 text-default-400 transition-transform @(isExpanded ? "rotate-180" : "")"
-                                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                                </svg>
                             </div>
                         </button>
-
-                        @if (isExpanded)
-                        {
-                            var convos = _projectConversations.GetValueOrDefault(project.TemplateId);
-                            @if (convos is null)
-                            {
-                                <div class="flex justify-center py-2 pl-6">
-                                    <LumexSpinner Color="@ThemeColor.Primary" Size="@Size.Small" />
-                                </div>
-                            }
-                            else
-                            {
-                                @foreach (var conv in convos)
-                                {
-                                    var isActive = ActiveConversationId == conv.ConversationId;
-                                    <button class="@SidebarItemClass(isActive) pl-8"
-                                            @onclick="@(() => OnConversationSelected.InvokeAsync(conv.ConversationId))">
-                                        <div class="flex items-center gap-2 min-w-0">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-default-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                                            </svg>
-                                            <div class="min-w-0 flex-1 text-left">
-                                                <div class="text-xs truncate">@(conv.Title ?? "Untitled")</div>
-                                                <div class="text-xs text-default-400">@FormatImportedDate(conv.CreateTime)</div>
-                                            </div>
-                                        </div>
-                                    </button>
-                                }
-                            }
-                        }
-                    </div>
+                    }
                 }
             }
 
-            @* Non-project imported conversations *@
+            @* ── Projects (collapsible section with collapsible folders) ── *@
+            @if (_projects.Count > 0)
+            {
+                <button class="w-full px-3 pt-4 pb-1 flex items-center justify-between hover:bg-default-100 transition-colors cursor-pointer"
+                        @onclick="@(() => _projectsCollapsed = !_projectsCollapsed)">
+                    <span class="text-xs font-semibold text-default-400 uppercase tracking-wider">Projects</span>
+                    <div class="flex items-center gap-1">
+                        <span class="text-xs text-default-400">@_projects.Count</span>
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                             class="h-3 w-3 text-default-400 transition-transform @(_projectsCollapsed ? "" : "rotate-180")"
+                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                </button>
+
+                @if (!_projectsCollapsed)
+                {
+                    @foreach (var project in _projects)
+                    {
+                        var isExpanded = _expandedProjects.Contains(project.TemplateId);
+                        var isEditing = _editingProjectId == project.TemplateId;
+                        <div>
+                            <div class="flex items-center w-full group">
+                                <button class="flex-1 px-3 py-2 hover:bg-default-100 transition-colors cursor-pointer text-left min-w-0"
+                                        @onclick="@(() => ToggleProject(project.TemplateId))">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        @* Folder icon *@
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-warning-500"
+                                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                                        </svg>
+                                        <div class="min-w-0 flex-1 text-left">
+                                            @if (isEditing)
+                                            {
+                                                @* Prevent click-through to toggle *@
+                                            }
+                                            else
+                                            {
+                                                <div class="text-sm truncate font-medium">@ProjectDisplayName(project)</div>
+                                                <div class="text-xs text-default-400">@project.ConversationCount conversations</div>
+                                            }
+                                        </div>
+                                        <svg xmlns="http://www.w3.org/2000/svg"
+                                             class="h-3 w-3 shrink-0 text-default-400 transition-transform @(isExpanded ? "rotate-180" : "")"
+                                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </div>
+                                </button>
+
+                                @if (!isEditing)
+                                {
+                                    @* Pencil icon for editing — visible on hover *@
+                                    <button class="px-1.5 py-2 opacity-0 group-hover:opacity-100 transition-opacity text-default-400 hover:text-primary shrink-0"
+                                            title="Rename project"
+                                            @onclick="@(() => StartEditing(project))"
+                                            @onclick:stopPropagation="true">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                    </button>
+                                }
+                            </div>
+
+                            @if (isEditing)
+                            {
+                                <div class="px-3 pb-2 flex items-center gap-1" @onclick:stopPropagation="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-warning-500"
+                                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                              d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                                    </svg>
+                                    <input type="text"
+                                           @bind="_editingName"
+                                           @bind:event="oninput"
+                                           @onkeydown="HandleEditKeyDown"
+                                           class="flex-1 text-sm rounded border border-primary bg-default-100 px-2 py-1 focus:outline-none"
+                                           autofocus />
+                                    <button class="text-primary hover:text-primary-600 p-1" title="Save"
+                                            @onclick="SaveProjectName">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </button>
+                                    <button class="text-default-400 hover:text-danger p-1" title="Cancel"
+                                            @onclick="CancelEditing">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            }
+
+                            @if (isExpanded)
+                            {
+                                var convos = _projectConversations.GetValueOrDefault(project.TemplateId);
+                                @if (convos is null)
+                                {
+                                    <div class="flex justify-center py-2 pl-6">
+                                        <LumexSpinner Color="@ThemeColor.Primary" Size="@Size.Small" />
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var conv in convos)
+                                    {
+                                        var isActive = ActiveConversationId == conv.ConversationId;
+                                        <button class="@SidebarItemClass(isActive) pl-8"
+                                                @onclick="@(() => OnConversationSelected.InvokeAsync(conv.ConversationId))">
+                                            <div class="flex items-center gap-2 min-w-0">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-default-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                                                </svg>
+                                                <div class="min-w-0 flex-1 text-left">
+                                                    <div class="text-xs truncate">@(conv.Title ?? "Untitled")</div>
+                                                    <div class="text-xs text-default-400">@FormatImportedDate(conv.CreateTime)</div>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    }
+                                }
+                            }
+                        </div>
+                    }
+                }
+            }
+
+            @* ── Imported History (collapsible) ── *@
             @if (_importedConversations.Count > 0 || _importedTotal > 0)
             {
-                <div class="px-3 pt-4 pb-1 flex items-center justify-between">
+                <button class="w-full px-3 pt-4 pb-1 flex items-center justify-between hover:bg-default-100 transition-colors cursor-pointer"
+                        @onclick="@(() => _importedCollapsed = !_importedCollapsed)">
                     <span class="text-xs font-semibold text-default-400 uppercase tracking-wider">Imported History</span>
-                    <span class="text-xs text-default-400">@_importedTotal total</span>
-                </div>
-
-                @* Search box for imported conversations *@
-                <div class="px-3 pb-2">
-                    <input type="text"
-                           @bind="_searchQuery"
-                           @bind:event="oninput"
-                           @bind:after="FilterImported"
-                           placeholder="Filter imported..."
-                           aria-label="Filter imported conversations"
-                           class="w-full text-xs rounded-md border border-default-200 bg-default-100 px-2 py-1.5 focus:outline-none focus:border-primary" />
-                </div>
-
-                @foreach (var conv in _filteredImported)
-                {
-                    var isActive = ActiveConversationId == conv.ConversationId;
-                    <button class="@SidebarItemClass(isActive)"
-                            @onclick="@(() => OnConversationSelected.InvokeAsync(conv.ConversationId))">
-                        <div class="flex items-center gap-2 min-w-0">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-default-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                            </svg>
-                            <div class="min-w-0 flex-1 text-left">
-                                <div class="text-sm truncate">@(conv.Title ?? "Untitled")</div>
-                                <div class="text-xs text-default-400">@FormatImportedDate(conv.CreateTime)</div>
-                            </div>
-                        </div>
-                    </button>
-                }
-
-                @if (_importedTotal > _importedConversations.Count)
-                {
-                    <div class="px-3 py-2 text-center">
-                        <button class="text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                                disabled="@_isLoadingMore"
-                                @onclick="LoadMoreImported">
-                            @(_isLoadingMore ? "Loading..." : "Load more...")
-                        </button>
+                    <div class="flex items-center gap-1">
+                        <span class="text-xs text-default-400">@_importedTotal total</span>
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                             class="h-3 w-3 text-default-400 transition-transform @(_importedCollapsed ? "" : "rotate-180")"
+                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
                     </div>
+                </button>
+
+                @if (!_importedCollapsed)
+                {
+                    @* Search box for imported conversations *@
+                    <div class="px-3 pb-2">
+                        <input type="text"
+                               @bind="_searchQuery"
+                               @bind:event="oninput"
+                               @bind:after="FilterImported"
+                               placeholder="Filter imported..."
+                               aria-label="Filter imported conversations"
+                               class="w-full text-xs rounded-md border border-default-200 bg-default-100 px-2 py-1.5 focus:outline-none focus:border-primary" />
+                    </div>
+
+                    @foreach (var conv in _filteredImported)
+                    {
+                        var isActive = ActiveConversationId == conv.ConversationId;
+                        <button class="@SidebarItemClass(isActive)"
+                                @onclick="@(() => OnConversationSelected.InvokeAsync(conv.ConversationId))">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-default-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                </svg>
+                                <div class="min-w-0 flex-1 text-left">
+                                    <div class="text-sm truncate">@(conv.Title ?? "Untitled")</div>
+                                    <div class="text-xs text-default-400">@FormatImportedDate(conv.CreateTime)</div>
+                                </div>
+                            </div>
+                        </button>
+                    }
+
+                    @if (_importedTotal > _importedConversations.Count)
+                    {
+                        <div class="px-3 py-2 text-center">
+                            <button class="text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled="@_isLoadingMore"
+                                    @onclick="LoadMoreImported">
+                                @(_isLoadingMore ? "Loading..." : "Load more...")
+                            </button>
+                        </div>
+                    }
                 }
             }
 
@@ -192,6 +278,15 @@
     private bool _isLoading = true;
     private bool _isLoadingMore;
     private string _searchQuery = string.Empty;
+
+    // Section collapse state (all expanded by default)
+    private bool _chatsCollapsed;
+    private bool _projectsCollapsed;
+    private bool _importedCollapsed;
+
+    // Inline editing state
+    private string? _editingProjectId;
+    private string _editingName = string.Empty;
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
@@ -338,9 +433,73 @@
         }
     }
 
+    // ── Inline editing ──
+
+    private void StartEditing(ProjectItem project)
+    {
+        _editingProjectId = project.TemplateId;
+        _editingName = ProjectDisplayName(project);
+    }
+
+    private void CancelEditing()
+    {
+        _editingProjectId = null;
+        _editingName = string.Empty;
+    }
+
+    private async Task SaveProjectName()
+    {
+        if (_editingProjectId is null || string.IsNullOrWhiteSpace(_editingName))
+        {
+            CancelEditing();
+            return;
+        }
+
+        try
+        {
+            var client = HttpClients.CreateClient("apiservice");
+            var response = await client.PatchAsJsonAsync(
+                $"/conversations/projects/{_editingProjectId}/name",
+                new { name = _editingName.Trim() });
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Update the local project item with the new name.
+                var project = _projects.FirstOrDefault(p => p.TemplateId == _editingProjectId);
+                if (project is not null)
+                {
+                    var idx = _projects.IndexOf(project);
+                    _projects[idx] = project with { UserName = _editingName.Trim() };
+                }
+            }
+        }
+        catch
+        {
+            // Non-critical; name will revert to the inferred value on next reload.
+        }
+        finally
+        {
+            CancelEditing();
+        }
+    }
+
+    private async Task HandleEditKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SaveProjectName();
+        }
+        else if (e.Key == "Escape")
+        {
+            CancelEditing();
+        }
+    }
+
     private static string ProjectDisplayName(ProjectItem project)
     {
-        // Use the most recent conversation title as a fallback project name.
+        // Prefer user-assigned name, fall back to inferred name from most recent conversation.
+        if (!string.IsNullOrWhiteSpace(project.UserName))
+            return project.UserName;
         return project.MostRecentTitle ?? "Untitled Project";
     }
 
@@ -366,7 +525,7 @@
 
     // DTOs for deserialisation
     private record ChatSessionItem(Guid SessionId, string? Title, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string Status);
-    private record ProjectItem(string TemplateId, int ConversationCount, string? MostRecentTitle, double? LatestUpdateTime, double? EarliestCreateTime);
+    private record ProjectItem(string TemplateId, int ConversationCount, string? MostRecentTitle, double? LatestUpdateTime, double? EarliestCreateTime, string? UserName = null);
     private record ImportedConversationItem(string ConversationId, string? Title, double? CreateTime, double? UpdateTime, int MessageCount);
     private record StandaloneConversationsResponse(int Page, int PageSize, long Total, List<ImportedConversationItem> Items);
     private record ProjectConversationsResponse(string TemplateId, int Page, int PageSize, long Total, List<ImportedConversationItem> Items);

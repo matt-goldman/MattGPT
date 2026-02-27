@@ -30,6 +30,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<ConversationParser>();
 builder.Services.AddSingleton<ImportJobStore>();
 builder.Services.AddSingleton<IConversationRepository, ConversationRepository>();
+builder.Services.AddSingleton<IProjectNameRepository, ProjectNameRepository>();
 builder.Services.AddSingleton(Channel.CreateBounded<ImportJobRequest>(new BoundedChannelOptions(50)
 {
     FullMode = BoundedChannelFullMode.Wait,

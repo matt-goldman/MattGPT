@@ -2998,6 +2998,13 @@
       }
     }
   }
+  .group-hover\:opacity-100 {
+    &:is(:where(.group):hover *) {
+      @media (hover: hover) {
+        opacity: 100%;
+      }
+    }
+  }
   .group-hover\/th\:opacity-100 {
     &:is(:where(.group\/th):hover *) {
       @media (hover: hover) {

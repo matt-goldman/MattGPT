@@ -157,9 +157,16 @@ public static class ConversationsEndpoints
         .WithName("GetConversation");
 
         // Get all project groups (conversations grouped by ConversationTemplateId for snorlax gizmo type).
-        app.MapGet("/conversations/projects", async (IConversationRepository repository) =>
+        // Merges user-assigned project names when available.
+        app.MapGet("/conversations/projects", async (IConversationRepository repository, IProjectNameRepository projectNames) =>
         {
-            var projects = await repository.GetProjectsAsync();
+            var projectsTask = repository.GetProjectsAsync();
+            var namesTask = projectNames.GetAllNamesAsync();
+            await Task.WhenAll(projectsTask, namesTask);
+
+            var projects = projectsTask.Result;
+            var names = namesTask.Result;
+
             return Results.Ok(projects.Select(p => new
             {
                 templateId = p.TemplateId,
@@ -167,9 +174,21 @@ public static class ConversationsEndpoints
                 mostRecentTitle = p.MostRecentTitle,
                 latestUpdateTime = p.LatestUpdateTime,
                 earliestCreateTime = p.EarliestCreateTime,
+                userName = names.GetValueOrDefault(p.TemplateId),
             }));
         })
         .WithName("GetProjects");
+
+        // Set or update a user-assigned project display name.
+        app.MapPatch("/conversations/projects/{templateId}/name", async (
+            string templateId, ProjectNameRequest request, IProjectNameRepository projectNames) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Name))
+                return Results.BadRequest(new { message = "Name is required." });
+            await projectNames.SetNameAsync(templateId, request.Name.Trim());
+            return Results.Ok(new { templateId, name = request.Name.Trim() });
+        })
+        .WithName("SetProjectName");
 
         // Get conversations within a specific project, paginated.
         app.MapGet("/conversations/projects/{templateId}", async (
@@ -225,3 +244,6 @@ public static class ConversationsEndpoints
         return app;
     }
 }
+
+/// <summary>Request body for setting a project display name.</summary>
+public record ProjectNameRequest(string Name);
