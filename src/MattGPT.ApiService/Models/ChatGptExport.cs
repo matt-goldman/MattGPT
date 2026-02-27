@@ -100,4 +100,83 @@ public class Content
     /// </summary>
     [JsonPropertyName("text")]
     public string? Text { get; set; }
+
+    /// <summary>Programming language for 'code' content type.</summary>
+    [JsonPropertyName("language")]
+    public string? Language { get; set; }
+
+    /// <summary>Browse result text for 'tether_browsing_display' content type.</summary>
+    [JsonPropertyName("result")]
+    public string? Result { get; set; }
+
+    /// <summary>Summary text for 'tether_browsing_display' content type.</summary>
+    [JsonPropertyName("summary")]
+    public string? Summary { get; set; }
+
+    /// <summary>Source URL for 'tether_quote' content type.</summary>
+    [JsonPropertyName("url")]
+    public string? Url { get; set; }
+
+    /// <summary>Source domain for 'tether_quote' content type.</summary>
+    [JsonPropertyName("domain")]
+    public string? Domain { get; set; }
+
+    /// <summary>Source title for 'tether_quote' content type.</summary>
+    [JsonPropertyName("title")]
+    public string? Title { get; set; }
+
+    /// <summary>Thought items for 'thoughts' content type.</summary>
+    [JsonPropertyName("thoughts")]
+    public List<ThoughtItem>? Thoughts { get; set; }
+
+    /// <summary>Text content for 'reasoning_recap' content type (JSON field: "content").</summary>
+    [JsonPropertyName("content")]
+    public string? ReasoningContent { get; set; }
+
+    /// <summary>User profile text for 'user_editable_context' content type.</summary>
+    [JsonPropertyName("user_profile")]
+    public string? UserProfile { get; set; }
+
+    /// <summary>User instructions text for 'user_editable_context' content type.</summary>
+    [JsonPropertyName("user_instructions")]
+    public string? UserInstructions { get; set; }
+
+    /// <summary>Output string for 'citable_code_output' content type.</summary>
+    [JsonPropertyName("output_str")]
+    public string? OutputStr { get; set; }
+
+    /// <summary>Error name for 'system_error' content type.</summary>
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    /// <summary>Browser/computer state for 'computer_output' content type.</summary>
+    [JsonPropertyName("state")]
+    public ComputerState? State { get; set; }
+}
+
+/// <summary>
+/// A single thought item within a 'thoughts' content type message.
+/// </summary>
+public class ThoughtItem
+{
+    [JsonPropertyName("content")]
+    public string? Content { get; set; }
+
+    [JsonPropertyName("summary")]
+    public string? Summary { get; set; }
+}
+
+/// <summary>
+/// Browser/computer state from a 'computer_output' content type message.
+/// </summary>
+public class ComputerState
+{
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
+
+    [JsonPropertyName("url")]
+    public string? Url { get; set; }
+
+    [JsonPropertyName("title")]
+    public string? Title { get; set; }
 }
