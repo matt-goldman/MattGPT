@@ -8,6 +8,7 @@
 @code {
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
+        .DisableHtml()
         .Build();
 
     private MarkupString _renderedHtml;
