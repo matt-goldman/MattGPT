@@ -42,6 +42,9 @@ builder.Services.AddScoped<EmbeddingService>();
 builder.Services.AddSingleton<IQdrantService, QdrantService>();
 builder.Services.AddScoped<RagService>();
 builder.Services.Configure<RagOptions>(builder.Configuration.GetSection(RagOptions.SectionName));
+builder.Services.AddSingleton<IChatSessionRepository, ChatSessionRepository>();
+builder.Services.AddScoped<ChatSessionService>();
+builder.Services.Configure<ChatSessionOptions>(builder.Configuration.GetSection(ChatSessionOptions.SectionName));
 
 // Allow large multipart form uploads on this service.
 builder.Services.Configure<FormOptions>(options =>
@@ -406,15 +409,21 @@ app.MapGet("/rag/diagnostics", async (
 .WithName("RagDiagnostics");
 
 // RAG chat endpoint — generates a response augmented with relevant past conversations.
-app.MapPost("/chat", async (ChatRequest request, RagService ragService, CancellationToken ct) =>
+app.MapPost("/chat", async (ChatRequest request, RagService ragService, ChatSessionService sessionService, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(request.Message))
         return Results.BadRequest("'message' is required.");
 
-    var result = await ragService.ChatAsync(request.Message, ct);
+    var session = await sessionService.GetOrCreateAsync(request.SessionId, ct);
+    await sessionService.AddUserMessageAsync(session, request.Message, ct);
+
+    var result = await ragService.ChatAsync(request.Message, session, ct);
+
+    await sessionService.AddAssistantMessageAsync(session, result.Answer, ct);
 
     return Results.Ok(new
     {
+        sessionId = session.SessionId,
         answer = result.Answer,
         sources = result.Sources.Select(s => new
         {
@@ -428,7 +437,7 @@ app.MapPost("/chat", async (ChatRequest request, RagService ragService, Cancella
 .WithName("Chat");
 
 // Streaming RAG chat endpoint — returns Server-Sent Events with incremental tokens.
-app.MapPost("/chat/stream", async (ChatRequest request, RagService ragService, HttpContext httpContext, CancellationToken ct) =>
+app.MapPost("/chat/stream", async (ChatRequest request, RagService ragService, ChatSessionService sessionService, HttpContext httpContext, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(request.Message))
     {
@@ -437,14 +446,25 @@ app.MapPost("/chat/stream", async (ChatRequest request, RagService ragService, H
         return;
     }
 
+    var session = await sessionService.GetOrCreateAsync(request.SessionId, ct);
+    await sessionService.AddUserMessageAsync(session, request.Message, ct);
+
     httpContext.Response.ContentType = "text/event-stream";
     httpContext.Response.Headers.CacheControl = "no-cache";
     httpContext.Response.Headers.Connection = "keep-alive";
 
-    await foreach (var chunk in ragService.ChatStreamAsync(request.Message, ct))
+    // Send the session ID as the first SSE event so the client can track it.
+    var sessionIdJson = System.Text.Json.JsonSerializer.Serialize(session.SessionId);
+    await httpContext.Response.WriteAsync($"event: session\ndata: {sessionIdJson}\n\n", ct);
+    await httpContext.Response.Body.FlushAsync(ct);
+
+    var fullResponse = new System.Text.StringBuilder();
+
+    await foreach (var chunk in ragService.ChatStreamAsync(request.Message, session, ct))
     {
         if (chunk.Text is not null)
         {
+            fullResponse.Append(chunk.Text);
             // Text token — send as a "token" event.
             var escapedText = System.Text.Json.JsonSerializer.Serialize(chunk.Text);
             await httpContext.Response.WriteAsync($"event: token\ndata: {escapedText}\n\n", ct);
@@ -465,6 +485,12 @@ app.MapPost("/chat/stream", async (ChatRequest request, RagService ragService, H
         }
     }
 
+    // Persist the assistant's full response.
+    if (fullResponse.Length > 0)
+    {
+        await sessionService.AddAssistantMessageAsync(session, fullResponse.ToString(), ct);
+    }
+
     // Signal end of stream.
     await httpContext.Response.WriteAsync("event: done\ndata: [DONE]\n\n", ct);
     await httpContext.Response.Body.FlushAsync(ct);
@@ -480,4 +506,4 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
 
-record ChatRequest(string Message);
+record ChatRequest(string Message, Guid? SessionId = null);

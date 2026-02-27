@@ -122,6 +122,7 @@
     private string _errorMessage = string.Empty;
     private ElementReference _textareaRef;
     private IJSObjectReference? _jsModule;
+    private Guid? _sessionId;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -163,9 +164,12 @@
         try
         {
             var client = HttpClients.CreateClient("apiservice");
+            var requestBody = _sessionId.HasValue
+                ? new { message = text, sessionId = _sessionId.Value }
+                : (object)new { message = text };
             var request = new HttpRequestMessage(HttpMethod.Post, "/chat/stream")
             {
-                Content = JsonContent.Create(new { message = text }),
+                Content = JsonContent.Create(requestBody),
             };
             request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
 
@@ -202,6 +206,13 @@
 
                     switch (currentEvent)
                     {
+                        case "session":
+                            // Server sends the session ID as the first event.
+                            var sid = JsonSerializer.Deserialize<Guid>(data);
+                            if (sid != Guid.Empty)
+                                _sessionId = sid;
+                            break;
+
                         case "token":
                             // Data is a JSON-encoded string — deserialise to get the raw text.
                             var token = JsonSerializer.Deserialize<string>(data);

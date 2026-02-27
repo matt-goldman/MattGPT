@@ -377,15 +377,14 @@ public class EmbeddingServiceTests
         {
             ConversationId = "long",
             Title = "Long",
-            LinearisedMessages = Enumerable.Range(0, 500)
+            LinearisedMessages = [.. Enumerable.Range(0, 500)
                 .Select(i => new StoredMessage
                 {
                     Id = $"m{i}",
                     Role = "user",
                     ContentType = "text",
                     Parts = [$"This is a fairly long message number {i} to eventually exceed the limit."],
-                })
-                .ToList(),
+                })],
         };
 
         var text = EmbeddingService.BuildEmbeddingText(conv);

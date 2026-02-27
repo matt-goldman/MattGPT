@@ -4,6 +4,9 @@ using MattGPT.ApiService.Models;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 
+// Alias to avoid collision with the Blazor-side ChatMessage record.
+using AIChatMessage = Microsoft.Extensions.AI.ChatMessage;
+
 namespace MattGPT.ApiService.Services;
 
 /// <summary>A single retrieved conversation reference included in a chat response.</summary>
@@ -37,6 +40,7 @@ public class RagService
     private readonly IConversationRepository _repository;
     private readonly IChatClient _chatClient;
     private readonly RagOptions _options;
+    private readonly ChatSessionOptions _chatOptions;
     private readonly ILogger<RagService> _logger;
 
     public RagService(
@@ -45,6 +49,7 @@ public class RagService
         IConversationRepository repository,
         IChatClient chatClient,
         IOptions<RagOptions> options,
+        IOptions<ChatSessionOptions> chatOptions,
         ILogger<RagService> logger)
     {
         _embeddingGenerator = embeddingGenerator;
@@ -52,13 +57,14 @@ public class RagService
         _repository = repository;
         _chatClient = chatClient;
         _options = options.Value;
+        _chatOptions = chatOptions.Value;
         _logger = logger;
     }
 
     /// <summary>
     /// Runs the full RAG pipeline for a user query and returns the LLM answer with sources.
     /// </summary>
-    public async Task<RagChatResponse> ChatAsync(string query, CancellationToken ct = default)
+    public async Task<RagChatResponse> ChatAsync(string query, ChatSession? session = null, CancellationToken ct = default)
     {
         _logger.LogInformation("RAG ChatAsync called. Query: {Query}", query);
 
@@ -114,7 +120,7 @@ public class RagService
             fullConversations.Count, relevant.Count);
 
         // 5. Build the augmented prompt using proper chat message roles.
-        var messages = BuildMessages(query, relevant, conversationLookup);
+        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount);
 
         var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
         _logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
@@ -137,6 +143,7 @@ public class RagService
     /// </summary>
     public async IAsyncEnumerable<RagStreamChunk> ChatStreamAsync(
         string query,
+        ChatSession? session = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         _logger.LogInformation("RAG ChatStreamAsync called. Query: {Query}", query);
@@ -193,7 +200,7 @@ public class RagService
             fullConversations.Count, relevant.Count);
 
         // 5. Build the augmented prompt using proper chat message roles.
-        var messages = BuildMessages(query, relevant, conversationLookup);
+        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount);
 
         var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
         _logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
@@ -217,14 +224,17 @@ public class RagService
 
     /// <summary>
     /// Builds the chat message list with a system prompt that frames retrieved conversations
-    /// as the assistant's own memory, and includes full conversation excerpts from MongoDB.
+    /// as the assistant's own memory, includes full conversation excerpts from MongoDB,
+    /// and inserts session context (rolling summary + recent messages) for multi-turn support.
     /// </summary>
-    public static List<ChatMessage> BuildMessages(
+    public static List<AIChatMessage> BuildMessages(
         string query,
         IReadOnlyList<QdrantSearchResult> context,
-        IReadOnlyDictionary<string, StoredConversation>? fullConversations = null)
+        IReadOnlyDictionary<string, StoredConversation>? fullConversations = null,
+        ChatSession? session = null,
+        int recentMessageCount = 6)
     {
-        var messages = new List<ChatMessage>();
+        var messages = new List<AIChatMessage>();
 
         // --- System message: identity + memory framing ---
         var system = new StringBuilder();
@@ -274,10 +284,47 @@ public class RagService
             system.AppendLine("No relevant memories were found for this query.");
         }
 
-        messages.Add(new ChatMessage(ChatRole.System, system.ToString()));
+        messages.Add(new AIChatMessage(ChatRole.System, system.ToString()));
+
+        // --- Rolling summary (medium-term memory) ---
+        if (session?.RollingSummary is { Length: > 0 } rollingSummary)
+        {
+            var summaryBlock = new StringBuilder();
+            summaryBlock.AppendLine("=== CONVERSATION SO FAR ===");
+            summaryBlock.AppendLine(rollingSummary);
+            summaryBlock.AppendLine("=== END CONVERSATION SUMMARY ===");
+            messages.Add(new AIChatMessage(ChatRole.System, summaryBlock.ToString()));
+        }
+
+        // --- Recent messages (short-term memory) ---
+        // Messages already in the session are included as prior turns so the LLM
+        // sees the conversation history. The current user query is already in
+        // session.Messages at this point, but we exclude it from the history via
+        // SkipLast(1) since we add it explicitly as the final user message below.
+        if (session is { Messages.Count: > 0 })
+        {
+            // Only include RECENT messages verbatim — older messages are already
+            // compressed into the rolling summary above.  We take the recent window
+            // (recentMessageCount) plus the current query, then SkipLast(1) to
+            // exclude the current query which is added as the final user message below.
+            var recentWindow = recentMessageCount + 1; // +1 for current query
+            var historyMessages = session.Messages
+                .TakeLast(recentWindow)
+                .SkipLast(1);
+            foreach (var msg in historyMessages)
+            {
+                var role = msg.Role switch
+                {
+                    "user" => ChatRole.User,
+                    "assistant" => ChatRole.Assistant,
+                    _ => ChatRole.User,
+                };
+                messages.Add(new AIChatMessage(role, msg.Content));
+            }
+        }
 
         // --- User message ---
-        messages.Add(new ChatMessage(ChatRole.User, query));
+        messages.Add(new AIChatMessage(ChatRole.User, query));
 
         return messages;
     }

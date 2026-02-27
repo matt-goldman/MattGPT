@@ -179,7 +179,7 @@ public class ImportProcessingServiceTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         // Act
-        var runTask = service.StartAsync(cts.Token);
+        await service.StartAsync(cts.Token);
         await channel.Writer.WriteAsync(new ImportJobRequest(job.JobId, tempPath), cts.Token);
 
         // Wait until the job reaches a terminal state.
@@ -188,8 +188,10 @@ public class ImportProcessingServiceTests
             await Task.Delay(50, cts.Token);
         }
 
+        // StopAsync properly awaits ExecuteAsync (including finally blocks)
+        // whereas StartAsync returns immediately.
         cts.Cancel();
-        try { await runTask; } catch (OperationCanceledException) { }
+        try { await service.StopAsync(CancellationToken.None); } catch (OperationCanceledException) { }
 
         // Assert
         Assert.Equal(ImportJobStatus.Complete, job.Status);
@@ -237,7 +239,7 @@ public class ImportProcessingServiceTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         // Act
-        var runTask = service.StartAsync(cts.Token);
+        await service.StartAsync(cts.Token);
         await channel.Writer.WriteAsync(new ImportJobRequest(job.JobId, tempPath), cts.Token);
 
         while (job.Status is ImportJobStatus.Queued or ImportJobStatus.Processing)
@@ -246,7 +248,7 @@ public class ImportProcessingServiceTests
         }
 
         cts.Cancel();
-        try { await runTask; } catch (OperationCanceledException) { }
+        try { await service.StopAsync(CancellationToken.None); } catch (OperationCanceledException) { }
 
         // Assert — repository should have received one upsert per conversation.
         Assert.Equal(2, repository.Upserted.Count);
@@ -273,7 +275,7 @@ public class ImportProcessingServiceTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         // Act
-        var runTask = service.StartAsync(cts.Token);
+        await service.StartAsync(cts.Token);
         await channel.Writer.WriteAsync(new ImportJobRequest(job.JobId, tempPath), cts.Token);
 
         while (job.Status is ImportJobStatus.Queued or ImportJobStatus.Processing)
@@ -282,7 +284,7 @@ public class ImportProcessingServiceTests
         }
 
         cts.Cancel();
-        try { await runTask; } catch (OperationCanceledException) { }
+        try { await service.StopAsync(CancellationToken.None); } catch (OperationCanceledException) { }
 
         // Assert
         Assert.Equal(ImportJobStatus.Failed, job.Status);
@@ -308,7 +310,7 @@ public class ImportProcessingServiceTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         // Act
-        var runTask = service.StartAsync(cts.Token);
+        await service.StartAsync(cts.Token);
         await channel.Writer.WriteAsync(new ImportJobRequest(job.JobId, tempPath), cts.Token);
 
         while (job.Status is ImportJobStatus.Queued or ImportJobStatus.Processing)
@@ -317,7 +319,7 @@ public class ImportProcessingServiceTests
         }
 
         cts.Cancel();
-        try { await runTask; } catch (OperationCanceledException) { }
+        try { await service.StopAsync(CancellationToken.None); } catch (OperationCanceledException) { }
 
         // Assert
         Assert.False(File.Exists(tempPath), "Temp file should have been deleted after processing.");
