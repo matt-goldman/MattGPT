@@ -211,6 +211,7 @@
         else if (ConversationId is null && _lastLoadedConversationId is not null)
         {
             _lastLoadedConversationId = null;
+            await StartNewChat();
         }
     }
 
