@@ -85,12 +85,12 @@ public class QdrantService : IQdrantService
             limit: (ulong)limit,
             cancellationToken: ct);
 
-        return results.Select(r => new QdrantSearchResult(
+        return [.. results.Select(r => new QdrantSearchResult(
             ConversationId: GetPayloadString(r.Payload, "conversation_id") ?? string.Empty,
             Score: r.Score,
             Title: GetPayloadString(r.Payload, "title"),
             Summary: GetPayloadString(r.Payload, "summary")
-        )).ToList();
+        ))];
     }
 
     private static string? GetPayloadString(IReadOnlyDictionary<string, Value> payload, string key)
