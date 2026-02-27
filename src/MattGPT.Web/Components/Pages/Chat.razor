@@ -33,7 +33,11 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
             </button>
-            <div class="min-w-0 flex-1">
+        </div>
+
+        @* Message history *@
+        <div class="flex-1 overflow-y-auto px-4 py-4" id="chat-messages">
+            <div class="max-w-4xl mx-auto space-y-4">
                 @if (_viewingConversationId is not null)
                 {
                     <div class="flex items-center gap-2">
@@ -47,12 +51,6 @@
                     <h1 class="text-lg font-semibold truncate">@(_sessionTitle ?? "New Chat")</h1>
                     <p class="text-default-400 text-xs">Ask anything — responses are augmented with your imported conversation history.</p>
                 }
-            </div>
-        </div>
-
-        @* Message history *@
-        <div class="flex-1 overflow-y-auto px-4 py-4" id="chat-messages">
-            <div class="max-w-4xl mx-auto space-y-4">
             @if (_messages.Count == 0 && _viewingConversationId is null)
             {
                 <div class="flex items-center justify-center h-full text-default-400 text-sm">
