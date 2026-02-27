@@ -78,6 +78,12 @@ internal sealed class FakeConversationRepository : IConversationRepository
         return Task.FromResult(items);
     }
 
+    public Task<StoredConversation?> GetByIdAsync(string conversationId, CancellationToken ct = default)
+    {
+        var item = _conversations.FirstOrDefault(c => c.ConversationId == conversationId);
+        return Task.FromResult(item);
+    }
+
     public Task<Dictionary<ConversationProcessingStatus, long>> GetStatusCountsAsync(CancellationToken ct = default)
     {
         var counts = _conversations

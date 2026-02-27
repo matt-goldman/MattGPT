@@ -25,6 +25,9 @@ public interface IConversationRepository
     /// <summary>Update the embedding vector and processing status of a single conversation.</summary>
     Task UpdateEmbeddingAsync(string conversationId, float[]? embedding, ConversationProcessingStatus status, CancellationToken ct = default);
 
+    /// <summary>Return a single conversation by ID, or null if not found.</summary>
+    Task<StoredConversation?> GetByIdAsync(string conversationId, CancellationToken ct = default);
+
     /// <summary>Return conversations matching the given IDs.</summary>
     Task<List<StoredConversation>> GetByIdsAsync(IEnumerable<string> conversationIds, CancellationToken ct = default);
 

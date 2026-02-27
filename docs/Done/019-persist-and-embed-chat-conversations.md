@@ -1,6 +1,6 @@
 # 019 — Persist and Embed Chat Conversations
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 19
 **Dependencies:** 018 (multi-turn chat), 007 (MongoDB storage), 009 (embeddings), 010 (Qdrant storage)
 
@@ -57,12 +57,12 @@ This creates an asymmetry: the LLM "remembers" imported ChatGPT conversations bu
 
 ## Acceptance Criteria
 
-- [ ] Chat conversations are persisted to MongoDB with full message history.
-- [ ] Completed chat sessions are embedded in Qdrant and appear in RAG retrieval results.
-- [ ] A conversation from a previous chat session can influence responses in a new session (via RAG).
-- [ ] Page refresh does not lose the current conversation (session is recoverable via session ID).
-- [ ] Chat sessions have auto-generated titles.
-- [ ] The system handles concurrent sessions (multiple browser tabs) correctly.
+- [x] Chat conversations are persisted to MongoDB with full message history.
+- [x] Completed chat sessions are embedded in Qdrant and appear in RAG retrieval results.
+- [x] A conversation from a previous chat session can influence responses in a new session (via RAG).
+- [x] Page refresh does not lose the current conversation (session is recoverable via session ID).
+- [x] Chat sessions have auto-generated titles.
+- [x] The system handles concurrent sessions (multiple browser tabs) correctly.
 
 ## Notes
 
