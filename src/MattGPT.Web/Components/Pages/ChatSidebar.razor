@@ -86,7 +86,7 @@
                         <div>
                             <div class="flex items-center w-full group">
                                 <button class="flex-1 px-3 py-2 hover:bg-default-100 transition-colors cursor-pointer text-left min-w-0"
-                                        @onclick="@(() => ToggleProject(project.TemplateId))">
+                                        @onclick="@(async () => { if (!isEditing) await ToggleProject(project.TemplateId); })">
                                     <div class="flex items-center gap-2 min-w-0">
                                         @* Folder icon *@
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-warning-500"
@@ -366,6 +366,7 @@
             _expandedProjects.Add(templateId);
             if (!_projectConversations.ContainsKey(templateId))
             {
+                StateHasChanged(); // Re-render immediately to show the spinner
                 await LoadProjectConversations(templateId);
             }
         }
@@ -377,11 +378,30 @@
         try
         {
             var client = HttpClients.CreateClient("apiservice");
-            var result = await client.GetFromJsonAsync<ProjectConversationsResponse>(
-                $"/conversations/projects/{templateId}?page=1&pageSize=100", _jsonOptions);
-            if (result?.Items is not null)
+            var page = 1;
+            const int pageSize = 100;
+            _projectConversations[templateId] = [];
+
+            while (true)
             {
-                _projectConversations[templateId] = result.Items;
+                var result = await client.GetFromJsonAsync<ProjectConversationsResponse>(
+                    $"/conversations/projects/{templateId}?page={page}&pageSize={pageSize}", _jsonOptions);
+
+                if (result?.Items is null || result.Items.Count == 0)
+                    break;
+
+                if (page == 1)
+                    _projectConversations[templateId] = result.Items;
+                else
+                    _projectConversations[templateId].AddRange(result.Items);
+
+                if (result.Items.Count < pageSize)
+                    break;
+
+                if (result.Total > 0 && _projectConversations[templateId].Count >= result.Total)
+                    break;
+
+                page++;
             }
         }
         catch
@@ -458,7 +478,7 @@
         try
         {
             var client = HttpClients.CreateClient("apiservice");
-            var response = await client.PatchAsJsonAsync(
+            using var response = await client.PatchAsJsonAsync(
                 $"/conversations/projects/{_editingProjectId}/name",
                 new { name = _editingName.Trim() });
 

@@ -155,7 +155,9 @@ public class ConversationRepository : IConversationRepository
     public async Task<(List<StoredConversation> Items, long Total)> GetProjectConversationsAsync(
         string templateId, int page, int pageSize, CancellationToken ct = default)
     {
-        var filter = Builders<StoredConversation>.Filter.Eq(x => x.ConversationTemplateId, templateId);
+        var filter = Builders<StoredConversation>.Filter.And(
+            Builders<StoredConversation>.Filter.Eq(x => x.GizmoType, "snorlax"),
+            Builders<StoredConversation>.Filter.Eq(x => x.ConversationTemplateId, templateId));
         var projection = Builders<StoredConversation>.Projection.Exclude(x => x.Embedding);
         var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
         var items = await _collection
