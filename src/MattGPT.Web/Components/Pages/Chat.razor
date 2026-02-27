@@ -27,7 +27,8 @@
         @* Header with sidebar toggle *@
         <div class="flex items-center gap-3 px-4 py-3 border-b border-default-200">
             <button class="p-1.5 rounded-md hover:bg-default-100 transition-colors" @onclick="ToggleSidebar"
-                    title="@(_sidebarOpen ? "Hide sidebar" : "Show sidebar")">
+                    title="@(_sidebarOpen ? "Hide sidebar" : "Show sidebar")"
+                    aria-label="@(_sidebarOpen ? "Hide sidebar" : "Show sidebar")">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-default-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
