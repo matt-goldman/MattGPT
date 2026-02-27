@@ -752,4 +752,84 @@ public class StoredMessageTests
             },
         };
     }
+
+    // -----------------------------------------------------------------------
+    // Weight and IsHidden
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void From_WeightCaptured()
+    {
+        var message = MakeMessage("m1", "system", "text", ["Custom instructions"]);
+        message.Weight = 0.0;
+
+        var stored = StoredMessage.From(message);
+
+        Assert.Equal(0.0, stored.Weight);
+    }
+
+    [Fact]
+    public void From_WeightNull_WhenNotPresent()
+    {
+        var message = MakeMessage("m1", "user", "text", ["Hello"]);
+
+        var stored = StoredMessage.From(message);
+
+        Assert.Null(stored.Weight);
+    }
+
+    [Fact]
+    public void From_WeightOne_ForNormalMessage()
+    {
+        var message = MakeMessage("m1", "user", "text", ["Hello"]);
+        message.Weight = 1.0;
+
+        var stored = StoredMessage.From(message);
+
+        Assert.Equal(1.0, stored.Weight);
+    }
+
+    [Fact]
+    public void From_IsHidden_True_WhenMetadataIndicatesHidden()
+    {
+        var message = MakeMessage("m1", "system", "text", ["System prompt"]);
+        message.Metadata = new MessageMetadata { IsVisuallyHiddenFromConversation = true };
+
+        var stored = StoredMessage.From(message);
+
+        Assert.True(stored.IsHidden);
+    }
+
+    [Fact]
+    public void From_IsHidden_False_WhenMetadataIndicatesVisible()
+    {
+        var message = MakeMessage("m1", "user", "text", ["Hello"]);
+        message.Metadata = new MessageMetadata { IsVisuallyHiddenFromConversation = false };
+
+        var stored = StoredMessage.From(message);
+
+        Assert.False(stored.IsHidden);
+    }
+
+    [Fact]
+    public void From_IsHidden_False_WhenMetadataNull()
+    {
+        var message = MakeMessage("m1", "user", "text", ["Hello"]);
+        // No metadata set
+
+        var stored = StoredMessage.From(message);
+
+        Assert.False(stored.IsHidden);
+    }
+
+    [Fact]
+    public void From_IsHidden_False_WhenHiddenFlagNull()
+    {
+        var message = MakeMessage("m1", "user", "text", ["Hello"]);
+        message.Metadata = new MessageMetadata { IsVisuallyHiddenFromConversation = null };
+
+        var stored = StoredMessage.From(message);
+
+        Assert.False(stored.IsHidden);
+    }
 }

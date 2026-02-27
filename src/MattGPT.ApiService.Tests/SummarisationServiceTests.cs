@@ -240,4 +240,69 @@ public class SummarisationServiceTests
         // Prompt should not be excessively large.
         Assert.True(prompt.Length < 15_000);
     }
+
+    [Fact]
+    public void BuildPrompt_ExcludesZeroWeightMessages()
+    {
+        var conversation = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Test",
+            LinearisedMessages =
+            [
+                new StoredMessage { Id = "m0", Role = "system", ContentType = "text", Parts = ["System scaffolding"], Weight = 0.0 },
+                new StoredMessage { Id = "m1", Role = "user", ContentType = "text", Parts = ["User question"], Weight = 1.0 },
+                new StoredMessage { Id = "m2", Role = "assistant", ContentType = "text", Parts = ["Assistant answer"], Weight = 1.0 },
+            ],
+            ProcessingStatus = ConversationProcessingStatus.Imported,
+        };
+
+        var prompt = SummarisationService.BuildPrompt(conversation);
+
+        Assert.DoesNotContain("System scaffolding", prompt);
+        Assert.Contains("user: User question", prompt);
+        Assert.Contains("assistant: Assistant answer", prompt);
+    }
+
+    [Fact]
+    public void BuildPrompt_ExcludesHiddenMessages()
+    {
+        var conversation = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Test",
+            LinearisedMessages =
+            [
+                new StoredMessage { Id = "m0", Role = "system", ContentType = "user_editable_context", Parts = ["[User Profile] my profile"], IsHidden = true },
+                new StoredMessage { Id = "m1", Role = "user", ContentType = "text", Parts = ["Visible question"] },
+                new StoredMessage { Id = "m2", Role = "assistant", ContentType = "text", Parts = ["Visible answer"] },
+            ],
+            ProcessingStatus = ConversationProcessingStatus.Imported,
+        };
+
+        var prompt = SummarisationService.BuildPrompt(conversation);
+
+        Assert.DoesNotContain("User Profile", prompt);
+        Assert.Contains("user: Visible question", prompt);
+        Assert.Contains("assistant: Visible answer", prompt);
+    }
+
+    [Fact]
+    public void BuildPrompt_NullWeight_IncludesMessage()
+    {
+        var conversation = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Test",
+            LinearisedMessages =
+            [
+                new StoredMessage { Id = "m1", Role = "user", ContentType = "text", Parts = ["Included"], Weight = null },
+            ],
+            ProcessingStatus = ConversationProcessingStatus.Imported,
+        };
+
+        var prompt = SummarisationService.BuildPrompt(conversation);
+
+        Assert.Contains("user: Included", prompt);
+    }
 }

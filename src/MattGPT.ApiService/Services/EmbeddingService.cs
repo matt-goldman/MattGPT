@@ -153,8 +153,13 @@ public class EmbeddingService(
             sb.Append("Summary: ").AppendLine(conversation.Summary);
 
         // Append message content up to the character limit.
+        // Skip hidden and zero-weight messages (system scaffolding, custom instructions)
+        // to dedicate the embedding window to actual conversational content.
         foreach (var msg in conversation.LinearisedMessages)
         {
+            if (msg.IsHidden || msg.Weight == 0.0)
+                continue;
+
             var content = string.Join(" ", msg.Parts);
             if (string.IsNullOrWhiteSpace(content))
                 continue;

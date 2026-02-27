@@ -150,6 +150,11 @@ public class SummarisationService(
 
         foreach (var msg in conversation.LinearisedMessages)
         {
+            // Skip hidden and zero-weight messages (system scaffolding, custom instructions)
+            // to focus the summary on actual conversational content.
+            if (msg.IsHidden || msg.Weight == 0.0)
+                continue;
+
             var content = string.Join(" ", msg.Parts);
             var line = $"{msg.Role}: {content}\n";
 
