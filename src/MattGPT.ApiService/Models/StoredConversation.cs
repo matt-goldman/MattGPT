@@ -226,6 +226,24 @@ public class StoredConversation
     public double? UpdateTime { get; set; }
     public string? DefaultModelSlug { get; set; }
 
+    /// <summary>Identifies which custom GPT was used (null for standard conversations).</summary>
+    public string? GizmoId { get; set; }
+
+    /// <summary>Project/template association for the conversation.</summary>
+    public string? ConversationTemplateId { get; set; }
+
+    /// <summary>
+    /// Whether the user opted out of memory for this conversation.
+    /// Conversations with this flag are stored but annotated so downstream consumers can filter them.
+    /// </summary>
+    public bool? IsDoNotRemember { get; set; }
+
+    /// <summary>Memory scope for this conversation (e.g. "global_enabled", "project_enabled").</summary>
+    public string? MemoryScope { get; set; }
+
+    /// <summary>Whether this conversation has been archived.</summary>
+    public bool? IsArchived { get; set; }
+
     /// <summary>Active-thread messages in chronological order, linearised from the message tree.</summary>
     public List<StoredMessage> LinearisedMessages { get; set; } = new();
 
@@ -248,6 +266,11 @@ public class StoredConversation
         CreateTime = conversation.CreateTime,
         UpdateTime = conversation.UpdateTime,
         DefaultModelSlug = conversation.DefaultModelSlug,
+        GizmoId = conversation.GizmoId,
+        ConversationTemplateId = conversation.ConversationTemplateId,
+        IsDoNotRemember = conversation.IsDoNotRemember,
+        MemoryScope = conversation.MemoryScope,
+        IsArchived = conversation.IsArchived,
         LinearisedMessages = [.. conversation.Messages.Select(StoredMessage.From)],
         ImportTimestamp = DateTimeOffset.UtcNow,
         ProcessingStatus = ConversationProcessingStatus.Imported,
