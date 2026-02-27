@@ -298,9 +298,9 @@ public class RagService
 
         // --- Recent messages (short-term memory) ---
         // Messages already in the session are included as prior turns so the LLM
-        // sees the conversation history. The current user query is NOT in session.Messages
-        // yet at prompt-build time (it is added before summary evaluation, but here we
-        // only include messages prior to the current query as context).
+        // sees the conversation history. The current user query is already in
+        // session.Messages at this point, but we exclude it from the history via
+        // SkipLast(1) since we add it explicitly as the final user message below.
         if (session is { Messages.Count: > 0 })
         {
             // Only include RECENT messages verbatim — older messages are already
