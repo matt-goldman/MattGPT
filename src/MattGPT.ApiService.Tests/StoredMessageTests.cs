@@ -230,6 +230,20 @@ public class StoredMessageTests
     }
 
     [Fact]
+    public void From_TetherQuote_EmptyTitle_FallsToDomain()
+    {
+        var message = MakeMessage("m1", "assistant", "tether_quote");
+        message.Content.Text = "Some quote";
+        message.Content.Title = "";
+        message.Content.Domain = "example.com";
+
+        var stored = StoredMessage.From(message);
+
+        Assert.Equal(2, stored.Parts.Count);
+        Assert.Equal("[Source: example.com]", stored.Parts[1]);
+    }
+
+    [Fact]
     public void From_TetherQuote_NoTitleNoDomain_NoSourceAnnotation()
     {
         var message = MakeMessage("m1", "assistant", "tether_quote");

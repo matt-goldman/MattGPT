@@ -69,8 +69,9 @@ public class StoredMessage
                 var quoteParts = new List<string>();
                 if (!string.IsNullOrEmpty(content.Text))
                     quoteParts.Add(content.Text);
-                if (!string.IsNullOrEmpty(content.Title) || !string.IsNullOrEmpty(content.Domain))
-                    quoteParts.Add($"[Source: {content.Title ?? content.Domain}]");
+                var sourceLabel = !string.IsNullOrEmpty(content.Title) ? content.Title : content.Domain;
+                if (!string.IsNullOrEmpty(sourceLabel))
+                    quoteParts.Add($"[Source: {sourceLabel}]");
                 stored.Parts = quoteParts;
                 break;
 
@@ -160,6 +161,7 @@ public class StoredMessage
     private static string FormatObjectPart(JsonElement element)
     {
         if (element.TryGetProperty("content_type", out var ct) &&
+            ct.ValueKind == JsonValueKind.String &&
             ct.GetString() == "image_asset_pointer")
         {
             return FormatImageAssetPointer(element);
