@@ -24,6 +24,7 @@ public class ChatSessionRepository : IChatSessionRepository
         _collection.Indexes.CreateMany([
             new CreateIndexModel<ChatSession>(keys.Descending(x => x.CreatedAt)),
             new CreateIndexModel<ChatSession>(keys.Ascending(x => x.Status)),
+            new CreateIndexModel<ChatSession>(keys.Descending(x => x.UpdatedAt)),
         ]);
     }
 
@@ -83,8 +84,15 @@ public class ChatSessionRepository : IChatSessionRepository
     /// <inheritdoc/>
     public async Task<List<ChatSession>> ListRecentAsync(int limit = 50, CancellationToken ct = default)
     {
+        // Exclude Messages and RollingSummary to minimise payload for the list view.
+        // The caller only needs SessionId, Title, CreatedAt, UpdatedAt, and Status.
+        var projection = Builders<ChatSession>.Projection
+            .Exclude(x => x.Messages)
+            .Exclude(x => x.RollingSummary);
+
         return await _collection
             .Find(Builders<ChatSession>.Filter.Empty)
+            .Project<ChatSession>(projection)
             .SortByDescending(x => x.UpdatedAt)
             .Limit(limit)
             .ToListAsync(ct);

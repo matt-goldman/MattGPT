@@ -178,6 +178,7 @@
     private string? _sessionTitle;
     private bool _sidebarOpen = true;
     private ChatSidebar? _sidebar;
+    private CancellationTokenSource? _streamCts;
 
     // When viewing an imported conversation read-only.
     private string? _viewingConversationId;
@@ -194,6 +195,8 @@
 
     public async ValueTask DisposeAsync()
     {
+        _streamCts?.Cancel();
+        _streamCts?.Dispose();
         if (_jsModule is not null)
         {
             await _jsModule.DisposeAsync();
@@ -202,8 +205,18 @@
 
     private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
 
+    private void CancelActiveStream()
+    {
+        _streamCts?.Cancel();
+        _streamCts?.Dispose();
+        _streamCts = null;
+        _isThinking = false;
+        _streamingContent.Clear();
+    }
+
     private async Task StartNewChat()
     {
+        CancelActiveStream();
         _messages.Clear();
         _sessionId = null;
         _sessionTitle = null;
@@ -216,6 +229,7 @@
 
     private async Task LoadSession(Guid sessionId)
     {
+        CancelActiveStream();
         _viewingConversationId = null;
         _viewingTitle = null;
         _messages.Clear();
@@ -245,6 +259,7 @@
 
     private async Task LoadImportedConversation(string conversationId)
     {
+        CancelActiveStream();
         _sessionId = null;
         _sessionTitle = null;
         _messages.Clear();
@@ -304,6 +319,11 @@
         _isThinking = true;
         StateHasChanged();
 
+        _streamCts?.Cancel();
+        _streamCts?.Dispose();
+        _streamCts = new CancellationTokenSource();
+        var ct = _streamCts.Token;
+
         try
         {
             var client = HttpClients.CreateClient("apiservice");
@@ -316,7 +336,7 @@
             };
             request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
 
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -392,6 +412,10 @@
             // Refresh sidebar to show the new/updated session.
             if (_sidebar is not null)
                 await _sidebar.RefreshAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // Stream was cancelled by navigation / new chat — not an error.
         }
         catch (Exception ex)
         {

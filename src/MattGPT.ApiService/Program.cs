@@ -509,7 +509,6 @@ app.MapGet("/chat/sessions", async (IChatSessionRepository sessionRepo, int limi
         createdAt = s.CreatedAt,
         updatedAt = s.UpdatedAt,
         status = s.Status.ToString(),
-        messageCount = s.Messages.Count,
     }));
 })
 .WithName("ListChatSessions");

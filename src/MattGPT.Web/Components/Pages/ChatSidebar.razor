@@ -88,8 +88,10 @@
                 @if (_importedTotal > _importedConversations.Count)
                 {
                     <div class="px-3 py-2 text-center">
-                        <button class="text-xs text-primary hover:underline" @onclick="LoadMoreImported">
-                            Load more...
+                        <button class="text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled="@_isLoadingMore"
+                                @onclick="LoadMoreImported">
+                            @(_isLoadingMore ? "Loading..." : "Load more...")
                         </button>
                     </div>
                 }
@@ -118,6 +120,7 @@
     private long _importedTotal;
     private int _importedPage = 1;
     private bool _isLoading = true;
+    private bool _isLoadingMore;
     private string _searchQuery = string.Empty;
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -177,21 +180,30 @@
 
     private async Task LoadMoreImported()
     {
+        if (_isLoadingMore) return;
+        _isLoadingMore = true;
+        StateHasChanged();
+
+        var nextPage = _importedPage + 1;
         try
         {
-            _importedPage++;
             var client = HttpClients.CreateClient("apiservice");
             var result = await client.GetFromJsonAsync<ConversationsResponse>(
-                $"/conversations?page={_importedPage}&pageSize=50", _jsonOptions);
+                $"/conversations?page={nextPage}&pageSize=50", _jsonOptions);
             if (result?.Items is not null)
             {
+                _importedPage = nextPage;
                 _importedConversations.AddRange(result.Items);
                 FilterImported();
             }
         }
         catch
         {
-            // Non-critical; ignore.
+            // Non-critical; ignore. Page counter unchanged so retry will fetch the same page.
+        }
+        finally
+        {
+            _isLoadingMore = false;
         }
     }
 
@@ -230,7 +242,7 @@
     }
 
     // DTOs for deserialisation
-    private record ChatSessionItem(Guid SessionId, string? Title, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string Status, int MessageCount);
+    private record ChatSessionItem(Guid SessionId, string? Title, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string Status);
     private record ImportedConversationItem(string ConversationId, string? Title, double? CreateTime, double? UpdateTime, int MessageCount);
     private record ConversationsResponse(int Page, int PageSize, long Total, List<ImportedConversationItem> Items);
 }
