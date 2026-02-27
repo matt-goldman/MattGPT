@@ -63,6 +63,28 @@ public class Message
 
     [JsonPropertyName("create_time")]
     public double? CreateTime { get; set; }
+
+    /// <summary>
+    /// Weight/priority of this message. Typically 0.0 for system messages, 1.0 for visible messages.
+    /// </summary>
+    [JsonPropertyName("weight")]
+    public double? Weight { get; set; }
+
+    /// <summary>
+    /// Message-level metadata containing model info, visibility flags, citations, etc.
+    /// </summary>
+    [JsonPropertyName("metadata")]
+    public MessageMetadata? Metadata { get; set; }
+}
+
+/// <summary>
+/// Metadata associated with a message. Contains visibility flags and other contextual information.
+/// </summary>
+public class MessageMetadata
+{
+    /// <summary>Whether this message is hidden in the UI (common for system messages).</summary>
+    [JsonPropertyName("is_visually_hidden_from_conversation")]
+    public bool? IsVisuallyHiddenFromConversation { get; set; }
 }
 
 /// <summary>

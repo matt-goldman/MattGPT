@@ -236,8 +236,125 @@ public class SummarisationServiceTests
 
         var prompt = SummarisationService.BuildPrompt(conversation);
 
+        Assert.NotNull(prompt);
         Assert.Contains("truncated", prompt);
         // Prompt should not be excessively large.
         Assert.True(prompt.Length < 15_000);
+    }
+
+    [Fact]
+    public void BuildPrompt_ExcludesZeroWeightMessages()
+    {
+        var conversation = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Test",
+            LinearisedMessages =
+            [
+                new StoredMessage { Id = "m0", Role = "system", ContentType = "text", Parts = ["System scaffolding"], Weight = 0.0 },
+                new StoredMessage { Id = "m1", Role = "user", ContentType = "text", Parts = ["User question"], Weight = 1.0 },
+                new StoredMessage { Id = "m2", Role = "assistant", ContentType = "text", Parts = ["Assistant answer"], Weight = 1.0 },
+            ],
+            ProcessingStatus = ConversationProcessingStatus.Imported,
+        };
+
+        var prompt = SummarisationService.BuildPrompt(conversation);
+
+        Assert.DoesNotContain("System scaffolding", prompt);
+        Assert.Contains("user: User question", prompt);
+        Assert.Contains("assistant: Assistant answer", prompt);
+    }
+
+    [Fact]
+    public void BuildPrompt_ExcludesHiddenMessages()
+    {
+        var conversation = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Test",
+            LinearisedMessages =
+            [
+                new StoredMessage { Id = "m0", Role = "system", ContentType = "user_editable_context", Parts = ["[User Profile] my profile"], IsHidden = true },
+                new StoredMessage { Id = "m1", Role = "user", ContentType = "text", Parts = ["Visible question"] },
+                new StoredMessage { Id = "m2", Role = "assistant", ContentType = "text", Parts = ["Visible answer"] },
+            ],
+            ProcessingStatus = ConversationProcessingStatus.Imported,
+        };
+
+        var prompt = SummarisationService.BuildPrompt(conversation);
+
+        Assert.DoesNotContain("User Profile", prompt);
+        Assert.Contains("user: Visible question", prompt);
+        Assert.Contains("assistant: Visible answer", prompt);
+    }
+
+    [Fact]
+    public void BuildPrompt_NullWeight_IncludesMessage()
+    {
+        var conversation = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Test",
+            LinearisedMessages =
+            [
+                new StoredMessage { Id = "m1", Role = "user", ContentType = "text", Parts = ["Included"], Weight = null },
+            ],
+            ProcessingStatus = ConversationProcessingStatus.Imported,
+        };
+
+        var prompt = SummarisationService.BuildPrompt(conversation);
+
+        Assert.NotNull(prompt);
+        Assert.Contains("user: Included", prompt);
+    }
+
+    [Fact]
+    public void BuildPrompt_AllMessagesFiltered_ReturnsNull()
+    {
+        var conversation = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Test",
+            LinearisedMessages =
+            [
+                new StoredMessage { Id = "m0", Role = "system", ContentType = "text", Parts = ["System scaffolding"], Weight = 0.0 },
+                new StoredMessage { Id = "m1", Role = "system", ContentType = "user_editable_context", Parts = ["[User Profile] ..."], IsHidden = true },
+            ],
+            ProcessingStatus = ConversationProcessingStatus.Imported,
+        };
+
+        var prompt = SummarisationService.BuildPrompt(conversation);
+
+        Assert.Null(prompt);
+    }
+
+    [Fact]
+    public async Task SummariseAsync_AllMessagesHidden_MarksAsSkipped()
+    {
+        var repository = new FakeConversationRepository();
+        var conversation = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "All hidden",
+            LinearisedMessages =
+            [
+                new StoredMessage { Id = "m0", Role = "system", ContentType = "text", Parts = ["Hidden"], Weight = 0.0 },
+                new StoredMessage { Id = "m1", Role = "system", ContentType = "text", Parts = ["Also hidden"], IsHidden = true },
+            ],
+            ProcessingStatus = ConversationProcessingStatus.Imported,
+        };
+        repository.Seed([conversation]);
+
+        var chatClient = new FakeChatClient("Should not be called");
+        var service = new SummarisationService(repository, chatClient, NullLogger<SummarisationService>.Instance);
+
+        var result = await service.SummariseAsync();
+
+        Assert.Equal(0, result.Summarised);
+        Assert.Equal(0, result.Errors);
+        Assert.Equal(1, result.Skipped);
+        Assert.Single(repository.SummaryUpdates);
+        Assert.Equal(ConversationProcessingStatus.Summarised, repository.SummaryUpdates[0].Status);
+        Assert.Null(repository.SummaryUpdates[0].Summary);
     }
 }

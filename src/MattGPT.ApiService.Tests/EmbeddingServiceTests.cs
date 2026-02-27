@@ -382,4 +382,89 @@ public class EmbeddingServiceTests
 
         Assert.True(text.Length <= EmbeddingService.MaxEmbeddingTextChars);
     }
+
+    [Fact]
+    public void BuildEmbeddingText_ExcludesZeroWeightMessages()
+    {
+        var conv = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Test",
+            LinearisedMessages =
+            [
+                new StoredMessage { Id = "m0", Role = "system", ContentType = "text", Parts = ["System prompt"], Weight = 0.0 },
+                new StoredMessage { Id = "m1", Role = "user", ContentType = "text", Parts = ["Hello"], Weight = 1.0 },
+                new StoredMessage { Id = "m2", Role = "assistant", ContentType = "text", Parts = ["Hi there"], Weight = 1.0 },
+            ],
+        };
+
+        var text = EmbeddingService.BuildEmbeddingText(conv);
+
+        Assert.DoesNotContain("System prompt", text);
+        Assert.Contains("user: Hello", text);
+        Assert.Contains("assistant: Hi there", text);
+    }
+
+    [Fact]
+    public void BuildEmbeddingText_ExcludesHiddenMessages()
+    {
+        var conv = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Test",
+            LinearisedMessages =
+            [
+                new StoredMessage { Id = "m0", Role = "system", ContentType = "user_editable_context", Parts = ["[User Profile] ..."], IsHidden = true },
+                new StoredMessage { Id = "m1", Role = "user", ContentType = "text", Parts = ["Real question"] },
+                new StoredMessage { Id = "m2", Role = "assistant", ContentType = "text", Parts = ["Real answer"] },
+            ],
+        };
+
+        var text = EmbeddingService.BuildEmbeddingText(conv);
+
+        Assert.DoesNotContain("User Profile", text);
+        Assert.Contains("user: Real question", text);
+        Assert.Contains("assistant: Real answer", text);
+    }
+
+    [Fact]
+    public void BuildEmbeddingText_NullWeight_IncludesMessage()
+    {
+        var conv = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Test",
+            LinearisedMessages =
+            [
+                new StoredMessage { Id = "m1", Role = "user", ContentType = "text", Parts = ["Hello"], Weight = null },
+            ],
+        };
+
+        var text = EmbeddingService.BuildEmbeddingText(conv);
+
+        Assert.Contains("user: Hello", text);
+    }
+
+    [Fact]
+    public void BuildEmbeddingText_AllMessagesHidden_StillIncludesTitleAndSummary()
+    {
+        var conv = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Topic",
+            Summary = "A summary.",
+            LinearisedMessages =
+            [
+                new StoredMessage { Id = "m0", Role = "system", ContentType = "text", Parts = ["Hidden"], Weight = 0.0 },
+                new StoredMessage { Id = "m1", Role = "system", ContentType = "text", Parts = ["Also hidden"], IsHidden = true },
+            ],
+        };
+
+        var text = EmbeddingService.BuildEmbeddingText(conv);
+
+        Assert.Contains("Topic", text);
+        Assert.Contains("A summary.", text);
+        Assert.DoesNotContain("Hidden", text);
+        Assert.DoesNotContain("Also hidden", text);
+    }
 }
