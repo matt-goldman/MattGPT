@@ -8,21 +8,16 @@ namespace MattGPT.ApiService.Tests;
 /// <summary>
 /// Fake IEmbeddingGenerator that returns a fixed embedding vector or throws on demand.
 /// </summary>
-internal sealed class FakeEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
+internal sealed class FakeEmbeddingGenerator(Func<IEnumerable<string>, IList<Embedding<float>>> handler) : IEmbeddingGenerator<string, Embedding<float>>
 {
-    private readonly Func<IEnumerable<string>, IList<Embedding<float>>> _handler;
-
     public FakeEmbeddingGenerator(float[] vector)
         : this(_ => [new Embedding<float>(vector)]) { }
-
-    public FakeEmbeddingGenerator(Func<IEnumerable<string>, IList<Embedding<float>>> handler)
-        => _handler = handler;
 
     public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(
         IEnumerable<string> values,
         EmbeddingGenerationOptions? options = null,
         CancellationToken cancellationToken = default)
-        => Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(_handler(values)));
+        => Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(handler(values)));
 
     public object? GetService(Type serviceType, object? key = null) => null;
 
@@ -32,17 +27,13 @@ internal sealed class FakeEmbeddingGenerator : IEmbeddingGenerator<string, Embed
 /// <summary>
 /// Fake IEmbeddingGenerator that always throws an exception.
 /// </summary>
-internal sealed class ThrowingEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
+internal sealed class ThrowingEmbeddingGenerator(Exception exception) : IEmbeddingGenerator<string, Embedding<float>>
 {
-    private readonly Exception _exception;
-
-    public ThrowingEmbeddingGenerator(Exception exception) => _exception = exception;
-
     public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(
         IEnumerable<string> values,
         EmbeddingGenerationOptions? options = null,
         CancellationToken cancellationToken = default)
-        => throw _exception;
+        => throw exception;
 
     public object? GetService(Type serviceType, object? key = null) => null;
 

@@ -20,7 +20,11 @@ public record EmbeddingProgress(int Embedded, int Errors, int Skipped);
 /// NOT required before embedding. Conversations with a summary use the summary as part of
 /// the embedding text for better quality; conversations without one are still embedded.
 /// </summary>
-public class EmbeddingService
+public class EmbeddingService(
+    IConversationRepository repository,
+    IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+    IQdrantService qdrantService,
+    ILogger<EmbeddingService> logger)
 {
     /// <summary>Number of conversations to load per batch from MongoDB.</summary>
     private const int BatchSize = 50;
@@ -31,23 +35,6 @@ public class EmbeddingService
     /// <summary>Statuses eligible for embedding — both freshly imported and summarised conversations.</summary>
     private static readonly ConversationProcessingStatus[] EmbeddableStatuses =
         [ConversationProcessingStatus.Imported, ConversationProcessingStatus.Summarised];
-
-    private readonly IConversationRepository _repository;
-    private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator;
-    private readonly IQdrantService _qdrantService;
-    private readonly ILogger<EmbeddingService> _logger;
-
-    public EmbeddingService(
-        IConversationRepository repository,
-        IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
-        IQdrantService qdrantService,
-        ILogger<EmbeddingService> logger)
-    {
-        _repository = repository;
-        _embeddingGenerator = embeddingGenerator;
-        _qdrantService = qdrantService;
-        _logger = logger;
-    }
 
     /// <summary>
     /// Processes all conversations with <see cref="ConversationProcessingStatus.Imported"/> or
@@ -65,12 +52,12 @@ public class EmbeddingService
 
         while (!ct.IsCancellationRequested)
         {
-            var batch = await _repository.GetByStatusesAsync(EmbeddableStatuses, BatchSize, ct);
+            var batch = await repository.GetByStatusesAsync(EmbeddableStatuses, BatchSize, ct);
 
             if (batch.Count == 0)
                 break;
 
-            _logger.LogInformation("Embedding batch: {Count} conversations to process.", batch.Count);
+            logger.LogInformation("Embedding batch: {Count} conversations to process.", batch.Count);
 
             foreach (var conversation in batch)
             {
@@ -89,7 +76,7 @@ public class EmbeddingService
             }
         }
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "Embedding complete: {Embedded} embedded, {Errors} errors, {Skipped} skipped.",
             embedded, errors, skipped);
 
@@ -105,11 +92,11 @@ public class EmbeddingService
 
         if (string.IsNullOrWhiteSpace(embeddingText))
         {
-            _logger.LogDebug(
+            logger.LogDebug(
                 "Conversation {Id} has no embeddable content; marking as Embedded with null vector.",
                 conversation.ConversationId);
 
-            await _repository.UpdateEmbeddingAsync(
+            await repository.UpdateEmbeddingAsync(
                 conversation.ConversationId,
                 embedding: null,
                 ConversationProcessingStatus.Embedded,
@@ -119,12 +106,12 @@ public class EmbeddingService
 
         try
         {
-            var result = await _embeddingGenerator.GenerateAsync(
+            var result = await embeddingGenerator.GenerateAsync(
                 [embeddingText], cancellationToken: ct);
 
             var vector = result[0].Vector.ToArray();
 
-            await _repository.UpdateEmbeddingAsync(
+            await repository.UpdateEmbeddingAsync(
                 conversation.ConversationId,
                 vector,
                 ConversationProcessingStatus.Embedded,
@@ -132,7 +119,7 @@ public class EmbeddingService
 
             await TryUpsertQdrantAsync(conversation, vector, ct);
 
-            _logger.LogDebug(
+            logger.LogDebug(
                 "Embedded conversation {Id} ({Title}), dimensions: {Dims}, text length: {TextLen}.",
                 conversation.ConversationId, conversation.Title, vector.Length, embeddingText.Length);
 
@@ -140,7 +127,7 @@ public class EmbeddingService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(
+            logger.LogWarning(
                 ex,
                 "Failed to embed conversation {Id} ({Title}); marking as EmbeddingError.",
                 conversation.ConversationId, conversation.Title);
@@ -193,11 +180,11 @@ public class EmbeddingService
     {
         try
         {
-            await _qdrantService.UpsertAsync(conversation, vector, ct);
+            await qdrantService.UpsertAsync(conversation, vector, ct);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(
+            logger.LogWarning(
                 ex,
                 "Failed to upsert conversation {Id} into Qdrant; the embedding is stored in MongoDB.",
                 conversation.ConversationId);
@@ -208,7 +195,7 @@ public class EmbeddingService
     {
         try
         {
-            await _repository.UpdateEmbeddingAsync(
+            await repository.UpdateEmbeddingAsync(
                 conversationId,
                 embedding: null,
                 ConversationProcessingStatus.EmbeddingError,
@@ -216,7 +203,7 @@ public class EmbeddingService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Could not update EmbeddingError status for conversation {Id}.", conversationId);
+            logger.LogError(ex, "Could not update EmbeddingError status for conversation {Id}.", conversationId);
         }
     }
 }

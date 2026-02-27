@@ -14,68 +14,51 @@ public record ImportJobRequest(string JobId, string TempFilePath);
 /// After a successful import, automatically triggers embedding generation so that
 /// conversations are immediately available for RAG queries.
 /// </summary>
-public class ImportProcessingService : BackgroundService
+public class ImportProcessingService(
+    Channel<ImportJobRequest> channel,
+    ImportJobStore jobStore,
+    ConversationParser parser,
+    IConversationRepository repository,
+    IServiceProvider serviceProvider,
+    ILogger<ImportProcessingService> logger) : BackgroundService
 {
-    private readonly Channel<ImportJobRequest> _channel;
-    private readonly ImportJobStore _jobStore;
-    private readonly ConversationParser _parser;
-    private readonly IConversationRepository _repository;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<ImportProcessingService> _logger;
-
-    public ImportProcessingService(
-        Channel<ImportJobRequest> channel,
-        ImportJobStore jobStore,
-        ConversationParser parser,
-        IConversationRepository repository,
-        IServiceProvider serviceProvider,
-        ILogger<ImportProcessingService> logger)
-    {
-        _channel = channel;
-        _jobStore = jobStore;
-        _parser = parser;
-        _repository = repository;
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-    }
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var request in _channel.Reader.ReadAllAsync(stoppingToken))
+        await foreach (var request in channel.Reader.ReadAllAsync(stoppingToken))
         {
-            var job = _jobStore.GetJob(request.JobId);
+            var job = jobStore.GetJob(request.JobId);
             if (job is null)
             {
-                _logger.LogWarning("Import job {JobId} not found in store; skipping.", request.JobId);
+                logger.LogWarning("Import job {JobId} not found in store; skipping.", request.JobId);
                 TryDeleteTempFile(request.TempFilePath);
                 continue;
             }
 
             job.Status = ImportJobStatus.Processing;
-            _logger.LogInformation("Starting import job {JobId} from {TempFile}.", request.JobId, request.TempFilePath);
+            logger.LogInformation("Starting import job {JobId} from {TempFile}.", request.JobId, request.TempFilePath);
 
             try
             {
                 await using var stream = File.OpenRead(request.TempFilePath);
 
-                await foreach (var conversation in _parser.ParseAsync(stream, stoppingToken))
+                await foreach (var conversation in parser.ParseAsync(stream, stoppingToken))
                 {
                     try
                     {
                         // Upsert the conversation into MongoDB, then count it.
-                        await _repository.UpsertAsync(StoredConversation.From(conversation), stoppingToken);
+                        await repository.UpsertAsync(StoredConversation.From(conversation), stoppingToken);
                         job.ProcessedConversations++;
                     }
                     catch (Exception ex)
                     {
                         // Individual conversation processing errors are non-fatal.
                         job.ErrorCount++;
-                        _logger.LogWarning(ex, "Error processing conversation in job {JobId}; continuing.", request.JobId);
+                        logger.LogWarning(ex, "Error processing conversation in job {JobId}; continuing.", request.JobId);
                     }
                 }
 
                 job.Status = ImportJobStatus.Complete;
-                _logger.LogInformation(
+                logger.LogInformation(
                     "Import job {JobId} complete: {Count} conversations processed, {Errors} errors.",
                     request.JobId, job.ProcessedConversations, job.ErrorCount);
 
@@ -86,13 +69,13 @@ public class ImportProcessingService : BackgroundService
             {
                 job.Status = ImportJobStatus.Failed;
                 job.ErrorMessage = "Processing was cancelled.";
-                _logger.LogWarning("Import job {JobId} was cancelled.", request.JobId);
+                logger.LogWarning("Import job {JobId} was cancelled.", request.JobId);
             }
             catch (Exception ex)
             {
                 job.Status = ImportJobStatus.Failed;
                 job.ErrorMessage = ex.Message;
-                _logger.LogError(ex, "Import job {JobId} failed.", request.JobId);
+                logger.LogError(ex, "Import job {JobId} failed.", request.JobId);
             }
             finally
             {
@@ -109,16 +92,16 @@ public class ImportProcessingService : BackgroundService
     /// </summary>
     private async Task TryAutoEmbedAsync(string jobId, CancellationToken ct)
     {
-        var job = _jobStore.GetJob(jobId);
+        var job = jobStore.GetJob(jobId);
 
         try
         {
-            _logger.LogInformation("Auto-embedding: starting embedding generation for job {JobId}.", jobId);
+            logger.LogInformation("Auto-embedding: starting embedding generation for job {JobId}.", jobId);
 
             if (job is not null)
                 job.EmbeddingStatus = Models.EmbeddingJobStatus.InProgress;
 
-            using var scope = _serviceProvider.CreateScope();
+            using var scope = serviceProvider.CreateScope();
             var embedder = scope.ServiceProvider.GetRequiredService<EmbeddingService>();
 
             // Report progress back to the job so the UI can poll it.
@@ -141,7 +124,7 @@ public class ImportProcessingService : BackgroundService
                 job.EmbeddingStatus = Models.EmbeddingJobStatus.Complete;
             }
 
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Auto-embedding complete for job {JobId}: {Embedded} embedded, {Errors} errors, {Skipped} skipped.",
                 jobId, result.Embedded, result.Errors, result.Skipped);
         }
@@ -154,7 +137,7 @@ public class ImportProcessingService : BackgroundService
             }
 
             // Embedding failure should not mark the import as failed — the import succeeded.
-            _logger.LogError(
+            logger.LogError(
                 ex,
                 "Auto-embedding failed for job {JobId}. Conversations are imported but not yet searchable. " +
                 "Run POST /conversations/embed manually to retry.",
@@ -165,6 +148,6 @@ public class ImportProcessingService : BackgroundService
     private void TryDeleteTempFile(string path)
     {
         try { File.Delete(path); }
-        catch (Exception ex) { _logger.LogWarning(ex, "Could not delete temp file {Path}.", path); }
+        catch (Exception ex) { logger.LogWarning(ex, "Could not delete temp file {Path}.", path); }
     }
 }

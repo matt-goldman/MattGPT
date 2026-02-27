@@ -8,21 +8,16 @@ namespace MattGPT.ApiService.Tests;
 /// <summary>
 /// Fake IChatClient that returns a predefined reply or throws on demand.
 /// </summary>
-internal sealed class FakeChatClient : IChatClient
+internal sealed class FakeChatClient(Func<IEnumerable<ChatMessage>, ChatResponse> handler) : IChatClient
 {
-    private readonly Func<IEnumerable<ChatMessage>, ChatResponse> _handler;
-
     public FakeChatClient(string reply)
         : this(_ => new ChatResponse(new ChatMessage(ChatRole.Assistant, reply))) { }
-
-    public FakeChatClient(Func<IEnumerable<ChatMessage>, ChatResponse> handler)
-        => _handler = handler;
 
     public Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-        => Task.FromResult(_handler(messages));
+        => Task.FromResult(handler(messages));
 
     public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
         IEnumerable<ChatMessage> messages,
@@ -38,17 +33,13 @@ internal sealed class FakeChatClient : IChatClient
 /// <summary>
 /// Fake IChatClient that always throws an exception.
 /// </summary>
-internal sealed class ThrowingChatClient : IChatClient
+internal sealed class ThrowingChatClient(Exception exception) : IChatClient
 {
-    private readonly Exception _exception;
-
-    public ThrowingChatClient(Exception exception) => _exception = exception;
-
     public Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-        => throw _exception;
+        => throw exception;
 
     public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
         IEnumerable<ChatMessage> messages,
