@@ -94,6 +94,13 @@ public class ConversationRepository : IConversationRepository
     }
 
     /// <inheritdoc/>
+    public async Task<StoredConversation?> GetByIdAsync(string conversationId, CancellationToken ct = default)
+    {
+        var filter = Builders<StoredConversation>.Filter.Eq(x => x.ConversationId, conversationId);
+        return await _collection.Find(filter).FirstOrDefaultAsync(ct);
+    }
+
+    /// <inheritdoc/>
     public async Task<List<StoredConversation>> GetByIdsAsync(
         IEnumerable<string> conversationIds, CancellationToken ct = default)
     {

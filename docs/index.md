@@ -53,6 +53,7 @@ This document is the **system of record** for project planning and issue trackin
 | 19 | 017-export-content-analysis.md | Fully analyse export content for missing import detail | TODO | TODO/ | Depends on 4, 7 |
 | 20 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | Deferred | TODO/ | Depends on 3; first step is choosing the approach. Very low priority and can come later as gold plating. |
 | 21 | 021-abstract-vector-store-interface.md | Abstract vector store behind provider-agnostic interface | TODO | TODO/ | Depends on 2, 10. Low urgency — code quality / extensibility. Existing TODO in QdrantService.cs. |
+| 22 | 022-chat-history-sidebar.md | Chat history sidebar with imported conversations | Done | Done/ | Depends on 18, 7, 12. Shows both native chat sessions and imported ChatGPT conversations in a collapsible sidebar. |
 
 ---
 

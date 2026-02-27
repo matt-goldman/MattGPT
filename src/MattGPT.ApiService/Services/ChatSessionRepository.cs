@@ -79,4 +79,14 @@ public class ChatSessionRepository : IChatSessionRepository
             .Set(x => x.UpdatedAt, DateTimeOffset.UtcNow);
         await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
     }
+
+    /// <inheritdoc/>
+    public async Task<List<ChatSession>> ListRecentAsync(int limit = 50, CancellationToken ct = default)
+    {
+        return await _collection
+            .Find(Builders<ChatSession>.Filter.Empty)
+            .SortByDescending(x => x.UpdatedAt)
+            .Limit(limit)
+            .ToListAsync(ct);
+    }
 }

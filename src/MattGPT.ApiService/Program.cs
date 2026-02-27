@@ -497,6 +497,73 @@ app.MapPost("/chat/stream", async (ChatRequest request, RagService ragService, C
 })
 .WithName("ChatStream");
 
+// List recent chat sessions for the sidebar.
+app.MapGet("/chat/sessions", async (IChatSessionRepository sessionRepo, int limit = 50) =>
+{
+    if (limit is < 1 or > 200) limit = 50;
+    var sessions = await sessionRepo.ListRecentAsync(limit);
+    return Results.Ok(sessions.Select(s => new
+    {
+        sessionId = s.SessionId,
+        title = s.Title,
+        createdAt = s.CreatedAt,
+        updatedAt = s.UpdatedAt,
+        status = s.Status.ToString(),
+        messageCount = s.Messages.Count,
+    }));
+})
+.WithName("ListChatSessions");
+
+// Get a single chat session with full message history.
+app.MapGet("/chat/sessions/{sessionId:guid}", async (Guid sessionId, IChatSessionRepository sessionRepo) =>
+{
+    var session = await sessionRepo.GetByIdAsync(sessionId);
+    if (session is null)
+        return Results.NotFound(new { message = $"Session '{sessionId}' not found." });
+
+    return Results.Ok(new
+    {
+        sessionId = session.SessionId,
+        title = session.Title,
+        createdAt = session.CreatedAt,
+        updatedAt = session.UpdatedAt,
+        status = session.Status.ToString(),
+        rollingSummary = session.RollingSummary,
+        messages = session.Messages.Select(m => new
+        {
+            role = m.Role,
+            content = m.Content,
+            timestamp = m.Timestamp,
+        }),
+    });
+})
+.WithName("GetChatSession");
+
+// Get a single imported conversation with full message history.
+app.MapGet("/conversations/{conversationId}", async (string conversationId, IConversationRepository repository) =>
+{
+    var conversation = await repository.GetByIdAsync(conversationId);
+    if (conversation is null)
+        return Results.NotFound(new { message = $"Conversation '{conversationId}' not found." });
+
+    return Results.Ok(new
+    {
+        conversationId = conversation.ConversationId,
+        title = conversation.Title,
+        createTime = conversation.CreateTime,
+        updateTime = conversation.UpdateTime,
+        defaultModelSlug = conversation.DefaultModelSlug,
+        processingStatus = conversation.ProcessingStatus.ToString(),
+        messages = conversation.LinearisedMessages.Select(m => new
+        {
+            role = m.Role,
+            content = string.Join("\n", m.Parts),
+            createTime = m.CreateTime,
+        }),
+    });
+})
+.WithName("GetConversation");
+
 app.MapDefaultEndpoints();
 
 app.Run();
