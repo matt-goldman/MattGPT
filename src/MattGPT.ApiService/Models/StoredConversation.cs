@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace MattGPT.ApiService.Models;
@@ -16,18 +18,181 @@ public class StoredMessage
     public List<string> Parts { get; set; } = new();
     public double? CreateTime { get; set; }
 
-    internal static StoredMessage From(Message message) => new()
+    /// <summary>Programming language for code content type.</summary>
+    public string? Language { get; set; }
+
+    /// <summary>Source URL for tether_quote content type.</summary>
+    public string? Url { get; set; }
+
+    /// <summary>Source domain for tether_quote content type.</summary>
+    public string? Domain { get; set; }
+
+    /// <summary>Source page title for tether_quote content type.</summary>
+    public string? SourceTitle { get; set; }
+
+    internal static StoredMessage From(Message message)
     {
-        Id = message.Id,
-        Role = message.Author.Role,
-        ContentType = message.Content.ContentType,
-        Parts = message.Content.Parts?
-            .Select(p => p.ValueKind == System.Text.Json.JsonValueKind.String
-                ? p.GetString() ?? string.Empty
-                : p.GetRawText())
-            .ToList() ?? new List<string>(),
-        CreateTime = message.CreateTime,
-    };
+        var stored = new StoredMessage
+        {
+            Id = message.Id,
+            Role = message.Author.Role,
+            ContentType = message.Content.ContentType,
+            CreateTime = message.CreateTime,
+        };
+
+        ExtractContent(message.Content, stored);
+        return stored;
+    }
+
+    private static void ExtractContent(Content content, StoredMessage stored)
+    {
+        switch (content.ContentType)
+        {
+            case "text":
+            case "multimodal_text":
+                stored.Parts = ExtractParts(content.Parts);
+                break;
+
+            case "code":
+                stored.Language = content.Language;
+                stored.Parts = !string.IsNullOrEmpty(content.Text) ? [content.Text] : [];
+                break;
+
+            case "execution_output":
+                stored.Parts = !string.IsNullOrEmpty(content.Text) ? [content.Text] : [];
+                break;
+
+            case "tether_quote":
+                stored.Url = content.Url;
+                stored.Domain = content.Domain;
+                stored.SourceTitle = content.Title;
+                var quoteParts = new List<string>();
+                if (!string.IsNullOrEmpty(content.Text))
+                    quoteParts.Add(content.Text);
+                if (!string.IsNullOrEmpty(content.Title) || !string.IsNullOrEmpty(content.Domain))
+                    quoteParts.Add($"[Source: {content.Title ?? content.Domain}]");
+                stored.Parts = quoteParts;
+                break;
+
+            case "tether_browsing_display":
+                var browseParts = new List<string>();
+                if (!string.IsNullOrEmpty(content.Result))
+                    browseParts.Add(content.Result);
+                if (!string.IsNullOrEmpty(content.Summary))
+                    browseParts.Add(content.Summary);
+                stored.Parts = browseParts;
+                break;
+
+            case "thoughts":
+                stored.Parts = content.Thoughts?
+                    .Where(t => !string.IsNullOrEmpty(t.Content))
+                    .Select(t => t.Content!)
+                    .ToList() ?? [];
+                break;
+
+            case "reasoning_recap":
+                stored.Parts = !string.IsNullOrEmpty(content.ReasoningContent)
+                    ? [content.ReasoningContent] : [];
+                break;
+
+            case "user_editable_context":
+                var ctxParts = new List<string>();
+                if (!string.IsNullOrEmpty(content.UserProfile))
+                    ctxParts.Add($"[User Profile] {content.UserProfile}");
+                if (!string.IsNullOrEmpty(content.UserInstructions))
+                    ctxParts.Add($"[User Instructions] {content.UserInstructions}");
+                stored.Parts = ctxParts;
+                break;
+
+            case "system_error":
+                var errorParts = new List<string>();
+                if (!string.IsNullOrEmpty(content.Name))
+                    errorParts.Add($"[Error: {content.Name}]");
+                if (!string.IsNullOrEmpty(content.Text))
+                    errorParts.Add(content.Text);
+                stored.Parts = errorParts;
+                break;
+
+            case "citable_code_output":
+                stored.Parts = !string.IsNullOrEmpty(content.OutputStr)
+                    ? [content.OutputStr] : [];
+                break;
+
+            case "computer_output":
+                var compParts = new List<string>();
+                if (content.State is not null)
+                {
+                    if (!string.IsNullOrEmpty(content.State.Title))
+                        compParts.Add(content.State.Title);
+                    if (!string.IsNullOrEmpty(content.State.Url))
+                        compParts.Add(content.State.Url);
+                }
+                stored.Parts = compParts;
+                break;
+
+            default:
+                stored.Parts = ExtractParts(content.Parts);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Extracts parts from a list of JSON elements, converting strings directly
+    /// and formatting known object types (e.g. image_asset_pointer) as human-readable placeholders.
+    /// </summary>
+    internal static List<string> ExtractParts(List<JsonElement>? parts)
+    {
+        if (parts is null || parts.Count == 0)
+            return [];
+
+        return parts.Select(p =>
+        {
+            if (p.ValueKind == JsonValueKind.String)
+                return p.GetString() ?? string.Empty;
+
+            if (p.ValueKind == JsonValueKind.Object)
+                return FormatObjectPart(p);
+
+            return p.GetRawText();
+        }).ToList();
+    }
+
+    private static string FormatObjectPart(JsonElement element)
+    {
+        if (element.TryGetProperty("content_type", out var ct) &&
+            ct.GetString() == "image_asset_pointer")
+        {
+            return FormatImageAssetPointer(element);
+        }
+
+        return element.GetRawText();
+    }
+
+    internal static string FormatImageAssetPointer(JsonElement element)
+    {
+        var width = element.TryGetProperty("width", out var w) && w.ValueKind == JsonValueKind.Number
+            ? (int?)w.GetInt32() : null;
+        var height = element.TryGetProperty("height", out var h) && h.ValueKind == JsonValueKind.Number
+            ? (int?)h.GetInt32() : null;
+        var isDalle = element.TryGetProperty("dalle", out _);
+
+        var sb = new StringBuilder("[");
+        sb.Append(isDalle ? "Image" : "Uploaded image");
+
+        if (width.HasValue && height.HasValue)
+        {
+            sb.Append(": ").Append(width.Value).Append('×').Append(height.Value);
+            if (isDalle)
+                sb.Append(", DALL-E generated");
+        }
+        else if (isDalle)
+        {
+            sb.Append(": DALL-E generated");
+        }
+
+        sb.Append(']');
+        return sb.ToString();
+    }
 }
 
 /// <summary>
