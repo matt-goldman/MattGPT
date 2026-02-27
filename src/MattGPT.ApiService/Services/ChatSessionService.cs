@@ -60,8 +60,7 @@ public class ChatSessionService(
         // Auto-generate title from the first user message.
         if (session.Title is null)
         {
-            session.Title = content.Length > 80 ? content[..80] + "…" : content;
-        }
+            session.Title = content.Length > 80 ? content[..80] + "…" : content;            await repository.UpdateTitleAsync(session.SessionId, session.Title, ct);        }
 
         // Check if rolling summary is needed before the LLM call.
         await MaybeUpdateRollingSummaryAsync(session, ct);

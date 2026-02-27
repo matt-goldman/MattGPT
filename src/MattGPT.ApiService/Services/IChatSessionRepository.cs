@@ -16,6 +16,9 @@ public interface IChatSessionRepository
     /// <summary>Append a message to an existing session and update timestamps.</summary>
     Task AddMessageAsync(Guid sessionId, ChatSessionMessage message, CancellationToken ct = default);
 
+    /// <summary>Update the session title.</summary>
+    Task UpdateTitleAsync(Guid sessionId, string title, CancellationToken ct = default);
+
     /// <summary>Update the rolling summary for a session.</summary>
     Task UpdateRollingSummaryAsync(Guid sessionId, string summary, CancellationToken ct = default);
 

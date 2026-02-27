@@ -35,6 +35,13 @@ internal sealed class FakeChatSessionRepository : IChatSessionRepository
         return Task.CompletedTask;
     }
 
+    public Task UpdateTitleAsync(Guid sessionId, string title, CancellationToken ct = default)
+    {
+        if (_sessions.TryGetValue(sessionId, out var session))
+            session.Title = title;
+        return Task.CompletedTask;
+    }
+
     public Task UpdateRollingSummaryAsync(Guid sessionId, string summary, CancellationToken ct = default)
     {
         if (_sessions.TryGetValue(sessionId, out var session))

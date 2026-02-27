@@ -51,6 +51,16 @@ public class ChatSessionRepository : IChatSessionRepository
     }
 
     /// <inheritdoc/>
+    public async Task UpdateTitleAsync(Guid sessionId, string title, CancellationToken ct = default)
+    {
+        var filter = Builders<ChatSession>.Filter.Eq(x => x.SessionId, sessionId);
+        var update = Builders<ChatSession>.Update
+            .Set(x => x.Title, title)
+            .Set(x => x.UpdatedAt, DateTimeOffset.UtcNow);
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
+
+    /// <inheritdoc/>
     public async Task UpdateRollingSummaryAsync(Guid sessionId, string summary, CancellationToken ct = default)
     {
         var filter = Builders<ChatSession>.Filter.Eq(x => x.SessionId, sessionId);
