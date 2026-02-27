@@ -23,6 +23,7 @@ public class ConversationRepository : IConversationRepository
         var keys = Builders<StoredConversation>.IndexKeys;
         _collection.Indexes.CreateMany([
             new CreateIndexModel<StoredConversation>(keys.Ascending(x => x.CreateTime)),
+            new CreateIndexModel<StoredConversation>(keys.Descending(x => x.UpdateTime)),
             new CreateIndexModel<StoredConversation>(keys.Ascending(x => x.ProcessingStatus)),
         ]);
     }
@@ -42,7 +43,7 @@ public class ConversationRepository : IConversationRepository
         var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
         var items = await _collection
             .Find(filter)
-            .SortByDescending(x => x.ImportTimestamp)
+            .SortByDescending(x => x.UpdateTime)
             .Skip((page - 1) * pageSize)
             .Limit(pageSize)
             .ToListAsync(ct);
