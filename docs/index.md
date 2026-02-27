@@ -47,12 +47,13 @@ This document is the **system of record** for project planning and issue trackin
 | 13 | 013-end-to-end-testing-and-docs.md | End-to-end testing and documentation | Done | Done/ | Depends on all |
 | 14 | 016-multi-file-import.md | Support importing multiple files | Done | Done/ | Depends on 5, 6 |
 | 15 | 018-multi-turn-chat-with-rolling-summaries.md | Multi-turn chat with rolling summaries | Done | Done/ | Depends on 11, 12; see ADR-004. Includes MongoDB session persistence (scope pulled forward from 019). |
-| 16 | 019-persist-and-embed-chat-conversations.md | Persist and embed chat conversations | In Progress | TODO/ | Depends on 15, 7, 9, 10. Remaining scope: embed completed sessions in Qdrant, session lifecycle (Active/Completed), auto-title generation, chat history sidebar (stretch). |
+| 16 | 019-persist-and-embed-chat-conversations.md | Persist and embed chat conversations | Done | Done/ | Depends on 15, 7, 9, 10. Persistence, session lifecycle, auto-titles, and chat history sidebar all delivered (sidebar in 022). |
 | 17 | 020-tool-calling-rag-retrieval.md | Tool-calling RAG retrieval | TODO | TODO/ | Depends on 15, 11; exploratory — ADR first |
 | 18 | 015-clickable-citation-links.md | Clickable citation links in chat UI | TODO | TODO/ | Depends on 12 |
 | 19 | 017-export-content-analysis.md | Fully analyse export content for missing import detail | TODO | TODO/ | Depends on 4, 7 |
 | 20 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | Deferred | TODO/ | Depends on 3; first step is choosing the approach. Very low priority and can come later as gold plating. |
 | 21 | 021-abstract-vector-store-interface.md | Abstract vector store behind provider-agnostic interface | TODO | TODO/ | Depends on 2, 10. Low urgency — code quality / extensibility. Existing TODO in QdrantService.cs. |
+| 22 | 022-chat-history-sidebar.md | Chat history sidebar with imported conversations | Done | Done/ | Part of 019 scope. Depends on 18, 7, 12. Shows both native chat sessions and imported ChatGPT conversations in a collapsible sidebar. |
 
 ---
 

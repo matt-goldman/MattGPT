@@ -1,4 +1,5 @@
 @page "/chat"
+@layout MattGPT.Web.Components.Layout.ChatLayout
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 @inject IHttpClientFactory HttpClients
@@ -8,110 +9,162 @@
 
 <PageTitle>Chat</PageTitle>
 
-<div class="max-w-4xl mx-auto flex flex-col" style="height: calc(100vh - 120px);">
-    <div class="mb-4">
-        <h1 class="text-2xl font-bold">Chat</h1>
-        <p class="text-default-500 text-sm">Ask anything — responses are augmented with your imported conversation history.</p>
+<div class="flex h-[calc(100vh-64px)]">
+    @* Collapsible sidebar *@
+    <div class="@(_sidebarOpen ? "w-72" : "w-0") transition-all duration-200 overflow-hidden shrink-0">
+        <div class="w-72 h-full">
+            <ChatSidebar @ref="_sidebar"
+                         ActiveSessionId="@_sessionId"
+                         ActiveConversationId="@_viewingConversationId"
+                         OnNewChat="StartNewChat"
+                         OnSessionSelected="LoadSession"
+                         OnConversationSelected="LoadImportedConversation" />
+        </div>
     </div>
 
-    @* Message history *@
-    <div class="flex-1 overflow-y-auto space-y-4 mb-4 pr-1" id="chat-messages">
-        @if (_messages.Count == 0)
-        {
-            <div class="flex items-center justify-center h-full text-default-400 text-sm">
-                <p>No messages yet. Type a message below to get started.</p>
-            </div>
-        }
-
-        @foreach (var msg in _messages)
-        {
-            @if (msg.Role == "user")
-            {
-                <div class="flex justify-end">
-                    <div class="max-w-lg bg-primary text-white rounded-2xl rounded-tr-sm px-4 py-2 text-sm">
-                        @msg.Content
+    @* Main chat area *@
+    <div class="flex-1 flex flex-col min-w-0">
+        @* Header with sidebar toggle *@
+        <div class="flex items-center gap-3 px-4 py-3 border-b border-default-200">
+            <button class="p-1.5 rounded-md hover:bg-default-100 transition-colors" @onclick="ToggleSidebar"
+                    title="@(_sidebarOpen ? "Hide sidebar" : "Show sidebar")"
+                    aria-label="@(_sidebarOpen ? "Hide sidebar" : "Show sidebar")">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-default-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+            <div class="min-w-0 flex-1">
+                @if (_viewingConversationId is not null)
+                {
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs bg-default-200 text-default-600 rounded px-1.5 py-0.5">Imported</span>
+                        <h1 class="text-lg font-semibold truncate">@(_viewingTitle ?? "Imported Conversation")</h1>
                     </div>
+                    <p class="text-default-400 text-xs">Read-only view of an imported conversation</p>
+                }
+                else
+                {
+                    <h1 class="text-lg font-semibold truncate">@(_sessionTitle ?? "New Chat")</h1>
+                    <p class="text-default-400 text-xs">Ask anything — responses are augmented with your imported conversation history.</p>
+                }
+            </div>
+        </div>
+
+        @* Message history *@
+        <div class="flex-1 overflow-y-auto space-y-4 px-4 py-4" id="chat-messages">
+            @if (_messages.Count == 0 && _viewingConversationId is null)
+            {
+                <div class="flex items-center justify-center h-full text-default-400 text-sm">
+                    <p>No messages yet. Type a message below to get started.</p>
                 </div>
             }
-            else
+
+            @foreach (var msg in _messages)
             {
-                <div class="space-y-2">
-                    <div class="flex justify-start">
-                        <div class="max-w-2xl bg-default-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm">
+                @if (msg.Role == "user")
+                {
+                    <div class="flex justify-end">
+                        <div class="max-w-lg bg-primary text-white rounded-2xl rounded-tr-sm px-4 py-2 text-sm">
                             @msg.Content
                         </div>
                     </div>
-
-                    @if (msg.Sources is { Count: > 0 })
-                    {
-                        <div class="ml-2">
-                            <details class="text-xs text-default-400">
-                                <summary class="cursor-pointer hover:text-default-600 select-none">
-                                    @msg.Sources.Count source(s) used
-                                </summary>
-                                <div class="mt-2 space-y-1 pl-2 border-l-2 border-default-200">
-                                    @foreach (var src in msg.Sources)
-                                    {
-                                        <div class="text-xs">
-                                            <span class="font-medium text-default-600">@(src.Title ?? "Untitled")</span>
-                                            <span class="text-default-400 ml-1">(score: @src.Score.ToString("F2"))</span>
-                                            @if (!string.IsNullOrWhiteSpace(src.Summary))
-                                            {
-                                                <p class="text-default-400 mt-0.5 line-clamp-2">@src.Summary</p>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-                            </details>
+                }
+                else
+                {
+                    <div class="space-y-2">
+                        <div class="flex justify-start">
+                            <div class="max-w-2xl bg-default-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm whitespace-pre-wrap">
+                                @msg.Content
+                            </div>
                         </div>
-                    }
+
+                        @if (msg.Sources is { Count: > 0 })
+                        {
+                            <div class="ml-2">
+                                <details class="text-xs text-default-400">
+                                    <summary class="cursor-pointer hover:text-default-600 select-none">
+                                        @msg.Sources.Count source(s) used
+                                    </summary>
+                                    <div class="mt-2 space-y-1 pl-2 border-l-2 border-default-200">
+                                        @foreach (var src in msg.Sources)
+                                        {
+                                            <div class="text-xs">
+                                                <span class="font-medium text-default-600">@(src.Title ?? "Untitled")</span>
+                                                <span class="text-default-400 ml-1">(score: @src.Score.ToString("F2"))</span>
+                                                @if (!string.IsNullOrWhiteSpace(src.Summary))
+                                                {
+                                                    <p class="text-default-400 mt-0.5 line-clamp-2">@src.Summary</p>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </details>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            @if (_isThinking)
+            {
+                <div class="flex justify-start">
+                    <div class="bg-default-100 rounded-2xl rounded-tl-sm px-4 py-3">
+                        @if (_streamingContent.Length == 0)
+                        {
+                            <LumexSpinner Color="@ThemeColor.Primary" Size="@Size.Small" />
+                        }
+                        else
+                        {
+                            <div class="max-w-2xl text-sm whitespace-pre-wrap">@_streamingContent.ToString()</div>
+                        }
+                    </div>
                 </div>
             }
-        }
 
-        @if (_isThinking)
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <LumexAlert Color="@ThemeColor.Danger" Title="Error">
+                    @_errorMessage
+                </LumexAlert>
+            }
+        </div>
+
+        @* Input area — hidden when viewing imported conversation *@
+        @if (_viewingConversationId is null)
         {
-            <div class="flex justify-start">
-                <div class="bg-default-100 rounded-2xl rounded-tl-sm px-4 py-3">
-                    @if (_streamingContent.Length == 0)
-                    {
-                        <LumexSpinner Color="@ThemeColor.Primary" Size="@Size.Small" />
-                    }
-                    else
-                    {
-                        <div class="max-w-2xl text-sm whitespace-pre-wrap">@_streamingContent.ToString()</div>
-                    }
-                </div>
+            <div class="px-4 pb-4 pt-2">
+                <LumexCard Class="p-3">
+                    <div class="flex gap-2 items-end">
+                        <textarea @ref="_textareaRef"
+                                  @bind="_inputText"
+                                  @bind:event="oninput"
+                                  @onkeydown="HandleKeyDown"
+                                  rows="1"
+                                  placeholder="Ask a question..."
+                                  disabled="@_isThinking"
+                                  class="flex-1 resize-none rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
+                                  style="min-height: 40px; max-height: 120px;"></textarea>
+                        <LumexButton Color="@ThemeColor.Primary"
+                                     IsDisabled="@(string.IsNullOrWhiteSpace(_inputText) || _isThinking)"
+                                     OnClick="SendMessage">
+                            Send
+                        </LumexButton>
+                    </div>
+                </LumexCard>
             </div>
         }
-
-        @if (!string.IsNullOrEmpty(_errorMessage))
+        else
         {
-            <LumexAlert Color="@ThemeColor.Danger" Title="Error">
-                @_errorMessage
-            </LumexAlert>
+            <div class="px-4 pb-4 pt-2">
+                <LumexCard Class="p-3 text-center">
+                    <p class="text-sm text-default-400 mb-2">This is a read-only view of an imported conversation.</p>
+                    <LumexButton Color="@ThemeColor.Primary" Variant="@Variant.Flat" OnClick="StartNewChat">
+                        Start a New Chat
+                    </LumexButton>
+                </LumexCard>
+            </div>
         }
     </div>
-
-    @* Input area *@
-    <LumexCard Class="p-3">
-        <div class="flex gap-2 items-end">
-            <textarea @ref="_textareaRef"
-                      @bind="_inputText"
-                      @bind:event="oninput"
-                      @onkeydown="HandleKeyDown"
-                      rows="1"
-                      placeholder="Ask a question..."
-                      disabled="@_isThinking"
-                      class="flex-1 resize-none rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
-                      style="min-height: 40px; max-height: 120px;"></textarea>
-            <LumexButton Color="@ThemeColor.Primary"
-                         IsDisabled="@(string.IsNullOrWhiteSpace(_inputText) || _isThinking)"
-                         OnClick="SendMessage">
-                Send
-            </LumexButton>
-        </div>
-    </LumexCard>
 </div>
 
 @code {
@@ -123,6 +176,14 @@
     private ElementReference _textareaRef;
     private IJSObjectReference? _jsModule;
     private Guid? _sessionId;
+    private string? _sessionTitle;
+    private bool _sidebarOpen = true;
+    private ChatSidebar? _sidebar;
+    private CancellationTokenSource? _streamCts;
+
+    // When viewing an imported conversation read-only.
+    private string? _viewingConversationId;
+    private string? _viewingTitle;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -135,10 +196,108 @@
 
     public async ValueTask DisposeAsync()
     {
+        _streamCts?.Cancel();
+        _streamCts?.Dispose();
         if (_jsModule is not null)
         {
             await _jsModule.DisposeAsync();
         }
+    }
+
+    private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+
+    private void CancelActiveStream()
+    {
+        _streamCts?.Cancel();
+        _streamCts?.Dispose();
+        _streamCts = null;
+        _isThinking = false;
+        _streamingContent.Clear();
+    }
+
+    private async Task StartNewChat()
+    {
+        CancelActiveStream();
+        _messages.Clear();
+        _sessionId = null;
+        _sessionTitle = null;
+        _viewingConversationId = null;
+        _viewingTitle = null;
+        _errorMessage = string.Empty;
+        _streamingContent.Clear();
+        StateHasChanged();
+    }
+
+    private async Task LoadSession(Guid sessionId)
+    {
+        CancelActiveStream();
+        _viewingConversationId = null;
+        _viewingTitle = null;
+        _messages.Clear();
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var client = HttpClients.CreateClient("apiservice");
+            var session = await client.GetFromJsonAsync<SessionDetail>($"/chat/sessions/{sessionId}", _jsonOptions);
+            if (session is null) return;
+
+            _sessionId = session.SessionId;
+            _sessionTitle = session.Title;
+
+            foreach (var msg in session.Messages)
+            {
+                _messages.Add(new ChatMessage(msg.Role, msg.Content, null));
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load session: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task LoadImportedConversation(string conversationId)
+    {
+        CancelActiveStream();
+        _sessionId = null;
+        _sessionTitle = null;
+        _messages.Clear();
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var client = HttpClients.CreateClient("apiservice");
+            var conv = await client.GetFromJsonAsync<ImportedConversationDetail>($"/conversations/{conversationId}", _jsonOptions);
+            if (conv is null) return;
+
+            _viewingConversationId = conv.ConversationId;
+            _viewingTitle = conv.Title;
+
+            foreach (var msg in conv.Messages)
+            {
+                // Map imported roles to display format.
+                var role = msg.Role switch
+                {
+                    "user" => "user",
+                    "assistant" => "assistant",
+                    "system" => "assistant", // show system messages in the assistant style
+                    "tool" => "assistant",
+                    _ => msg.Role,
+                };
+                if (!string.IsNullOrWhiteSpace(msg.Content))
+                {
+                    _messages.Add(new ChatMessage(role, msg.Content, null));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load conversation: {ex.Message}";
+        }
+
+        StateHasChanged();
     }
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
@@ -161,6 +320,11 @@
         _isThinking = true;
         StateHasChanged();
 
+        _streamCts?.Cancel();
+        _streamCts?.Dispose();
+        _streamCts = new CancellationTokenSource();
+        var ct = _streamCts.Token;
+
         try
         {
             var client = HttpClients.CreateClient("apiservice");
@@ -173,7 +337,7 @@
             };
             request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
 
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -210,7 +374,12 @@
                             // Server sends the session ID as the first event.
                             var sid = JsonSerializer.Deserialize<Guid>(data);
                             if (sid != Guid.Empty)
+                            {
                                 _sessionId = sid;
+                                // Update session title from input on first message.
+                                if (_sessionTitle is null)
+                                    _sessionTitle = text.Length > 60 ? text[..60] + "…" : text;
+                            }
                             break;
 
                         case "token":
@@ -240,6 +409,14 @@
             }
 
             _messages.Add(new ChatMessage("assistant", _streamingContent.ToString(), sources));
+
+            // Refresh sidebar to show the new/updated session.
+            if (_sidebar is not null)
+                await _sidebar.RefreshAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // Stream was cancelled by navigation / new chat — not an error.
         }
         catch (Exception ex)
         {
@@ -260,4 +437,8 @@
 
     private record ChatMessage(string Role, string Content, List<ChatSource>? Sources);
     private record ChatSource(string ConversationId, string? Title, string? Summary, float Score);
+    private record SessionDetail(Guid SessionId, string? Title, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string Status, string? RollingSummary, List<SessionMessage> Messages);
+    private record SessionMessage(string Role, string Content, DateTimeOffset Timestamp);
+    private record ImportedConversationDetail(string ConversationId, string? Title, double? CreateTime, double? UpdateTime, List<ImportedMessage> Messages);
+    private record ImportedMessage(string Role, string Content, double? CreateTime);
 }

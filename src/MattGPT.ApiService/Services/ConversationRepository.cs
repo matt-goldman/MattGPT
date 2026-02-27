@@ -94,6 +94,15 @@ public class ConversationRepository : IConversationRepository
     }
 
     /// <inheritdoc/>
+    public async Task<StoredConversation?> GetByIdAsync(string conversationId, CancellationToken ct = default)
+    {
+        var filter = Builders<StoredConversation>.Filter.Eq(x => x.ConversationId, conversationId);
+        // Exclude the Embedding field — it's a large float[] not needed by UI consumers.
+        var projection = Builders<StoredConversation>.Projection.Exclude(x => x.Embedding);
+        return await _collection.Find(filter).Project<StoredConversation>(projection).FirstOrDefaultAsync(ct);
+    }
+
+    /// <inheritdoc/>
     public async Task<List<StoredConversation>> GetByIdsAsync(
         IEnumerable<string> conversationIds, CancellationToken ct = default)
     {

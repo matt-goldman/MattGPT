@@ -56,6 +56,15 @@ internal sealed class FakeChatSessionRepository : IChatSessionRepository
         return Task.CompletedTask;
     }
 
+    public Task<List<ChatSession>> ListRecentAsync(int limit = 50, CancellationToken ct = default)
+    {
+        var items = _sessions.Values
+            .OrderByDescending(s => s.UpdatedAt)
+            .Take(limit)
+            .ToList();
+        return Task.FromResult(items);
+    }
+
     /// <summary>Seed a pre-existing session for tests that need to start with state.</summary>
     public void Seed(ChatSession session) => _sessions[session.SessionId] = session;
 }
