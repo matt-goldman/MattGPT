@@ -50,7 +50,7 @@ This document is the **system of record** for project planning and issue trackin
 | 16 | 019-persist-and-embed-chat-conversations.md | Persist and embed chat conversations | Done | Done/ | Depends on 15, 7, 9, 10. Persistence, session lifecycle, auto-titles, and chat history sidebar all delivered (sidebar in 022). |
 | 17 | 020-tool-calling-rag-retrieval.md | Tool-calling RAG retrieval | Done | Done/ | Depends on 15, 11; see ADR-005 |
 | 18 | 015-clickable-citation-links.md | Clickable citation links in chat UI | Done | Done/ | Depends on 12 |
-| 19 | 017-export-content-analysis.md | Fully analyse export content for missing import detail | In Progress | TODO/ | Depends on 4, 7 |
+| 19 | 017-export-content-analysis.md | Fully analyse export content for missing import detail | Done | Done/ | Depends on 4, 7. Analysed 2,913 conversations / 79,910 messages; created issues 023–028. |
 | 20 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | Deferred | TODO/ | Depends on 3; first step is choosing the approach. Very low priority and can come later as gold plating. |
 | 21 | 021-abstract-vector-store-interface.md | Abstract vector store behind provider-agnostic interface | TODO | TODO/ | Depends on 2, 10. Low urgency — code quality / extensibility. Existing TODO in QdrantService.cs. |
 | 22 | 022-chat-history-sidebar.md | Chat history sidebar with imported conversations | Done | Done/ | Part of 019 scope. Depends on 18, 7, 12. Shows both native chat sessions and imported ChatGPT conversations in a collapsible sidebar. |

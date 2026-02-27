@@ -8,10 +8,21 @@
 - Raw statistics saved to `docs/export-analysis-raw.md`
 - Committed: `a4bf2ec`
 
-### Phase 2: Findings Document (In Progress)
-- Writing `docs/export-analysis.md` covering all 5 analysis areas from the issue
-- Cross-referencing raw data with current parser/model code
+### Phase 2: Findings Document (Complete)
+- Wrote `docs/export-analysis.md` covering all 5 analysis areas from the issue
+- Cross-referenced raw data with current parser/model code
 - Identifying gaps between schema and what MattGPT captures
+- Committed: `5046fde`
+
+### Phase 3: Backlog Issues (Complete)
+- Created 6 follow-on issues (023–028) covering Priority 1–3 gaps
+- Updated backlog index with new issues
+- Committed: `5ebd58b`
+
+### Phase 4: Close Issue (Complete)
+- Moved issue 017 from TODO/ to Done/
+- Marked all acceptance criteria as complete
+- Updated index status to Done
 
 ### Key observations so far
 - 12 distinct content_type values found; parser only handles `text` parts — all others are passed through as raw JSON strings

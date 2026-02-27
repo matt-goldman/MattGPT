@@ -1,6 +1,6 @@
 # 017 — Fully Analyse Export Content for Missing Import Detail
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 17
 **Dependencies:** 4 (ChatGPT JSON parser), 7 (store conversations in MongoDB)
 
@@ -35,11 +35,11 @@ This issue is a discovery and scoping exercise. No production code changes are r
 
 ## Acceptance Criteria
 
-- [ ] `docs/export-analysis.md` exists and covers all five analysis areas above.
-- [ ] Every `content_type` value found in a real export is listed with its current handling status.
-- [ ] Rich media references are documented, with a clear recommendation on how (or whether) to handle them.
-- [ ] Any identified gaps that are worth addressing have corresponding new backlog issues.
-- [ ] The findings document is self-contained enough for any contributor to act on without needing access to a raw export file.
+- [x] `docs/export-analysis.md` exists and covers all five analysis areas above.
+- [x] Every `content_type` value found in a real export is listed with its current handling status.
+- [x] Rich media references are documented, with a clear recommendation on how (or whether) to handle them.
+- [x] Any identified gaps that are worth addressing have corresponding new backlog issues.
+- [x] The findings document is self-contained enough for any contributor to act on without needing access to a raw export file.
 
 ## Notes
 
