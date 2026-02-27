@@ -67,7 +67,7 @@ public class SearchMemoriesTool(
             // 2. Search Qdrant.
             var searchResults = await qdrantService.SearchAsync(queryVector, limit);
 
-            // 3. Apply minimum score threshold (use auto-mode threshold for tool results).
+            // 3. Apply minimum score threshold using MinScore (same threshold as WithPrompt mode).
             var relevant = searchResults
                 .Where(r => r.Score >= _options.MinScore)
                 .ToList();
