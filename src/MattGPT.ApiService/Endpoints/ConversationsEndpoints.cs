@@ -132,11 +132,19 @@ public static class ConversationsEndpoints
         .WithName("EmbedConversations");
 
         // Get a single imported conversation with full message history.
-        app.MapGet("/conversations/{conversationId}", async (string conversationId, IConversationRepository repository) =>
+        // Hidden/scaffolding messages (e.g. user profile prompts) are excluded by default.
+        // Pass ?includeHidden=true to include them.
+        app.MapGet("/conversations/{conversationId}", async (string conversationId, bool? includeHidden, IConversationRepository repository) =>
         {
             var conversation = await repository.GetByIdAsync(conversationId);
             if (conversation is null)
                 return Results.NotFound(new { message = $"Conversation '{conversationId}' not found." });
+
+            var messages = conversation.LinearisedMessages.AsEnumerable();
+            if (includeHidden != true)
+            {
+                messages = messages.Where(m => !m.IsHidden && m.Weight != 0.0);
+            }
 
             return Results.Ok(new
             {
@@ -146,7 +154,7 @@ public static class ConversationsEndpoints
                 updateTime = conversation.UpdateTime,
                 defaultModelSlug = conversation.DefaultModelSlug,
                 processingStatus = conversation.ProcessingStatus.ToString(),
-                messages = conversation.LinearisedMessages.Select(m => new
+                messages = messages.Select(m => new
                 {
                     role = m.Role,
                     content = string.Join("\n", m.Parts),
