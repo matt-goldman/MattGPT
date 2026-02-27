@@ -11,33 +11,20 @@ namespace MattGPT.ApiService.Services;
 /// to search past conversation history. This enables tool-calling RAG where
 /// the LLM decides when and how to search rather than always injecting context.
 /// </summary>
-public class SearchMemoriesTool
+public class SearchMemoriesTool(
+    IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+    IQdrantService qdrantService,
+    IConversationRepository repository,
+    IOptions<RagOptions> options,
+    ILogger<SearchMemoriesTool> logger)
 {
-    private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator;
-    private readonly IQdrantService _qdrantService;
-    private readonly IConversationRepository _repository;
-    private readonly RagOptions _options;
-    private readonly ILogger<SearchMemoriesTool> _logger;
+    private readonly RagOptions _options = options.Value;
 
     /// <summary>
     /// Sources retrieved by the most recent tool invocation. Populated after
     /// <see cref="SearchMemoriesAsync"/> is called by the LLM tool-call loop.
     /// </summary>
     public IReadOnlyList<ChatSource> LastSources { get; private set; } = [];
-
-    public SearchMemoriesTool(
-        IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
-        IQdrantService qdrantService,
-        IConversationRepository repository,
-        IOptions<RagOptions> options,
-        ILogger<SearchMemoriesTool> logger)
-    {
-        _embeddingGenerator = embeddingGenerator;
-        _qdrantService = qdrantService;
-        _repository = repository;
-        _options = options.Value;
-        _logger = logger;
-    }
 
     /// <summary>
     /// Creates an <see cref="AIFunction"/> wrapping <see cref="SearchMemoriesAsync"/>
@@ -67,25 +54,25 @@ public class SearchMemoriesTool
     {
         var limit = Math.Clamp(maxResults ?? _options.ToolMaxResults, 1, 10);
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "search_memories tool invoked. Query: {Query}, MaxResults: {MaxResults}",
             query, limit);
 
         try
         {
             // 1. Embed the tool query.
-            var embeddings = await _embeddingGenerator.GenerateAsync([query]);
+            var embeddings = await embeddingGenerator.GenerateAsync([query]);
             var queryVector = embeddings[0].Vector.ToArray();
 
             // 2. Search Qdrant.
-            var searchResults = await _qdrantService.SearchAsync(queryVector, limit);
+            var searchResults = await qdrantService.SearchAsync(queryVector, limit);
 
             // 3. Apply minimum score threshold (use auto-mode threshold for tool results).
             var relevant = searchResults
                 .Where(r => r.Score >= _options.MinScore)
                 .ToList();
 
-            _logger.LogInformation(
+            logger.LogInformation(
                 "search_memories: {Total} results from Qdrant, {Relevant} above MinScore {MinScore:F2}.",
                 searchResults.Count, relevant.Count, _options.MinScore);
 
@@ -96,7 +83,7 @@ public class SearchMemoriesTool
             }
 
             // 4. Fetch full conversations from MongoDB.
-            var fullConversations = await _repository.GetByIdsAsync(relevant.Select(r => r.ConversationId));
+            var fullConversations = await repository.GetByIdsAsync(relevant.Select(r => r.ConversationId));
             var conversationLookup = fullConversations.ToDictionary(c => c.ConversationId);
 
             // 5. Build formatted results.
@@ -130,7 +117,7 @@ public class SearchMemoriesTool
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "search_memories tool failed.");
+            logger.LogError(ex, "search_memories tool failed.");
             LastSources = [];
             return $"Memory search failed: {ex.Message}. Responding without memory context.";
         }

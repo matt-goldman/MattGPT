@@ -13,27 +13,16 @@ public record SummarisationResult(int Summarised, int Errors, int Skipped);
 /// Generates LLM summaries for conversations that have been imported but not yet summarised.
 /// Processes conversations in batches to avoid overwhelming the LLM endpoint.
 /// </summary>
-public class SummarisationService
+public class SummarisationService(
+    IConversationRepository repository,
+    IChatClient chatClient,
+    ILogger<SummarisationService> logger)
 {
     /// <summary>Maximum number of characters from linearised messages to include in a single LLM prompt.</summary>
     private const int MaxPromptChars = 12_000;
 
     /// <summary>Number of conversations to load per batch from MongoDB.</summary>
     private const int BatchSize = 50;
-
-    private readonly IConversationRepository _repository;
-    private readonly IChatClient _chatClient;
-    private readonly ILogger<SummarisationService> _logger;
-
-    public SummarisationService(
-        IConversationRepository repository,
-        IChatClient chatClient,
-        ILogger<SummarisationService> logger)
-    {
-        _repository = repository;
-        _chatClient = chatClient;
-        _logger = logger;
-    }
 
     /// <summary>
     /// Processes all conversations with <see cref="ConversationProcessingStatus.Imported"/> status,
@@ -48,13 +37,13 @@ public class SummarisationService
 
         while (!ct.IsCancellationRequested)
         {
-            var batch = await _repository.GetByStatusAsync(
+            var batch = await repository.GetByStatusAsync(
                 ConversationProcessingStatus.Imported, BatchSize, ct);
 
             if (batch.Count == 0)
                 break;
 
-            _logger.LogInformation("Summarisation batch: {Count} conversations to process.", batch.Count);
+            logger.LogInformation("Summarisation batch: {Count} conversations to process.", batch.Count);
 
             foreach (var conversation in batch)
             {
@@ -71,7 +60,7 @@ public class SummarisationService
             }
         }
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "Summarisation complete: {Summarised} summarised, {Errors} errors, {Skipped} skipped.",
             summarised, errors, skipped);
 
@@ -85,11 +74,11 @@ public class SummarisationService
     {
         if (conversation.LinearisedMessages.Count == 0)
         {
-            _logger.LogDebug(
+            logger.LogDebug(
                 "Conversation {Id} has no messages; marking as Summarised with empty summary.",
                 conversation.ConversationId);
 
-            await _repository.UpdateSummaryAsync(
+            await repository.UpdateSummaryAsync(
                 conversation.ConversationId,
                 summary: null,
                 ConversationProcessingStatus.Summarised,
@@ -100,16 +89,16 @@ public class SummarisationService
         try
         {
             var prompt = BuildPrompt(conversation);
-            var response = await _chatClient.GetResponseAsync(prompt, cancellationToken: ct);
+            var response = await chatClient.GetResponseAsync(prompt, cancellationToken: ct);
             var summary = response.Text;
 
-            await _repository.UpdateSummaryAsync(
+            await repository.UpdateSummaryAsync(
                 conversation.ConversationId,
                 summary,
                 ConversationProcessingStatus.Summarised,
                 ct);
 
-            _logger.LogDebug(
+            logger.LogDebug(
                 "Summarised conversation {Id} ({Title}).",
                 conversation.ConversationId, conversation.Title);
 
@@ -117,7 +106,7 @@ public class SummarisationService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(
+            logger.LogWarning(
                 ex,
                 "Failed to summarise conversation {Id} ({Title}); marking as SummaryError.",
                 conversation.ConversationId, conversation.Title);
@@ -131,7 +120,7 @@ public class SummarisationService
     {
         try
         {
-            await _repository.UpdateSummaryAsync(
+            await repository.UpdateSummaryAsync(
                 conversationId,
                 summary: null,
                 ConversationProcessingStatus.SummaryError,
@@ -139,7 +128,7 @@ public class SummarisationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Could not update SummaryError status for conversation {Id}.", conversationId);
+            logger.LogError(ex, "Could not update SummaryError status for conversation {Id}.", conversationId);
         }
     }
 

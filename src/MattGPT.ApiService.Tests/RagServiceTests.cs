@@ -10,22 +10,17 @@ namespace MattGPT.ApiService.Tests;
 /// <summary>
 /// Fake IQdrantService that returns configured search results.
 /// </summary>
-internal sealed class FakeSearchQdrantService : IQdrantService
+internal sealed class FakeSearchQdrantService(IReadOnlyList<QdrantSearchResult> results) : IQdrantService
 {
-    private readonly IReadOnlyList<QdrantSearchResult> _results;
-
-    public FakeSearchQdrantService(IReadOnlyList<QdrantSearchResult> results)
-        => _results = results;
-
     public Task UpsertAsync(MattGPT.ApiService.Models.StoredConversation conversation, float[] vector, CancellationToken ct = default)
         => Task.CompletedTask;
 
     public Task<IReadOnlyList<QdrantSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, CancellationToken ct = default)
-        => Task.FromResult(_results);
+        => Task.FromResult(results);
 
     public Task<ulong?> GetPointCountAsync(CancellationToken ct = default)
-        => Task.FromResult<ulong?>((ulong)_results.Count);
+        => Task.FromResult<ulong?>((ulong)results.Count);
 }
 
 public class RagServiceTests
