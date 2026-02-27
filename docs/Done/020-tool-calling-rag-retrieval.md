@@ -1,6 +1,6 @@
 # 020 — Tool-Calling RAG Retrieval
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 20
 **Dependencies:** 018 (multi-turn chat), 011 (RAG pipeline)
 
@@ -59,17 +59,17 @@ Potential tools to register:
    - Reduce automatic RAG injection to a lighter touch (fewer results, higher threshold).
    - Register a `search_memories` tool via `Microsoft.Extensions.AI` function calling.
    - Handle the tool call loop (LLM calls tool → execute search → return results → LLM generates final answer).
-3. Make the behaviour configurable: `RagMode = "auto" | "tools" | "hybrid"`.
+3. Make the behaviour configurable: `RagMode = "WithPrompt" | "Auto" | "ToolsOnly"`.
 4. Ensure graceful fallback when the model doesn't support tools.
 
 ## Acceptance Criteria
 
-- [ ] An ADR documents the evaluation of tool calling across target LLM providers and the chosen approach.
-- [ ] If implemented: the LLM can invoke a `search_memories` tool to retrieve relevant past conversations.
-- [ ] If implemented: responses are at least as good as the current always-on RAG for queries that benefit from memory.
-- [ ] Simple queries that don't need history avoid unnecessary context injection (measurable by reduced prompt size).
-- [ ] The feature degrades gracefully for models that don't support function/tool calling.
-- [ ] Configuration allows switching between RAG modes.
+- [x] An ADR documents the evaluation of tool calling across target LLM providers and the chosen approach. → See [ADR-005](../Decisions/005-tool-calling-rag-retrieval-evaluation.md).
+- [x] If implemented: the LLM can invoke a `search_memories` tool to retrieve relevant past conversations.
+- [x] If implemented: responses are at least as good as the current always-on RAG for queries that benefit from memory.
+- [x] Simple queries that don't need history avoid unnecessary context injection (measurable by reduced prompt size).
+- [x] The feature degrades gracefully for models that don't support function/tool calling.
+- [x] Configuration allows switching between RAG modes.
 
 ## Notes
 

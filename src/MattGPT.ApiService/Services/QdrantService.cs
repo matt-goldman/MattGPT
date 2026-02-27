@@ -30,20 +30,11 @@ public interface IQdrantService
 /// Ensures the collection is created on first use and upserts points idempotently using
 /// the conversation UUID as the point ID.
 /// </summary>
-public class QdrantService : IQdrantService
+public class QdrantService(QdrantClient client, ILogger<QdrantService> logger) : IQdrantService
 {
     private const string CollectionName = "conversations";
-
-    private readonly QdrantClient _client;
-    private readonly ILogger<QdrantService> _logger;
     private volatile bool _collectionEnsured;
     private readonly SemaphoreSlim _initLock = new(1, 1);
-
-    public QdrantService(QdrantClient client, ILogger<QdrantService> logger)
-    {
-        _client = client;
-        _logger = logger;
-    }
 
     /// <inheritdoc/>
     public async Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
@@ -65,9 +56,9 @@ public class QdrantService : IQdrantService
             }
         };
 
-        await _client.UpsertAsync(CollectionName, [point], cancellationToken: ct);
+        await client.UpsertAsync(CollectionName, [point], cancellationToken: ct);
 
-        _logger.LogDebug(
+        logger.LogDebug(
             "Upserted conversation {Id} ({Title}) to Qdrant.",
             conversation.ConversationId, conversation.Title);
     }
@@ -76,10 +67,10 @@ public class QdrantService : IQdrantService
     public async Task<IReadOnlyList<QdrantSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, CancellationToken ct = default)
     {
-        if (!await _client.CollectionExistsAsync(CollectionName, ct))
+        if (!await client.CollectionExistsAsync(CollectionName, ct))
             return [];
 
-        var results = await _client.SearchAsync(
+        var results = await client.SearchAsync(
             CollectionName,
             queryVector,
             limit: (ulong)limit,
@@ -103,10 +94,10 @@ public class QdrantService : IQdrantService
     /// <inheritdoc/>
     public async Task<ulong?> GetPointCountAsync(CancellationToken ct = default)
     {
-        if (!await _client.CollectionExistsAsync(CollectionName, ct))
+        if (!await client.CollectionExistsAsync(CollectionName, ct))
             return null;
 
-        var info = await _client.GetCollectionInfoAsync(CollectionName, ct);
+        var info = await client.GetCollectionInfoAsync(CollectionName, ct);
         return info.PointsCount;
     }
 
@@ -123,14 +114,14 @@ public class QdrantService : IQdrantService
         {
             if (_collectionEnsured) return;
 
-            if (!await _client.CollectionExistsAsync(CollectionName, ct))
+            if (!await client.CollectionExistsAsync(CollectionName, ct))
             {
-                await _client.CreateCollectionAsync(
+                await client.CreateCollectionAsync(
                     CollectionName,
                     new VectorParams { Size = dimensions, Distance = Distance.Cosine },
                     cancellationToken: ct);
 
-                _logger.LogInformation(
+                logger.LogInformation(
                     "Created Qdrant collection '{Collection}' with {Dims} dimensions.",
                     CollectionName, dimensions);
             }
