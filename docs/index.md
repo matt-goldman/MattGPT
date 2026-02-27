@@ -51,15 +51,15 @@ This document is the **system of record** for project planning and issue trackin
 | 17 | 020-tool-calling-rag-retrieval.md | Tool-calling RAG retrieval | Done | Done/ | Depends on 15, 11; see ADR-005 |
 | 18 | 015-clickable-citation-links.md | Clickable citation links in chat UI | Done | Done/ | Depends on 12 |
 | 19 | 017-export-content-analysis.md | Fully analyse export content for missing import detail | Done | Done/ | Depends on 4, 7. Analysed 2,913 conversations / 79,910 messages; created issues 023–028. |
-| 20 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | Deferred | TODO/ | Depends on 3; first step is choosing the approach. Very low priority and can come later as gold plating. |
-| 21 | 021-abstract-vector-store-interface.md | Abstract vector store behind provider-agnostic interface | TODO | TODO/ | Depends on 2, 10. Low urgency — code quality / extensibility. Existing TODO in QdrantService.cs. |
+| 20 | 023-handle-non-text-content-types.md | Handle non-text content types in parser | Done | Done/ | Depends on 4, 7, 17. Highest-impact parser fix — 11K messages with lost content. |
+| 21 | 027-filter-hidden-messages-from-embedding.md | Filter hidden/system messages from embedding | TODO | TODO/ | Depends on 17, 20. Improve RAG quality by excluding scaffolding. |
 | 22 | 022-chat-history-sidebar.md | Chat history sidebar with imported conversations | Done | Done/ | Part of 019 scope. Depends on 18, 7, 12. Shows both native chat sessions and imported ChatGPT conversations in a collapsible sidebar. |
-| 23 | 023-handle-non-text-content-types.md | Handle non-text content types in parser | TODO | TODO/ | Depends on 4, 7, 17. Highest-impact parser fix — 11K messages with lost content. |
-| 24 | 024-capture-attachments-and-tool-metadata.md | Capture file attachments and author/tool metadata | TODO | TODO/ | Depends on 4, 7, 17. 7,999 attachments and 11,719 tool names currently invisible. |
+| 23 | 024-capture-attachments-and-tool-metadata.md | Capture file attachments and author/tool metadata | TODO | TODO/ | Depends on 4, 7, 17. 7,999 attachments and 11,719 tool names currently invisible. |
+| 24 | 026-capture-conversation-metadata.md | Capture conversation-level metadata | TODO | TODO/ | Depends on 4, 7, 17. gizmo_id, memory opt-out, archived status. |
 | 25 | 025-capture-citations-and-content-references.md | Capture citations and content references | TODO | TODO/ | Depends on 4, 7, 17. 8,651 citations and 13,106 content references lost. |
-| 26 | 026-capture-conversation-metadata.md | Capture conversation-level metadata | TODO | TODO/ | Depends on 4, 7, 17. gizmo_id, memory opt-out, archived status. |
-| 27 | 027-filter-hidden-messages-from-embedding.md | Filter hidden/system messages from embedding | TODO | TODO/ | Depends on 17, 23. Improve RAG quality by excluding scaffolding. |
-| 28 | 028-extract-user-profile.md | Extract user profile from custom instructions | TODO | TODO/ | Depends on 17, 23. Store custom instructions as reusable system context. |
+| 26 | 028-extract-user-profile.md | Extract user profile from custom instructions | TODO | TODO/ | Depends on 17, 20. Store custom instructions as reusable system context. |
+| 27 | 021-abstract-vector-store-interface.md | Abstract vector store behind provider-agnostic interface | TODO | TODO/ | Depends on 2, 10. Low urgency — code quality / extensibility. Existing TODO in QdrantService.cs. |
+| 28 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | Deferred | TODO/ | Depends on 3; first step is choosing the approach. Very low priority and can come later as gold plating. |
 
 ---
 
