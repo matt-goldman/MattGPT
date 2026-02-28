@@ -64,7 +64,7 @@ Potential tools to register:
 
 ## Acceptance Criteria
 
-- [x] An ADR documents the evaluation of tool calling across target LLM providers and the chosen approach. → See [ADR-005](../Decisions/005-tool-calling-rag-retrieval-evaluation.md).
+- [x] An ADR documents the evaluation of tool calling across target LLM providers and the chosen approach. → See [ADR-005](../../Decisions/005-tool-calling-rag-retrieval-evaluation.md).
 - [x] If implemented: the LLM can invoke a `search_memories` tool to retrieve relevant past conversations.
 - [x] If implemented: responses are at least as good as the current always-on RAG for queries that benefit from memory.
 - [x] Simple queries that don't need history avoid unnecessary context injection (measurable by reduced prompt size).

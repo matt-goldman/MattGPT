@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-25
 **Status:** Accepted
-**Related Issues:** [003-configure-llm-endpoint.md](../Done/003-configure-llm-endpoint.md)
+**Related Issues:** [003-configure-llm-endpoint.md](../Backlog/Done/003-configure-llm-endpoint.md)
 
 ### Context
 

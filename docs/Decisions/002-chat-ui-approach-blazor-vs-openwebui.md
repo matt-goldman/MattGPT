@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-25
 **Status:** Accepted
-**Related Issues:** [012-chat-ui-with-rag.md](../TODO/012-chat-ui-with-rag.md)
+**Related Issues:** [012-chat-ui-with-rag.md](../Backlog/Done/012-chat-ui-with-rag.md)
 
 ### Context
 

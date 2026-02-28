@@ -283,3 +283,7 @@ You can mix and match LLM and vector store providers independently. For example:
 | Google + Pinecone | Gemini | OpenAI | Pinecone |
 
 The key constraint: your embedding model must be consistent across import and query. Changing the embedding model invalidates existing embeddings — re-embed via `POST /conversations/embed` after switching.
+
+---
+
+← [Previous: Configuration](configuration.md) | [User Guides](index.md) | [Next: Troubleshooting →](troubleshooting.md)

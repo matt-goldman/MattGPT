@@ -3,7 +3,7 @@
 **Status:** Deferred  
 **Sequence:** 24  
 **Dependencies:** 4 (ChatGPT JSON parser), 7 (store conversations in MongoDB), 17 (export content analysis)  
-**Deferred:** 2026-02-28 — See [ADR-006](../Decisions/006-defer-attachment-import-until-zip-support.md). Attachment metadata has marginal standalone value; defer until whole-zip import is implemented.
+**Deferred:** 2026-02-28 — See [ADR-006](../../Decisions/006-defer-attachment-import-until-zip-support.md). Attachment metadata has marginal standalone value; defer until whole-zip import is implemented.
 
 ## Summary
 

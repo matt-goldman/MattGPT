@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-27
 **Status:** Accepted
-**Related Issues:** [018-multi-turn-chat-with-rolling-summaries.md](../Done/018-multi-turn-chat-with-rolling-summaries.md), [019-persist-and-embed-chat-conversations.md](../TODO/019-persist-and-embed-chat-conversations.md)
+**Related Issues:** [018-multi-turn-chat-with-rolling-summaries.md](../Backlog/Done/018-multi-turn-chat-with-rolling-summaries.md), [019-persist-and-embed-chat-conversations.md](../Backlog/Done/019-persist-and-embed-chat-conversations.md)
 
 ### Context
 

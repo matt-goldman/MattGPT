@@ -66,23 +66,23 @@ The Aspire dashboard URL will be printed to the console. The web UI URL is also 
 
 | Document | Description |
 |----------|-------------|
-| [Getting Started](docs/getting-started.md) | Prerequisites, setup, and first run |
-| [Configuration](docs/configuration.md) | LLM, vector store, and RAG settings |
-| [Integrations](docs/integrations.md) | Setup guides for each LLM and vector store provider |
-| [Usage](docs/usage.md) | Uploading conversations, using the chat UI, API endpoints |
-| [Troubleshooting](docs/troubleshooting.md) | Common issues, performance notes |
+| [Getting Started](docs/UserGuides/getting-started.md) | Prerequisites, setup, and first run |
+| [Configuration](docs/UserGuides/configuration.md) | LLM, vector store, and RAG settings |
+| [Integrations](docs/UserGuides/integrations.md) | Setup guides for each LLM and vector store provider |
+| [Usage](docs/UserGuides/usage.md) | Uploading conversations, using the chat UI, API endpoints |
+| [Troubleshooting](docs/UserGuides/troubleshooting.md) | Common issues, performance notes |
 
 
 ## Project Tracking
 
-Planning and issue tracking lives in the [`docs/`](docs/) folder — [`docs/index.md`](docs/index.md) is the system of record. This file-based backlog exists so that AI coding agents (both online and offline) can pick up work autonomously. Completed issues are archived in `docs/Done/` with full context of what was built and why.
+Planning and issue tracking lives in the [`docs/`](docs/) folder — [`docs/Backlog/index.md`](docs/Backlog/index.md) is the system of record. This file-based backlog exists so that AI coding agents (both online and offline) can pick up work autonomously. Completed issues are archived in `docs/Backlog/Done/` with full context of what was built and why.
 
 If you'd like to suggest a feature or report a bug, please [open a GitHub Issue](https://github.com/matt-goldman/MattGPT/issues). Approved items will be promoted into the docs backlog for implementation.
 
 
 ## Future Enhancements
 
-- **Runtime configuration wizard** — a guided setup experience so new users can configure the LLM provider and model without editing config files (see [issue #14](docs/TODO/014-runtime-llm-configuration-wizard.md)).
+- **Runtime configuration wizard** — a guided setup experience so new users can configure the LLM provider and model without editing config files (see [issue #14](docs/Backlog/TODO/014-runtime-llm-configuration-wizard.md)).
 - Advanced parsing: sentiment analysis, topic modelling, entity extraction.
 - Import of other file types (images, PDFs) shared in conversations.
 - Integration with LM Studio, OpenWebUI, and other LLM tools.

@@ -53,3 +53,7 @@ MattGPT runs LLM inference locally by default (Ollama). Performance varies **dra
 - **Cloud providers are an alternative.** If local performance is unacceptable, switch to a cloud provider (OpenAI, Anthropic, Gemini, or Azure OpenAI) — see [Integrations](integrations.md).
 
 You may need to tweak the configuration for your specific hardware. The defaults are tuned for a Windows machine with an NVIDIA GPU.
+
+---
+
+← [Previous: Integrations](integrations.md) | [User Guides](index.md)
