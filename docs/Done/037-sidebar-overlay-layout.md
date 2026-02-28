@@ -1,6 +1,6 @@
 # 037 — Sidebar Should Overlay Chat Area, Not Push It
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 37  
 **Dependencies:** 022 (chat history sidebar), 012 (chat UI)
 
@@ -37,11 +37,11 @@ When `_sidebarOpen` toggles, the sidebar's width animates from `0` to `w-72` (18
 
 ## Acceptance Criteria
 
-- [ ] Opening/closing the sidebar does not cause the chat message area to resize or reflow.
-- [ ] The sidebar visually overlays the chat area with a higher z-index.
-- [ ] The sidebar can be dismissed by the existing toggle button.
-- [ ] The slide animation is smooth and performant.
-- [ ] The chat area remains fully usable (scrolling, input) when the sidebar is closed.
+- [x] Opening/closing the sidebar does not cause the chat message area to resize or reflow.
+- [x] The sidebar visually overlays the chat area with a higher z-index.
+- [x] The sidebar can be dismissed by the existing toggle button or by clicking the backdrop.
+- [x] The slide animation is smooth and performant (GPU-accelerated transform).
+- [x] The chat area remains fully usable (scrolling, input) when the sidebar is closed.
 
 ## Notes
 

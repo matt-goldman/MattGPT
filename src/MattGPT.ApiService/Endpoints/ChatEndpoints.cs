@@ -60,7 +60,21 @@ public static class ChatEndpoints
 
             await foreach (var chunk in ragService.ChatStreamAsync(request.Message, session, ct))
             {
-                if (chunk.Text is not null)
+                if (chunk.ToolStart && chunk.ToolName is not null)
+                {
+                    // Tool invocation started — emit tool_start event.
+                    var toolStartJson = System.Text.Json.JsonSerializer.Serialize(new { tool = chunk.ToolName });
+                    await httpContext.Response.WriteAsync($"event: tool_start\ndata: {toolStartJson}\n\n", ct);
+                    await httpContext.Response.Body.FlushAsync(ct);
+                }
+                else if (chunk.ToolEnd && chunk.ToolName is not null)
+                {
+                    // Tool invocation completed — emit tool_end event.
+                    var toolEndJson = System.Text.Json.JsonSerializer.Serialize(new { tool = chunk.ToolName });
+                    await httpContext.Response.WriteAsync($"event: tool_end\ndata: {toolEndJson}\n\n", ct);
+                    await httpContext.Response.Body.FlushAsync(ct);
+                }
+                else if (chunk.Text is not null)
                 {
                     fullResponse.Append(chunk.Text);
                     // Text token — send as a "token" event.

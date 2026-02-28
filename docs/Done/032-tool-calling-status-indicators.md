@@ -1,6 +1,6 @@
 # 032 — Tool-Calling Status Indicators in Chat UI
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 32  
 **Dependencies:** 020 (tool-calling RAG retrieval), 012 (chat UI)
 
@@ -45,11 +45,11 @@ When the LLM invokes the `search_memories` tool, the tool call happens server-si
 
 ## Acceptance Criteria
 
-- [ ] When the LLM invokes a tool, the chat UI shows a descriptive status (e.g. "Searching memories...") instead of just a spinner.
-- [ ] The status updates in real time via SSE events.
-- [ ] When the tool completes and tokens start streaming, the status transitions smoothly to showing the response.
-- [ ] The implementation supports multiple tools and is easy to extend with new tool names.
-- [ ] The SSE protocol includes `tool_start` and `tool_end` events.
+- [x] When the LLM invokes a tool, the chat UI shows a descriptive status (e.g. "Searching memories...") instead of just a spinner.
+- [x] The status updates in real time via SSE events.
+- [x] When the tool completes and tokens start streaming, the status transitions smoothly to showing the response.
+- [x] The implementation supports multiple tools and is easy to extend with new tool names.
+- [x] The SSE protocol includes `tool_start` and `tool_end` events.
 
 ## Notes
 

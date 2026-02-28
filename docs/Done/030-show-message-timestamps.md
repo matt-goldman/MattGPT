@@ -1,6 +1,6 @@
 # 030 — Show Message and Conversation Timestamps
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 30  
 **Dependencies:** 012 (chat UI), 022 (chat history sidebar)
 
@@ -34,11 +34,11 @@ However, the message rendering loop in `Chat.razor` (`@foreach (var msg in _mess
 
 ## Acceptance Criteria
 
-- [ ] Each message in the chat UI displays its timestamp.
-- [ ] Timestamps are formatted appropriately (time-only for today, date+time for older messages).
-- [ ] Date separators appear between messages from different days in long conversations.
-- [ ] Both native chat session messages and imported conversation messages show timestamps.
-- [ ] Timestamps do not clutter the UI — they should be subtle and secondary to the message content.
+- [x] Each message in the chat UI displays its timestamp.
+- [x] Timestamps are formatted appropriately (time-only for today, date+time for older messages).
+- [x] Date separators appear between messages from different days in long conversations.
+- [x] Both native chat session messages and imported conversation messages show timestamps.
+- [x] Timestamps do not clutter the UI — they should be subtle and secondary to the message content.
 
 ## Notes
 
