@@ -70,6 +70,7 @@ This document is the **system of record** for project planning and issue trackin
 | 36 | 036-investigate-tool-search-results-ignored.md | Investigate LLM ignoring tool search results | Done | Done/ | Depends on 20, 32. Improved system prompt and tool description to be more directive. |
 | 37 | 037-sidebar-overlay-layout.md | Sidebar should overlay chat area, not push it | Done | Done/ | Depends on 22, 12. Fixed overlay with backdrop and transform animation. |
 | 38 | 038-add-cloud-provider-integrations.md | Add cloud LLM and vector store provider integrations | Done | Done/ | Depends on 3, 21. Anthropic, OpenAI direct, Gemini; Azure AI Search, Pinecone, Weaviate. See ADR-007. |
+| 39 | 039-add-postgres-provider.md | Add Postgres as document DB and vector store provider | Done | Done/ | Depends on 38. Postgres via pgvector for both document DB and vector store, with shared Aspire resource. |
 
 ---
 
@@ -104,7 +105,7 @@ Significant architectural decisions must be recorded as ADRs in `docs/Decisions/
 | Web Frontend | Blazor Server | Upload UI, chat UI, progress monitoring |
 | API Service | ASP.NET Core Minimal API | Business logic, parsing, RAG pipeline |
 | Document DB | MongoDB | Full conversation storage, metadata |
-| Vector DB | Qdrant / Azure AI Search / Pinecone / Weaviate (config-driven) | Embedding storage and similarity search |
+| Vector DB | Qdrant / Postgres (pgvector) / Azure AI Search / Pinecone / Weaviate (config-driven) | Embedding storage and similarity search |
 | LLM | Ollama / Foundry Local / Azure OpenAI / OpenAI / Anthropic / Gemini (config-driven) | Summary generation, chat, embeddings |
 
 ---
