@@ -15,6 +15,18 @@ A .NET Aspire application that imports your entire ChatGPT conversation history 
   </tr>
 </table>
 
+## Features
+
+- **Import your ChatGPT conversation history** — upload your full export; supports multi-file exports (ChatGPT now splits large exports across several JSON files) and histories of thousands of conversations
+- **Project support** — conversations organised into ChatGPT projects are imported into project folders in MattGPT, with collapsible folder navigation and user-assignable names
+- **RAG memory** — conversations are summarised, embedded, and indexed so any LLM can retrieve relevant context from your history when you chat
+- **Multi-turn chat** — full conversation support with rolling summaries that keep context coherent across long sessions, even with small-context local models
+- **Persistent chat sessions** — conversations in MattGPT are saved to MongoDB and embedded in Qdrant, so they become part of your searchable memory over time
+- **Chat history sidebar** — browse and resume past chat sessions, and read any imported conversation in a read-only viewer directly in the app
+- **Clickable source citations** — each LLM response shows which past conversations were used as context; click any source to read the original conversation
+- **Configurable RAG modes** — choose between full automatic injection (`WithPrompt`), hybrid auto-RAG + tool-calling (`Auto`), or tool-only retrieval (`ToolsOnly`)
+- **Configurable LLM providers** — works with Ollama (local, default), Foundry Local, or Azure OpenAI; switch providers without re-importing your data
+
 ## Goals
 
 Enable users to import their entire ChatGPT conversation history into a format that can be used as RAG memory for any Large Language Model. This allows users to leverage their past interactions with ChatGPT to enhance responses from other LLMs.
