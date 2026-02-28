@@ -10,7 +10,7 @@ namespace MattGPT.ApiService.Services;
 /// <summary>
 /// Azure AI Search-backed implementation of <see cref="IVectorStore"/>.
 /// Creates the index on first use and upserts documents with vector embeddings.
-/// Supports hybrid search (vector + keyword) when the search query includes text.
+/// Performs vector-based search over stored conversations.
 /// </summary>
 public class AzureAISearchVectorStore(
     SearchClient searchClient,
