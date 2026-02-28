@@ -10,25 +10,54 @@ var endpoint = builder.Configuration["LLM:Endpoint"] ?? string.Empty;
 var apiKey = builder.Configuration["LLM:ApiKey"];
 var ragMode = builder.Configuration["RAG:Mode"];
 
+// --- Embedding provider fallback (for providers without native embedding APIs) ---
+var embeddingProvider = builder.Configuration["LLM:EmbeddingProvider"];
+var embeddingApiKey = builder.Configuration["LLM:EmbeddingApiKey"];
+var embeddingEndpoint = builder.Configuration["LLM:EmbeddingEndpoint"];
+
+// --- Vector store configuration ---
+var vectorStoreProvider = builder.Configuration["VectorStore:Provider"] ?? "Qdrant";
+var vectorStoreEndpoint = builder.Configuration["VectorStore:Endpoint"];
+var vectorStoreApiKey = builder.Configuration["VectorStore:ApiKey"];
+var vectorStoreIndexName = builder.Configuration["VectorStore:IndexName"];
+
 // --- Infrastructure resources ---
 var mongodb = builder.AddMongoDB("mongodb")
     .WithDataVolume()
     .AddDatabase("mattgptdb");
-
-var qdrant = builder.AddQdrant("qdrant")
-    .WithDataVolume();
 
 // --- API service ---
 var apiService = builder.AddProject<Projects.MattGPT_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
     .WithReference(mongodb)
     .WaitFor(mongodb)
-    .WithReference(qdrant)
-    .WaitFor(qdrant)
     .WithEnvironment("LLM__Provider", provider)
     .WithEnvironment("LLM__ModelId", modelId)
-    .WithEnvironment("LLM__EmbeddingModelId", embeddingModelId);
+    .WithEnvironment("LLM__EmbeddingModelId", embeddingModelId)
+    .WithEnvironment("VectorStore__Provider", vectorStoreProvider);
 
+// --- Qdrant (only when configured as the vector store provider) ---
+if (vectorStoreProvider.Equals("Qdrant", StringComparison.OrdinalIgnoreCase))
+{
+    var qdrant = builder.AddQdrant("qdrant")
+        .WithDataVolume();
+
+    apiService
+        .WithReference(qdrant)
+        .WaitFor(qdrant);
+}
+
+// --- Vector store configuration passthrough ---
+if (!string.IsNullOrEmpty(vectorStoreEndpoint))
+    apiService.WithEnvironment("VectorStore__Endpoint", vectorStoreEndpoint);
+
+if (!string.IsNullOrEmpty(vectorStoreApiKey))
+    apiService.WithEnvironment("VectorStore__ApiKey", vectorStoreApiKey);
+
+if (!string.IsNullOrEmpty(vectorStoreIndexName))
+    apiService.WithEnvironment("VectorStore__IndexName", vectorStoreIndexName);
+
+// --- LLM configuration passthrough ---
 if (!string.IsNullOrEmpty(endpoint))
     apiService.WithEnvironment("LLM__Endpoint", endpoint);
 
@@ -37,6 +66,16 @@ if (!string.IsNullOrEmpty(apiKey))
 
 if (!string.IsNullOrEmpty(ragMode))
     apiService.WithEnvironment("RAG__Mode", ragMode);
+
+// --- Embedding provider fallback passthrough ---
+if (!string.IsNullOrEmpty(embeddingProvider))
+    apiService.WithEnvironment("LLM__EmbeddingProvider", embeddingProvider);
+
+if (!string.IsNullOrEmpty(embeddingApiKey))
+    apiService.WithEnvironment("LLM__EmbeddingApiKey", embeddingApiKey);
+
+if (!string.IsNullOrEmpty(embeddingEndpoint))
+    apiService.WithEnvironment("LLM__EmbeddingEndpoint", embeddingEndpoint);
 
 // --- Ollama (only when configured as the provider) ---
 if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
