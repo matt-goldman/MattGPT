@@ -55,9 +55,9 @@ This document is the **system of record** for project planning and issue trackin
 | 21 | 027-filter-hidden-messages-from-embedding.md | Filter hidden/system messages from embedding | Done | Done/ | Depends on 19, 20. Improve RAG quality by excluding scaffolding. |
 | 22 | 022-chat-history-sidebar.md | Chat history sidebar with imported conversations | Done | Done/ | Part of 019 scope. Depends on 18, 7, 12. Shows both native chat sessions and imported ChatGPT conversations in a collapsible sidebar. |
 | 23 | 026-capture-conversation-metadata.md | Capture conversation-level metadata | Done | Done/ | Depends on 4, 7, 17. gizmo_id, memory opt-out, archived status. |
-| 24 | 025-capture-citations-and-content-references.md | Capture citations and content references | TODO | TODO/ | Depends on 4, 7, 17. 8,651 citations and 13,106 content references lost. |
-| 25 | 028-extract-user-profile.md | Extract user profile from custom instructions | TODO | TODO/ | Depends on 17, 20. Store custom instructions as reusable system context. |
-| 26 | 021-abstract-vector-store-interface.md | Abstract vector store behind provider-agnostic interface | TODO | TODO/ | Depends on 2, 10. Low urgency — code quality / extensibility. Existing TODO in QdrantService.cs. |
+| 24 | 025-capture-citations-and-content-references.md | Capture citations and content references | Done | Done/ | Depends on 4, 7, 17. 8,651 citations and 13,106 content references lost. |
+| 25 | 028-extract-user-profile.md | Extract user profile from custom instructions | Done | Done/ | Depends on 17, 20. Store custom instructions as reusable system context. |
+| 26 | 021-abstract-vector-store-interface.md | Abstract vector store behind provider-agnostic interface | Done | Done/ | Depends on 2, 10. Low urgency — code quality / extensibility. Existing TODO in QdrantService.cs. |
 | 27 | 024-capture-attachments-and-tool-metadata.md | Capture file attachments and author/tool metadata | Deferred | TODO/ | Depends on 4, 7, 17. Deferred per ADR-006 — marginal value without whole-zip import. |
 | 28 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | Deferred | TODO/ | Depends on 3; first step is choosing the approach. Very low priority and can come later as gold plating. |
 

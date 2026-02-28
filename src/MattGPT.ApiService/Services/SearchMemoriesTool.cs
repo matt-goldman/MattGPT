@@ -13,7 +13,7 @@ namespace MattGPT.ApiService.Services;
 /// </summary>
 public class SearchMemoriesTool(
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
-    IQdrantService qdrantService,
+    IVectorStore vectorStore,
     IConversationRepository repository,
     IOptions<RagOptions> options,
     ILogger<SearchMemoriesTool> logger)
@@ -64,8 +64,8 @@ public class SearchMemoriesTool(
             var embeddings = await embeddingGenerator.GenerateAsync([query]);
             var queryVector = embeddings[0].Vector.ToArray();
 
-            // 2. Search Qdrant.
-            var searchResults = await qdrantService.SearchAsync(queryVector, limit);
+            // 2. Search vector store.
+            var searchResults = await vectorStore.SearchAsync(queryVector, limit);
 
             // 3. Apply minimum score threshold using MinScore (same threshold as WithPrompt mode).
             var relevant = searchResults
@@ -73,7 +73,7 @@ public class SearchMemoriesTool(
                 .ToList();
 
             logger.LogInformation(
-                "search_memories: {Total} results from Qdrant, {Relevant} above MinScore {MinScore:F2}.",
+                "search_memories: {Total} results from vector store, {Relevant} above MinScore {MinScore:F2}.",
                 searchResults.Count, relevant.Count, _options.MinScore);
 
             if (relevant.Count == 0)

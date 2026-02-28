@@ -1,6 +1,6 @@
 # 025 — Capture Citations and Content References
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 25  
 **Dependencies:** 4 (ChatGPT JSON parser), 7 (store conversations in MongoDB), 17 (export content analysis)
 
@@ -42,10 +42,10 @@ Content reference types (top 5): `hidden` (6,416), `attribution` (2,406), `group
 
 ## Acceptance Criteria
 
-- [ ] Citations are parsed from `metadata.citations[]` and stored on `StoredMessage`.
-- [ ] Content references are parsed from `metadata.content_references[]` and stored on `StoredMessage`.
-- [ ] File and web citations contribute to embedding text.
-- [ ] Existing tests pass; new tests for citation parsing.
+- [x] Citations are parsed from `metadata.citations[]` and stored on `StoredMessage`.
+- [x] Content references are parsed from `metadata.content_references[]` and stored on `StoredMessage`.
+- [x] File and web citations contribute to embedding text.
+- [x] Existing tests pass; new tests for citation parsing.
 
 ## Notes
 

@@ -1,6 +1,6 @@
 # 021 — Abstract Vector Store Behind Provider-Agnostic Interface
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 21
 **Dependencies:** 002 (Qdrant integration), 010 (embeddings in Qdrant)
 
@@ -35,11 +35,11 @@ There is an existing TODO comment in `QdrantService.cs` noting this.
 
 ## Acceptance Criteria
 
-- [ ] A provider-agnostic `IVectorStore` interface exists and is the only vector store abstraction referenced by business logic.
-- [ ] `QdrantVectorStore` implements `IVectorStore` and preserves all current behaviour.
-- [ ] The active vector store provider is selected via configuration.
-- [ ] All existing unit tests pass with updated fakes.
-- [ ] Adding a new vector store provider requires only a new implementation class and a `case` in the startup switch.
+- [x] A provider-agnostic `IVectorStore` interface exists and is the only vector store abstraction referenced by business logic.
+- [x] `QdrantVectorStore` implements `IVectorStore` and preserves all current behaviour.
+- [x] The active vector store provider is selected via configuration.
+- [x] All existing unit tests pass with updated fakes.
+- [x] Adding a new vector store provider requires only a new implementation class and a `case` in the startup switch.
 
 ## Notes
 

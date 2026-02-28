@@ -19,6 +19,7 @@ public class ImportProcessingService(
     ImportJobStore jobStore,
     ConversationParser parser,
     IConversationRepository repository,
+    IUserProfileRepository userProfileRepository,
     IServiceProvider serviceProvider,
     ILogger<ImportProcessingService> logger) : BackgroundService
 {
@@ -41,10 +42,27 @@ public class ImportProcessingService(
             {
                 await using var stream = File.OpenRead(request.TempFilePath);
 
+                double? latestProfileCreateTime = null;
+                string? latestProfileText = null;
+                string? latestProfileInstructions = null;
+
                 await foreach (var conversation in parser.ParseAsync(stream, stoppingToken))
                 {
                     try
                     {
+                        // Scan for user_editable_context messages to extract the latest user profile.
+                        foreach (var message in conversation.Messages)
+                        {
+                            if (message.Content.ContentType == "user_editable_context" &&
+                                message.CreateTime.HasValue &&
+                                (!latestProfileCreateTime.HasValue || message.CreateTime > latestProfileCreateTime))
+                            {
+                                latestProfileCreateTime = message.CreateTime;
+                                latestProfileText = message.Content.UserProfile;
+                                latestProfileInstructions = message.Content.UserInstructions;
+                            }
+                        }
+
                         // Upsert the conversation into MongoDB, then count it.
                         await repository.UpsertAsync(StoredConversation.From(conversation), stoppingToken);
                         job.ProcessedConversations++;
@@ -55,6 +73,12 @@ public class ImportProcessingService(
                         job.ErrorCount++;
                         logger.LogWarning(ex, "Error processing conversation in job {JobId}; continuing.", request.JobId);
                     }
+                }
+
+                // Store latest user profile if found across the import.
+                if (latestProfileCreateTime.HasValue)
+                {
+                    await TryUpdateUserProfileAsync(latestProfileCreateTime.Value, latestProfileText, latestProfileInstructions, stoppingToken);
                 }
 
                 job.Status = ImportJobStatus.Complete;
@@ -142,6 +166,35 @@ public class ImportProcessingService(
                 "Auto-embedding failed for job {JobId}. Conversations are imported but not yet searchable. " +
                 "Run POST /conversations/embed manually to retry.",
                 jobId);
+        }
+    }
+
+    private async Task TryUpdateUserProfileAsync(double createTime, string? profileText, string? instructions, CancellationToken ct)
+    {
+        try
+        {
+            var existing = await userProfileRepository.GetAsync(ct);
+            if (existing?.SourceCreateTime >= createTime)
+            {
+                logger.LogDebug(
+                    "Skipping user profile update: existing profile (create_time={Existing}) is newer than found profile (create_time={Found}).",
+                    existing.SourceCreateTime, createTime);
+                return;
+            }
+
+            await userProfileRepository.UpsertAsync(new Models.UserProfile
+            {
+                UserProfileText = profileText,
+                UserInstructions = instructions,
+                SourceCreateTime = createTime,
+                LastUpdated = DateTimeOffset.UtcNow,
+            }, ct);
+
+            logger.LogInformation("Updated user profile from import (source create_time={CreateTime}).", createTime);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to update user profile during import.");
         }
     }
 

@@ -41,9 +41,9 @@ internal sealed class ThrowingEmbeddingGenerator(Exception exception) : IEmbeddi
 }
 
 /// <summary>
-/// Fake IQdrantService that records upserts for assertion in tests.
+/// Fake IVectorStore that records upserts for assertion in tests.
 /// </summary>
-internal sealed class FakeQdrantService : IQdrantService
+internal sealed class FakeVectorStore : IVectorStore
 {
     public List<(StoredConversation Conversation, float[] Vector)> Upserted { get; } = new();
 
@@ -53,25 +53,25 @@ internal sealed class FakeQdrantService : IQdrantService
         return Task.CompletedTask;
     }
 
-    public Task<IReadOnlyList<QdrantSearchResult>> SearchAsync(
+    public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<QdrantSearchResult>>([]);
+        => Task.FromResult<IReadOnlyList<VectorSearchResult>>([]);
 
     public Task<ulong?> GetPointCountAsync(CancellationToken ct = default)
         => Task.FromResult<ulong?>((ulong)Upserted.Count);
 }
 
 /// <summary>
-/// Fake IQdrantService that always throws on upsert.
+/// Fake IVectorStore that always throws on upsert.
 /// </summary>
-internal sealed class ThrowingQdrantService : IQdrantService
+internal sealed class ThrowingVectorStore : IVectorStore
 {
     public Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
-        => throw new InvalidOperationException("Qdrant unavailable");
+        => throw new InvalidOperationException("Vector store unavailable");
 
-    public Task<IReadOnlyList<QdrantSearchResult>> SearchAsync(
+    public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<QdrantSearchResult>>([]);
+        => Task.FromResult<IReadOnlyList<VectorSearchResult>>([]);
 
     public Task<ulong?> GetPointCountAsync(CancellationToken ct = default)
         => Task.FromResult<ulong?>(null);
@@ -115,7 +115,7 @@ public class EmbeddingServiceTests
         repository.Seed([MakeConversation("c1")]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var qdrant = new FakeQdrantService();
+        var qdrant = new FakeVectorStore();
         var service = new EmbeddingService(repository, generator, qdrant, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
@@ -138,7 +138,7 @@ public class EmbeddingServiceTests
         repository.Seed([MakeConversation("c1", summary: "A test summary.", status: ConversationProcessingStatus.Summarised)]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var qdrant = new FakeQdrantService();
+        var qdrant = new FakeVectorStore();
         var service = new EmbeddingService(repository, generator, qdrant, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
@@ -154,7 +154,7 @@ public class EmbeddingServiceTests
         repository.Seed([MakeConversation("c1")]);
 
         var generator = new ThrowingEmbeddingGenerator(new InvalidOperationException("Model unavailable"));
-        var service = new EmbeddingService(repository, generator, new FakeQdrantService(), NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -172,7 +172,7 @@ public class EmbeddingServiceTests
         repository.Seed([MakeConversation("c1", title: null, summary: null, messageCount: 0)]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var service = new EmbeddingService(repository, generator, new FakeQdrantService(), NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -192,7 +192,7 @@ public class EmbeddingServiceTests
         repository.Seed([MakeConversation("c1", summary: null, messageCount: 3)]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var qdrant = new FakeQdrantService();
+        var qdrant = new FakeVectorStore();
         var service = new EmbeddingService(repository, generator, qdrant, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
@@ -218,7 +218,7 @@ public class EmbeddingServiceTests
             callCount++;
             return [new Embedding<float>(TestVector)];
         });
-        var service = new EmbeddingService(repository, generator, new FakeQdrantService(), NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -237,7 +237,7 @@ public class EmbeddingServiceTests
         ]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var service = new EmbeddingService(repository, generator, new FakeQdrantService(), NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -263,7 +263,7 @@ public class EmbeddingServiceTests
                 throw new InvalidOperationException("Embedding error on second call");
             return [new Embedding<float>(TestVector)];
         });
-        var service = new EmbeddingService(repository, generator, new FakeQdrantService(), NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -278,7 +278,7 @@ public class EmbeddingServiceTests
     {
         var repository = new FakeConversationRepository();
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var service = new EmbeddingService(repository, generator, new FakeQdrantService(), NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -293,7 +293,7 @@ public class EmbeddingServiceTests
         var repository = new FakeConversationRepository();
         repository.Seed([MakeConversation("c1")]);
 
-        var qdrant = new FakeQdrantService();
+        var qdrant = new FakeVectorStore();
         var generator = new FakeEmbeddingGenerator(TestVector);
         var service = new EmbeddingService(repository, generator, qdrant, NullLogger<EmbeddingService>.Instance);
 
@@ -311,7 +311,7 @@ public class EmbeddingServiceTests
         repository.Seed([MakeConversation("c1")]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var service = new EmbeddingService(repository, generator, new ThrowingQdrantService(), NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new ThrowingVectorStore(), NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -328,7 +328,7 @@ public class EmbeddingServiceTests
         var repository = new FakeConversationRepository();
         repository.Seed([MakeConversation("c1", title: null, summary: null, messageCount: 0)]);
 
-        var qdrant = new FakeQdrantService();
+        var qdrant = new FakeVectorStore();
         var generator = new FakeEmbeddingGenerator(TestVector);
         var service = new EmbeddingService(repository, generator, qdrant, NullLogger<EmbeddingService>.Instance);
 
@@ -466,5 +466,35 @@ public class EmbeddingServiceTests
         Assert.Contains("A summary.", text);
         Assert.DoesNotContain("Hidden", text);
         Assert.DoesNotContain("Also hidden", text);
+    }
+
+    [Fact]
+    public void BuildEmbeddingText_WithCitations_IncludesCitationContext()
+    {
+        var conv = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Research",
+            LinearisedMessages =
+            [
+                new StoredMessage
+                {
+                    Id = "m1",
+                    Role = "assistant",
+                    ContentType = "text",
+                    Parts = ["Here is the information."],
+                    Citations =
+                    [
+                        new StoredCitation { Name = "Wikipedia: AI", Source = "https://en.wikipedia.org/wiki/AI" },
+                        new StoredCitation { Name = null, Source = "https://example.com/article" },
+                    ],
+                },
+            ],
+        };
+
+        var text = EmbeddingService.BuildEmbeddingText(conv);
+
+        Assert.Contains("[Cited: Wikipedia: AI]", text);
+        Assert.Contains("[Cited: https://example.com/article]", text);
     }
 }
