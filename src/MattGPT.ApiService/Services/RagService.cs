@@ -31,7 +31,7 @@ public record RagStreamChunk(string? Text, IReadOnlyList<ChatSource>? Sources = 
 /// </summary>
 public class RagService(
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
-    IQdrantService qdrantService,
+    IVectorStore vectorStore,
     IConversationRepository repository,
     IChatClient chatClient,
     IOptions<RagOptions> options,
@@ -152,7 +152,7 @@ public class RagService(
     /// In <see cref="RagMode.ToolsOnly"/> mode, skips retrieval entirely.
     /// In <see cref="RagMode.Auto"/> mode, uses lighter parameters (fewer results, higher threshold).
     /// </summary>
-    private async Task<(IReadOnlyList<QdrantSearchResult> Relevant, IReadOnlyDictionary<string, StoredConversation> ConversationLookup)> AutoRetrieveAsync(
+    private async Task<(IReadOnlyList<VectorSearchResult> Relevant, IReadOnlyDictionary<string, StoredConversation> ConversationLookup)> AutoRetrieveAsync(
         string query, CancellationToken ct)
     {
         var topK = EffectiveTopK;
@@ -169,7 +169,7 @@ public class RagService(
         logger.LogDebug("Generated query embedding with {Dimensions} dimensions.", queryVector.Length);
 
         // 2. Retrieve top-K candidates from Qdrant.
-        var searchResults = await qdrantService.SearchAsync(queryVector, topK, ct);
+        var searchResults = await vectorStore.SearchAsync(queryVector, topK, ct);
 
         if (searchResults.Count == 0)
         {
@@ -228,7 +228,7 @@ public class RagService(
     /// Merges sources from automatic retrieval with any sources from tool invocations.
     /// De-duplicates by conversation ID, preferring the higher score.
     /// </summary>
-    private IReadOnlyList<ChatSource> CollectAllSources(IReadOnlyList<QdrantSearchResult> autoRetrieved)
+    private IReadOnlyList<ChatSource> CollectAllSources(IReadOnlyList<VectorSearchResult> autoRetrieved)
     {
         var sourcesDict = new Dictionary<string, ChatSource>();
 
@@ -260,7 +260,7 @@ public class RagService(
     /// </summary>
     public static List<AIChatMessage> BuildMessages(
         string query,
-        IReadOnlyList<QdrantSearchResult> context,
+        IReadOnlyList<VectorSearchResult> context,
         IReadOnlyDictionary<string, StoredConversation>? fullConversations = null,
         ChatSession? session = null,
         int recentMessageCount = 6)

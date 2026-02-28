@@ -42,7 +42,7 @@ public static class DiagnosticsEndpoints
         // RAG pipeline health / diagnostics endpoint.
         app.MapGet("/rag/diagnostics", async (
             IConversationRepository repository,
-            IQdrantService qdrantService,
+            IVectorStore vectorStore,
             IOptions<RagOptions> ragOptions,
             IOptions<LlmOptions> llmOptions,
             CancellationToken ct) =>
@@ -58,7 +58,7 @@ public static class DiagnosticsEndpoints
             string? qdrantError = null;
             try
             {
-                qdrantPoints = await qdrantService.GetPointCountAsync(ct);
+                qdrantPoints = await vectorStore.GetPointCountAsync(ct);
             }
             catch (Exception ex)
             {

@@ -8,14 +8,14 @@ using Microsoft.Extensions.Options;
 namespace MattGPT.ApiService.Tests;
 
 /// <summary>
-/// Fake IQdrantService that returns configured search results.
+/// Fake IVectorStore that returns configured search results.
 /// </summary>
-internal sealed class FakeSearchQdrantService(IReadOnlyList<QdrantSearchResult> results) : IQdrantService
+internal sealed class FakeSearchVectorStore(IReadOnlyList<VectorSearchResult> results) : IVectorStore
 {
     public Task UpsertAsync(MattGPT.ApiService.Models.StoredConversation conversation, float[] vector, CancellationToken ct = default)
         => Task.CompletedTask;
 
-    public Task<IReadOnlyList<QdrantSearchResult>> SearchAsync(
+    public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, CancellationToken ct = default)
         => Task.FromResult(results);
 
@@ -50,7 +50,7 @@ public class RagServiceTests
     }
 
     private static RagService CreateService(
-        IReadOnlyList<QdrantSearchResult> searchResults,
+        IReadOnlyList<VectorSearchResult> searchResults,
         string llmResponse = "Test answer.",
         RagOptions? ragOptions = null,
         FakeConversationRepository? repository = null,
@@ -61,7 +61,7 @@ public class RagServiceTests
         var chatOpts = Options.Create(chatOptions ?? new ChatSessionOptions());
         return new RagService(
             new FakeEmbeddingGenerator(TestVector),
-            new FakeSearchQdrantService(searchResults),
+            new FakeSearchVectorStore(searchResults),
             repository ?? new FakeConversationRepository(),
             new FakeChatClient(llmResponse),
             options,
@@ -93,7 +93,7 @@ public class RagServiceTests
     [Fact]
     public async Task ChatAsync_ResultsAboveThreshold_IncludedInSources()
     {
-        var results = new List<QdrantSearchResult>
+        var results = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "Title 1", "Summary 1"),
             new("c2", 0.7f, "Title 2", "Summary 2"),
@@ -112,7 +112,7 @@ public class RagServiceTests
     [Fact]
     public async Task ChatAsync_ResultsBelowThreshold_ExcludedFromSources()
     {
-        var results = new List<QdrantSearchResult>
+        var results = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "Title 1", "Summary 1"),
             new("c2", 0.3f, "Title 2", "Summary 2"), // below 0.5 threshold
@@ -130,7 +130,7 @@ public class RagServiceTests
     [Fact]
     public async Task ChatAsync_AllResultsBelowThreshold_ReturnsEmptySources()
     {
-        var results = new List<QdrantSearchResult>
+        var results = new List<VectorSearchResult>
         {
             new("c1", 0.2f, "Title 1", "Summary 1"),
             new("c2", 0.1f, "Title 2", "Summary 2"),
@@ -145,7 +145,7 @@ public class RagServiceTests
     [Fact]
     public async Task ChatAsync_SourcesContainCorrectMetadata()
     {
-        var results = new List<QdrantSearchResult>
+        var results = new List<VectorSearchResult>
         {
             new("conv-123", 0.85f, "My Title", "My Summary"),
         };
@@ -165,7 +165,7 @@ public class RagServiceTests
     [Fact]
     public void BuildMessages_WithContext_IncludesRetrievedConversations()
     {
-        var context = new List<QdrantSearchResult>
+        var context = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "Test Title", "Test Summary"),
         };
@@ -201,7 +201,7 @@ public class RagServiceTests
     [Fact]
     public void BuildMessages_MultipleContextItems_AllIncluded()
     {
-        var context = new List<QdrantSearchResult>
+        var context = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "Title A", "Summary A"),
             new("c2", 0.8f, "Title B", "Summary B"),
@@ -222,7 +222,7 @@ public class RagServiceTests
     [Fact]
     public void BuildMessages_SystemPromptFramesContextAsMemory()
     {
-        var context = new List<QdrantSearchResult>
+        var context = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "Title", "Summary"),
         };
@@ -240,7 +240,7 @@ public class RagServiceTests
     [Fact]
     public void BuildMessages_IncludesFullConversationExcerpt()
     {
-        var context = new List<QdrantSearchResult>
+        var context = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "Coding Help", "Helped with Python"),
         };
@@ -325,7 +325,7 @@ public class RagServiceTests
     [Fact]
     public void BuildMessages_WithSessionAndRag_CombinesAllTiers()
     {
-        var context = new List<QdrantSearchResult>
+        var context = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "RAG Title", "RAG Summary"),
         };
@@ -491,7 +491,7 @@ public class RagServiceTests
         // In ToolsOnly mode, even if Qdrant has results, auto-retrieval should be skipped
         // (EffectiveTopK = 0), so sources should be empty (no tool was actually called
         // since our FakeChatClient doesn't call tools).
-        var results = new List<QdrantSearchResult>
+        var results = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "Title 1", "Summary 1"),
         };
@@ -507,7 +507,7 @@ public class RagServiceTests
     {
         // Auto mode uses AutoTopK=2 and AutoMinScore=0.65.
         // A result with score 0.6 should be excluded (below 0.65 threshold).
-        var results = new List<QdrantSearchResult>
+        var results = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "Title 1", "Summary 1"),
             new("c2", 0.6f, "Title 2", "Summary 2"), // below auto threshold of 0.65
@@ -533,7 +533,7 @@ public class RagServiceTests
     {
         // WithPrompt mode uses TopK=5 and MinScore=0.5.
         // A result with score 0.6 should be included (above 0.5 threshold).
-        var results = new List<QdrantSearchResult>
+        var results = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "Title 1", "Summary 1"),
             new("c2", 0.6f, "Title 2", "Summary 2"), // above WithPrompt threshold of 0.5
@@ -554,12 +554,12 @@ public class RagServiceTests
     }
 
     private static SearchMemoriesTool CreateSearchMemoriesTool(
-        IReadOnlyList<QdrantSearchResult>? results = null,
+        IReadOnlyList<VectorSearchResult>? results = null,
         FakeConversationRepository? repository = null)
     {
         return new SearchMemoriesTool(
             new FakeEmbeddingGenerator(TestVector),
-            new FakeSearchQdrantService(results ?? []),
+            new FakeSearchVectorStore(results ?? []),
             repository ?? new FakeConversationRepository(),
             Options.Create(new RagOptions()),
             NullLogger<SearchMemoriesTool>.Instance);

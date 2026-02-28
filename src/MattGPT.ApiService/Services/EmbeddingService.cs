@@ -23,7 +23,7 @@ public record EmbeddingProgress(int Embedded, int Errors, int Skipped);
 public class EmbeddingService(
     IConversationRepository repository,
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
-    IQdrantService qdrantService,
+    IVectorStore vectorStore,
     ILogger<EmbeddingService> logger)
 {
     /// <summary>Number of conversations to load per batch from MongoDB.</summary>
@@ -117,7 +117,7 @@ public class EmbeddingService(
                 ConversationProcessingStatus.Embedded,
                 ct);
 
-            await TryUpsertQdrantAsync(conversation, vector, ct);
+            await TryUpsertVectorStoreAsync(conversation, vector, ct);
 
             logger.LogDebug(
                 "Embedded conversation {Id} ({Title}), dimensions: {Dims}, text length: {TextLen}.",
@@ -181,17 +181,17 @@ public class EmbeddingService(
         return sb.ToString().Trim();
     }
 
-    private async Task TryUpsertQdrantAsync(StoredConversation conversation, float[] vector, CancellationToken ct)
+    private async Task TryUpsertVectorStoreAsync(StoredConversation conversation, float[] vector, CancellationToken ct)
     {
         try
         {
-            await qdrantService.UpsertAsync(conversation, vector, ct);
+            await vectorStore.UpsertAsync(conversation, vector, ct);
         }
         catch (Exception ex)
         {
             logger.LogWarning(
                 ex,
-                "Failed to upsert conversation {Id} into Qdrant; the embedding is stored in MongoDB.",
+                "Failed to upsert conversation {Id} into vector store; the embedding is stored in MongoDB.",
                 conversation.ConversationId);
         }
     }
