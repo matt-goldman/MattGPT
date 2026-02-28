@@ -24,7 +24,9 @@ public class VectorStoreOptions
     public string? ApiKey { get; set; }
 
     /// <summary>
-    /// Index or collection name override. Defaults to "conversations" for all providers.
+    /// Index or collection name. Defaults to "conversations" for all providers.
+    /// Currently, only the Pinecone provider honors this as an override; other providers may use
+    /// provider-specific, hard-coded collection or index names.
     /// For Pinecone, this is the index name (must be pre-created in the Pinecone console).
     /// </summary>
     public string IndexName { get; set; } = "conversations";
