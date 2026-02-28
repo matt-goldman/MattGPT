@@ -1,6 +1,6 @@
 # 028 — Extract User Profile from Custom Instructions
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 28  
 **Dependencies:** 17 (export content analysis), 23 (handle non-text content types)
 
@@ -28,10 +28,10 @@ These are identical across most conversations (the same custom instructions are 
 
 ## Acceptance Criteria
 
-- [ ] `user_editable_context` messages are detected during import.
-- [ ] The latest `user_profile` and `user_instructions` are stored as a user profile document.
-- [ ] The user profile is available for use as system context in chat sessions.
-- [ ] Custom instructions are not included in per-conversation embedding text.
+- [x] `user_editable_context` messages are detected during import.
+- [x] The latest `user_profile` and `user_instructions` are stored as a user profile document.
+- [x] The user profile is available for use as system context in chat sessions.
+- [x] Custom instructions are not included in per-conversation embedding text.
 
 ## Notes
 

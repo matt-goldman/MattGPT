@@ -37,7 +37,8 @@ public class RagService(
     IOptions<RagOptions> options,
     IOptions<ChatSessionOptions> chatOptions,
     ILogger<RagService> logger,
-    SearchMemoriesTool? searchMemoriesTool = null)
+    SearchMemoriesTool? searchMemoriesTool = null,
+    IUserProfileRepository? userProfileRepository = null)
 {
     /// <summary>
     /// Maximum number of message characters to include per conversation in the context window.
@@ -93,19 +94,24 @@ public class RagService(
         // 1. Automatic retrieval (full, light, or none depending on mode).
         var (relevant, conversationLookup) = await AutoRetrieveAsync(query, ct);
 
-        // 2. Build the augmented prompt.
-        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount);
+        // 2. Fetch user profile for system context.
+        var userProfile = userProfileRepository is not null
+            ? await userProfileRepository.GetAsync(ct)
+            : null;
+
+        // 3. Build the augmented prompt.
+        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile);
 
         var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
         logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
 
-        // 3. Call the LLM (with tools if mode supports it).
+        // 4. Call the LLM (with tools if mode supports it).
         var chatOptions = BuildToolChatOptions();
         var response = await chatClient.GetResponseAsync(messages, chatOptions, ct);
 
         logger.LogDebug("LLM response length: {ResponseLength} chars.", response.Text?.Length ?? 0);
 
-        // 4. Merge sources from auto-retrieval and any tool invocations.
+        // 5. Merge sources from auto-retrieval and any tool invocations.
         var sources = CollectAllSources(relevant);
 
         return new RagChatResponse(response.Text ?? string.Empty, sources);
@@ -125,13 +131,18 @@ public class RagService(
         // 1. Automatic retrieval (full, light, or none depending on mode).
         var (relevant, conversationLookup) = await AutoRetrieveAsync(query, ct);
 
-        // 2. Build the augmented prompt.
-        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount);
+        // 2. Fetch user profile for system context.
+        var userProfile = userProfileRepository is not null
+            ? await userProfileRepository.GetAsync(ct)
+            : null;
+
+        // 3. Build the augmented prompt.
+        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile);
 
         var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
         logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
 
-        // 3. Stream from the LLM (with tools if mode supports it).
+        // 4. Stream from the LLM (with tools if mode supports it).
         var chatOptions = BuildToolChatOptions();
         await foreach (var update in chatClient.GetStreamingResponseAsync(messages, chatOptions, ct))
         {
@@ -263,7 +274,8 @@ public class RagService(
         IReadOnlyList<VectorSearchResult> context,
         IReadOnlyDictionary<string, StoredConversation>? fullConversations = null,
         ChatSession? session = null,
-        int recentMessageCount = 6)
+        int recentMessageCount = 6,
+        UserProfile? userProfile = null)
     {
         var messages = new List<AIChatMessage>();
 
@@ -276,6 +288,25 @@ public class RagService(
             If the memories contain code, technical decisions, or project context, use that knowledge as if you were the assistant in those original conversations.
             If no relevant memories are found, answer from general knowledge but let the user know you don't have any relevant memories on that topic.
             """);
+
+        // --- User profile context (custom instructions) ---
+        if (userProfile is not null &&
+            (!string.IsNullOrWhiteSpace(userProfile.UserProfileText) || !string.IsNullOrWhiteSpace(userProfile.UserInstructions)))
+        {
+            system.AppendLine();
+            system.AppendLine("=== USER CONTEXT ===");
+            if (!string.IsNullOrWhiteSpace(userProfile.UserProfileText))
+            {
+                system.AppendLine("About the user:");
+                system.AppendLine(userProfile.UserProfileText);
+            }
+            if (!string.IsNullOrWhiteSpace(userProfile.UserInstructions))
+            {
+                system.AppendLine("User's preferences for responses:");
+                system.AppendLine(userProfile.UserInstructions);
+            }
+            system.AppendLine("=== END USER CONTEXT ===");
+        }
 
         if (context.Count > 0)
         {

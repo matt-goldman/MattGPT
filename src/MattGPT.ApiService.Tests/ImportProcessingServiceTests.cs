@@ -8,8 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MattGPT.ApiService.Tests;
 
 /// <summary>No-op repository used in unit tests that do not require MongoDB.</summary>
-internal sealed class FakeConversationRepository : IConversationRepository
-{
+internal sealed class FakeConversationRepository : IConversationRepository{
     public List<StoredConversation> Upserted { get; } = new();
     public List<(string Id, string? Summary, ConversationProcessingStatus Status)> SummaryUpdates { get; } = new();
     public List<(string Id, float[]? Embedding, ConversationProcessingStatus Status)> EmbeddingUpdates { get; } = new();
@@ -104,6 +103,21 @@ internal sealed class FakeConversationRepository : IConversationRepository
         => Task.FromResult((_conversations.ToList(), (long)_conversations.Count));
 }
 
+/// <summary>In-memory user profile repository for unit tests.</summary>
+internal sealed class FakeUserProfileRepository : IUserProfileRepository
+{
+    public UserProfile? Stored { get; private set; }
+
+    public Task<UserProfile?> GetAsync(CancellationToken ct = default)
+        => Task.FromResult(Stored);
+
+    public Task UpsertAsync(UserProfile profile, CancellationToken ct = default)
+    {
+        Stored = profile;
+        return Task.CompletedTask;
+    }
+}
+
 public class ImportJobStoreTests
 {
     [Fact]
@@ -172,7 +186,7 @@ public class ImportProcessingServiceTests
         var parser = new ConversationParser();
         var repository = new FakeConversationRepository();
         var logger = NullLogger<ImportProcessingService>.Instance;
-        var service = new ImportProcessingService(channel, store, parser, repository, EmptyServiceProvider(), logger);
+        var service = new ImportProcessingService(channel, store, parser, repository, new FakeUserProfileRepository(), EmptyServiceProvider(), logger);
 
         var json = """
             [
@@ -226,7 +240,7 @@ public class ImportProcessingServiceTests
         var parser = new ConversationParser();
         var repository = new FakeConversationRepository();
         var logger = NullLogger<ImportProcessingService>.Instance;
-        var service = new ImportProcessingService(channel, store, parser, repository, EmptyServiceProvider(), logger);
+        var service = new ImportProcessingService(channel, store, parser, repository, new FakeUserProfileRepository(), EmptyServiceProvider(), logger);
 
         var json = """
             [
@@ -283,7 +297,7 @@ public class ImportProcessingServiceTests
         var parser = new ConversationParser();
         var repository = new FakeConversationRepository();
         var logger = NullLogger<ImportProcessingService>.Instance;
-        var service = new ImportProcessingService(channel, store, parser, repository, EmptyServiceProvider(), logger);
+        var service = new ImportProcessingService(channel, store, parser, repository, new FakeUserProfileRepository(), EmptyServiceProvider(), logger);
 
         var tempPath = Path.GetTempFileName();
         await File.WriteAllTextAsync(tempPath, "NOT VALID JSON {{{{");
@@ -318,7 +332,7 @@ public class ImportProcessingServiceTests
         var parser = new ConversationParser();
         var repository = new FakeConversationRepository();
         var logger = NullLogger<ImportProcessingService>.Instance;
-        var service = new ImportProcessingService(channel, store, parser, repository, EmptyServiceProvider(), logger);
+        var service = new ImportProcessingService(channel, store, parser, repository, new FakeUserProfileRepository(), EmptyServiceProvider(), logger);
 
         var tempPath = Path.GetTempFileName();
         await File.WriteAllTextAsync(tempPath, "[]");
