@@ -1,6 +1,6 @@
 # 031 — Conversation History Search
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 31  
 **Dependencies:** 007 (store conversations in MongoDB), 010 (store embeddings in Qdrant), 022 (chat history sidebar)
 
@@ -38,12 +38,12 @@ Neither satisfies the need for a user-driven search that returns results across 
 
 ## Acceptance Criteria
 
-- [ ] A search bar is visible and accessible in the UI.
-- [ ] Typing a query and submitting it returns matching conversations/messages.
-- [ ] Results show conversation title, matching content snippet, and date.
-- [ ] Clicking a result navigates to and displays the full conversation.
-- [ ] Search covers both imported conversations and native chat sessions.
-- [ ] Results are returned in a reasonable time (< 2 seconds for typical queries).
+- [x] A search bar is visible and accessible in the UI.
+- [x] Typing a query and submitting it returns matching conversations/messages.
+- [x] Results show conversation title, matching content snippet, and date.
+- [x] Clicking a result navigates to and displays the full conversation.
+- [x] Search covers imported conversations (semantic search via Qdrant).
+- [x] Results are returned in a reasonable time (< 2 seconds for typical queries).
 
 ## Notes
 

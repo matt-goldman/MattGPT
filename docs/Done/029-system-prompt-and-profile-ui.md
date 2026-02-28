@@ -1,6 +1,6 @@
 # 029 — System Prompt and User Profile UI
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 29  
 **Dependencies:** 028 (extract user profile), 012 (chat UI)
 
@@ -34,13 +34,13 @@ ADR-002 acknowledged that building a custom Blazor UI means features like settin
 
 ## Acceptance Criteria
 
-- [ ] `GET /user-profile` returns the current user profile.
-- [ ] `PUT /user-profile` updates the user profile fields.
-- [ ] `GET /system-prompt` returns the current system prompt (stored, not hardcoded).
-- [ ] `PUT /system-prompt` updates the system prompt.
-- [ ] A `/settings` page exists in the Blazor UI showing editable system prompt, user profile, and user instructions.
-- [ ] Changes made on the settings page are persisted and take effect in subsequent chat sessions.
-- [ ] A "Settings" link appears in the navigation menu.
+- [x] `GET /user-profile` returns the current user profile.
+- [x] `PUT /user-profile` updates the user profile fields.
+- [x] `GET /system-prompt` returns the current system prompt (stored, not hardcoded).
+- [x] `PUT /system-prompt` updates the system prompt.
+- [x] A `/settings` page exists in the Blazor UI showing editable system prompt, user profile, and user instructions.
+- [x] Changes made on the settings page are persisted and take effect in subsequent chat sessions.
+- [x] A "Settings" link appears in the navigation menu.
 
 ## Notes
 

@@ -1,6 +1,6 @@
 # 035 — Auto-Scroll Chat to Bottom
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 35  
 **Dependencies:** 012 (chat UI)
 
@@ -31,11 +31,11 @@ This is particularly noticeable when:
 
 ## Acceptance Criteria
 
-- [ ] Sending a message scrolls the chat area to the bottom.
-- [ ] Streaming response tokens keep the view scrolled to the bottom.
-- [ ] Manually scrolling up pauses auto-scroll; scrolling back to the bottom resumes it.
-- [ ] Loading a conversation (imported or native) scrolls to the bottom.
-- [ ] Scrolling is smooth and does not cause visual jank.
+- [x] Sending a message scrolls the chat area to the bottom.
+- [x] Streaming response tokens keep the view scrolled to the bottom.
+- [x] Manually scrolling up pauses auto-scroll; scrolling back to the bottom resumes it.
+- [x] Loading a conversation (imported or native) scrolls to the bottom.
+- [x] Scrolling is smooth and does not cause visual jank.
 
 ## Notes
 
