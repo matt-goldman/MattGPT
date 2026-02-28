@@ -1,6 +1,6 @@
 # 038 — Add Cloud LLM and Vector Store Provider Integrations
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 38
 **Dependencies:** 003 (LLM config), 021 (vector store abstraction)
 
@@ -22,17 +22,17 @@ See **ADR-007** for the rationale behind provider selection.
 
 | Provider | SDK / Package | `LLM:Provider` value |
 |----------|--------------|---------------------|
-| Anthropic (Claude) | `Anthropic` + `Microsoft.Extensions.AI` adapter | `Anthropic` |
+| Anthropic (Claude) | `Anthropic.SDK` (includes M.E.AI IChatClient adapter) | `Anthropic` |
 | OpenAI (direct) | `OpenAI` (already referenced) | `OpenAI` |
-| Google Gemini | `Google.Cloud.AIPlatform.V1` or `Mscc.GenerativeAI` + M.E.AI adapter | `Gemini` |
+| Google Gemini | `GeminiDotnet.Extensions.AI` (M.E.AI adapter) | `Gemini` |
 
 ### Vector Store Providers to Add
 
 | Provider | SDK / Package | `VectorStore:Provider` value |
 |----------|--------------|------------------------------|
-| Azure AI Search | `Azure.Search.Documents` + Aspire integration | `AzureAISearch` |
-| Pinecone | `Pinecone.NET` | `Pinecone` |
-| Weaviate | `WeaviateNET` or `Weaviate.Client` | `Weaviate` |
+| Azure AI Search | `Azure.Search.Documents` | `AzureAISearch` |
+| Pinecone | `Pinecone.Client` (official SDK) | `Pinecone` |
+| Weaviate | Raw REST/GraphQL via `HttpClient` | `Weaviate` |
 
 ### Implementation Approach
 
@@ -68,16 +68,16 @@ See **ADR-007** for the rationale behind provider selection.
 
 ## Acceptance Criteria
 
-- [ ] Setting `LLM:Provider=Anthropic` with a valid API key registers Claude as the chat and embedding provider.
-- [ ] Setting `LLM:Provider=OpenAI` with a valid API key registers OpenAI directly (not via Azure).
-- [ ] Setting `LLM:Provider=Gemini` with a valid API key registers Google Gemini.
-- [ ] Setting `VectorStore:Provider=AzureAISearch` registers Azure AI Search as the vector store.
-- [ ] Setting `VectorStore:Provider=Pinecone` registers Pinecone as the vector store.
-- [ ] Setting `VectorStore:Provider=Weaviate` registers Weaviate as the vector store.
-- [ ] Each new `IVectorStore` implementation passes basic upsert/search/count operations.
-- [ ] The AppHost correctly wires resources and passes configuration for each supported provider.
-- [ ] All existing unit tests pass without modification.
-- [ ] Provider selection remains purely config-driven — no code changes needed to switch providers.
+- [x] Setting `LLM:Provider=Anthropic` with a valid API key registers Claude as the chat and embedding provider.
+- [x] Setting `LLM:Provider=OpenAI` with a valid API key registers OpenAI directly (not via Azure).
+- [x] Setting `LLM:Provider=Gemini` with a valid API key registers Google Gemini.
+- [x] Setting `VectorStore:Provider=AzureAISearch` registers Azure AI Search as the vector store.
+- [x] Setting `VectorStore:Provider=Pinecone` registers Pinecone as the vector store.
+- [x] Setting `VectorStore:Provider=Weaviate` registers Weaviate as the vector store.
+- [x] Each new `IVectorStore` implementation passes basic upsert/search/count operations.
+- [x] The AppHost correctly wires resources and passes configuration for each supported provider.
+- [x] All existing unit tests pass without modification.
+- [x] Provider selection remains purely config-driven — no code changes needed to switch providers.
 
 ## Notes
 
