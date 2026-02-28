@@ -176,6 +176,23 @@ public class EmbeddingService(
             }
 
             sb.Append(line);
+
+            // Include citation context (file names and web source titles/URLs).
+            if (msg.Citations is { Count: > 0 })
+            {
+                foreach (var citation in msg.Citations)
+                {
+                    var citName = !string.IsNullOrWhiteSpace(citation.Name)
+                        ? citation.Name
+                        : !string.IsNullOrWhiteSpace(citation.Source) ? citation.Source : null;
+                    if (citName is not null)
+                    {
+                        var citLine = $"[Cited: {citName}]\n";
+                        if (sb.Length + citLine.Length <= MaxEmbeddingTextChars)
+                            sb.Append(citLine);
+                    }
+                }
+            }
         }
 
         return sb.ToString().Trim();

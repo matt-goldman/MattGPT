@@ -7,6 +7,29 @@ namespace MattGPT.ApiService.Models;
 /// <summary>Processing status of a stored conversation.</summary>
 public enum ConversationProcessingStatus { Imported, Summarised, Embedded, SummaryError, EmbeddingError }
 
+/// <summary>A citation stored with a message.</summary>
+public class StoredCitation
+{
+    public int? StartIndex { get; set; }
+    public int? EndIndex { get; set; }
+    public string? FormatType { get; set; }
+    public string? Type { get; set; }
+    public string? Name { get; set; }
+    public string? Source { get; set; }
+    public string? Text { get; set; }
+}
+
+/// <summary>A content reference stored with a message.</summary>
+public class StoredContentReference
+{
+    public string? Type { get; set; }
+    public string? Name { get; set; }
+    public string? MatchedText { get; set; }
+    public string? Snippet { get; set; }
+    public string? Url { get; set; }
+    public string? Source { get; set; }
+}
+
 /// <summary>
 /// A single message as stored in MongoDB, with parts normalised to strings.
 /// </summary>
@@ -42,6 +65,12 @@ public class StoredMessage
     /// </summary>
     public bool IsHidden { get; set; }
 
+    /// <summary>Citations parsed from message metadata. Null if none were present.</summary>
+    public List<StoredCitation>? Citations { get; set; }
+
+    /// <summary>Content references parsed from message metadata (hidden type excluded). Null if none were present.</summary>
+    public List<StoredContentReference>? ContentReferences { get; set; }
+
     internal static StoredMessage From(Message message)
     {
         var stored = new StoredMessage
@@ -55,6 +84,38 @@ public class StoredMessage
         };
 
         ExtractContent(message.Content, stored);
+
+        if (message.Metadata?.Citations is { Count: > 0 } citations)
+        {
+            stored.Citations = citations.Select(c => new StoredCitation
+            {
+                StartIndex = c.StartIndex,
+                EndIndex = c.EndIndex,
+                FormatType = c.FormatType,
+                Type = c.Metadata?.Type,
+                Name = c.Metadata?.Title,
+                Source = c.Metadata?.Url,
+                Text = c.Metadata?.Text,
+            }).ToList();
+        }
+
+        if (message.Metadata?.ContentReferences is { Count: > 0 } refs)
+        {
+            var nonHidden = refs.Where(r => r.Type != "hidden").ToList();
+            if (nonHidden.Count > 0)
+            {
+                stored.ContentReferences = nonHidden.Select(r => new StoredContentReference
+                {
+                    Type = r.Type,
+                    Name = r.Title,
+                    MatchedText = r.MatchedText,
+                    Snippet = r.Snippet,
+                    Url = r.Url,
+                    Source = r.Source,
+                }).ToList();
+            }
+        }
+
         return stored;
     }
 

@@ -467,4 +467,34 @@ public class EmbeddingServiceTests
         Assert.DoesNotContain("Hidden", text);
         Assert.DoesNotContain("Also hidden", text);
     }
+
+    [Fact]
+    public void BuildEmbeddingText_WithCitations_IncludesCitationContext()
+    {
+        var conv = new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Research",
+            LinearisedMessages =
+            [
+                new StoredMessage
+                {
+                    Id = "m1",
+                    Role = "assistant",
+                    ContentType = "text",
+                    Parts = ["Here is the information."],
+                    Citations =
+                    [
+                        new StoredCitation { Name = "Wikipedia: AI", Source = "https://en.wikipedia.org/wiki/AI" },
+                        new StoredCitation { Name = null, Source = "https://example.com/article" },
+                    ],
+                },
+            ],
+        };
+
+        var text = EmbeddingService.BuildEmbeddingText(conv);
+
+        Assert.Contains("[Cited: Wikipedia: AI]", text);
+        Assert.Contains("[Cited: https://example.com/article]", text);
+    }
 }

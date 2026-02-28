@@ -109,6 +109,66 @@ public class MessageMetadata
     /// <summary>Whether this message is hidden in the UI (common for system messages).</summary>
     [JsonPropertyName("is_visually_hidden_from_conversation")]
     public bool? IsVisuallyHiddenFromConversation { get; set; }
+
+    [JsonPropertyName("citations")]
+    public List<MessageCitation>? Citations { get; set; }
+
+    [JsonPropertyName("content_references")]
+    public List<MessageContentReference>? ContentReferences { get; set; }
+}
+
+/// <summary>A citation from message metadata.</summary>
+public class MessageCitation
+{
+    [JsonPropertyName("start_ix")]
+    public int? StartIndex { get; set; }
+
+    [JsonPropertyName("end_ix")]
+    public int? EndIndex { get; set; }
+
+    [JsonPropertyName("citation_format_type")]
+    public string? FormatType { get; set; }
+
+    [JsonPropertyName("metadata")]
+    public CitationMetadata? Metadata { get; set; }
+}
+
+/// <summary>Metadata within a citation.</summary>
+public class CitationMetadata
+{
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
+
+    [JsonPropertyName("title")]
+    public string? Title { get; set; }
+
+    [JsonPropertyName("url")]
+    public string? Url { get; set; }
+
+    [JsonPropertyName("text")]
+    public string? Text { get; set; }
+}
+
+/// <summary>A content reference from message metadata.</summary>
+public class MessageContentReference
+{
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
+
+    [JsonPropertyName("title")]
+    public string? Title { get; set; }
+
+    [JsonPropertyName("matched_text")]
+    public string? MatchedText { get; set; }
+
+    [JsonPropertyName("snippet")]
+    public string? Snippet { get; set; }
+
+    [JsonPropertyName("url")]
+    public string? Url { get; set; }
+
+    [JsonPropertyName("source")]
+    public string? Source { get; set; }
 }
 
 /// <summary>
