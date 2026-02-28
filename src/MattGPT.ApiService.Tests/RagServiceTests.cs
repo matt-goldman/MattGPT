@@ -604,6 +604,82 @@ public class RagServiceTests
     }
 
     [Fact]
+    public async Task ChatAsync_DiagnosticMode_ExtractsJsonPrefixedByProse()
+    {
+        var response = "Here is my response:\n{\"reasoning\":\"Thought about it.\",\"response\":\"The actual answer.\"}";
+        var service = CreateService([], llmResponse: response,
+            ragOptions: new RagOptions { DiagnosticMode = true });
+
+        var result = await service.ChatAsync("query");
+
+        Assert.Equal("The actual answer.", result.Answer);
+    }
+
+    [Fact]
+    public async Task ChatAsync_DiagnosticMode_ExtractsJsonWrappedInProse()
+    {
+        var response = "Sure! Here you go:\n{\"reasoning\":\"Memory search.\",\"response\":\"Found it.\"}\nHope that helps!";
+        var service = CreateService([], llmResponse: response,
+            ragOptions: new RagOptions { DiagnosticMode = true });
+
+        var result = await service.ChatAsync("query");
+
+        Assert.Equal("Found it.", result.Answer);
+    }
+
+    [Fact]
+    public async Task ChatAsync_DiagnosticMode_HandlesMarkdownContentGracefully()
+    {
+        // Simulate a model dumping retrieved markdown content instead of JSON.
+        var markdownDump = "---\ntitle: \"Starting with Why\"\ndate: 2025-08-15\n---\n\n## Episode X\n\n**Summary**\n\nSome content here.";
+        var service = CreateService([], llmResponse: markdownDump,
+            ragOptions: new RagOptions { DiagnosticMode = true });
+
+        var result = await service.ChatAsync("query");
+
+        // Falls back to raw text since no JSON is present at all.
+        Assert.Equal(markdownDump, result.Answer);
+    }
+
+    [Fact]
+    public void EnumerateJsonCandidates_PlainJson_ReturnsSingleCandidate()
+    {
+        var json = "{\"reasoning\":\"R\",\"response\":\"A\"}";
+        var candidates = RagService.EnumerateJsonCandidates(json).ToList();
+
+        Assert.Single(candidates);
+        Assert.Equal(json, candidates[0]);
+    }
+
+    [Fact]
+    public void EnumerateJsonCandidates_JsonWithProse_ReturnsBraceExtracted()
+    {
+        var input = "Here is the result: {\"reasoning\":\"R\",\"response\":\"A\"} done.";
+        var candidates = RagService.EnumerateJsonCandidates(input).ToList();
+
+        Assert.Contains("{\"reasoning\":\"R\",\"response\":\"A\"}", candidates);
+    }
+
+    [Fact]
+    public void EnumerateJsonCandidates_FencedJson_ReturnsFenceStripped()
+    {
+        var input = "```json\n{\"reasoning\":\"R\",\"response\":\"A\"}\n```";
+        var candidates = RagService.EnumerateJsonCandidates(input).ToList();
+
+        Assert.Contains("{\"reasoning\":\"R\",\"response\":\"A\"}", candidates);
+    }
+
+    [Fact]
+    public void EnumerateJsonCandidates_NoJson_StillReturnsRawTrimmed()
+    {
+        var input = "No JSON here at all, just plain text.";
+        var candidates = RagService.EnumerateJsonCandidates(input).ToList();
+
+        // At minimum the raw trimmed text is returned as a candidate.
+        Assert.Contains(input, candidates);
+    }
+
+    [Fact]
     public void BuildMessages_DiagnosticInstruction_ContainsBothFields()
     {
         Assert.Contains("\"reasoning\"", RagService.DiagnosticInstruction);

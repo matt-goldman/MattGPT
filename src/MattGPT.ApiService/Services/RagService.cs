@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using MattGPT.ApiService.Models;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -175,6 +176,15 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
     /// full response is JSON-parsed, the reasoning is logged, and only the <c>response</c>
     /// field is emitted as a single text chunk.
     /// </summary>
+    /// <remarks>
+    /// Uses a <see cref="Channel{T}"/> to decouple tool event callbacks from the LLM
+    /// streaming loop. The <see cref="FunctionInvokingChatClient"/> executes tools
+    /// between streaming rounds — without a channel, both <c>tool_start</c> and <c>tool_end</c>
+    /// events would be queued before any streaming update arrives, making the UI status
+    /// indicator flash invisibly. The channel allows <c>tool_start</c> to reach the consumer
+    /// immediately when the callback fires, while the tool's async work (embedding, search)
+    /// yields control between <c>OnStarted</c> and <c>OnCompleted</c>.
+    /// </remarks>
     public async IAsyncEnumerable<RagStreamChunk> ChatStreamAsync(
         string query,
         ChatSession? session = null,
@@ -205,64 +215,89 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         // 4. Stream from the LLM (with tools if mode supports it).
         var chatOptions = BuildToolChatOptions();
 
-        // Set up tool event callbacks to emit tool_start / tool_end chunks (issue 032).
-        // Tool events are queued synchronously during the FunctionInvokingChatClient loop
-        // and drained before each streaming token. ConcurrentQueue is used for safety
-        // in case the tool is invoked on a different thread by the middleware.
-        var pendingToolEvents = new System.Collections.Concurrent.ConcurrentQueue<RagStreamChunk>();
+        // Use a Channel to merge tool event callbacks with LLM streaming chunks.
+        // Tool callbacks fire synchronously inside FunctionInvokingChatClient's tool-call
+        // loop; the Channel makes tool_start available to the consumer immediately so the
+        // UI can show "Searching..." while the async tool work (embed → search → fetch)
+        // is still in progress.
+        var channel = Channel.CreateUnbounded<RagStreamChunk>(
+            new UnboundedChannelOptions { SingleReader = true });
+
         if (searchMemoriesTool is not null)
         {
             searchMemoriesTool.OnStarted = name =>
-                pendingToolEvents.Enqueue(new RagStreamChunk(null, ToolName: name, ToolStart: true));
+                channel.Writer.TryWrite(new RagStreamChunk(null, ToolName: name, ToolStart: true));
             searchMemoriesTool.OnCompleted = name =>
-                pendingToolEvents.Enqueue(new RagStreamChunk(null, ToolName: name, ToolEnd: true));
+                channel.Writer.TryWrite(new RagStreamChunk(null, ToolName: name, ToolEnd: true));
         }
 
-        if (_options.DiagnosticMode)
+        // Fire-and-forget producer: streams LLM tokens (and tool events via callbacks)
+        // into the channel. The consumer below reads and yields them.
+        var producerTask = ProduceStreamChunksAsync(
+            channel.Writer, messages, chatOptions, relevant, query, ct);
+
+        // Consumer: yield chunks to the caller (SSE endpoint) as they arrive.
+        await foreach (var chunk in channel.Reader.ReadAllAsync(ct))
         {
-            // In diagnostic mode, buffer the full response so we can parse and log the reasoning.
-            // Tool events are still emitted in real time so status indicators work normally.
-            var rawBuffer = new StringBuilder();
-            await foreach (var update in chatClient.GetStreamingResponseAsync(messages, chatOptions, ct))
-            {
-                while (pendingToolEvents.TryDequeue(out var toolEvent))
-                    yield return toolEvent;
-
-                if (!string.IsNullOrEmpty(update.Text))
-                    rawBuffer.Append(update.Text);
-            }
-
-            while (pendingToolEvents.TryDequeue(out var remainingEvent))
-                yield return remainingEvent;
-
-            // Parse the buffered JSON response, log reasoning, emit the response text.
-            var responseText = ExtractAndLogDiagnosticResponse(rawBuffer.ToString(), query);
-            if (!string.IsNullOrEmpty(responseText))
-                yield return new RagStreamChunk(responseText);
+            yield return chunk;
         }
-        else
-        {
-            await foreach (var update in chatClient.GetStreamingResponseAsync(messages, chatOptions, ct))
-            {
-                // Drain any tool events that arrived while the previous update was being processed.
-                while (pendingToolEvents.TryDequeue(out var toolEvent))
-                    yield return toolEvent;
 
-                if (!string.IsNullOrEmpty(update.Text))
+        // Propagate any exception from the producer that wasn't surfaced via
+        // ChannelWriter.Complete(exception).
+        await producerTask;
+    }
+
+    /// <summary>
+    /// Producer task for <see cref="ChatStreamAsync"/>: drives the LLM streaming loop
+    /// and writes all chunks (text tokens, diagnostic output, and final sources) into
+    /// the <paramref name="writer"/>. Tool events are written directly by the
+    /// <see cref="SearchMemoriesTool"/> callbacks on the same channel.
+    /// </summary>
+    private async Task ProduceStreamChunksAsync(
+        ChannelWriter<RagStreamChunk> writer,
+        List<AIChatMessage> messages,
+        ChatOptions? chatOptions,
+        IReadOnlyList<VectorSearchResult> relevant,
+        string query,
+        CancellationToken ct)
+    {
+        try
+        {
+            if (_options.DiagnosticMode)
+            {
+                // Buffer the full response so we can parse and log the reasoning.
+                // Tool events still flow through the channel in real time.
+                var rawBuffer = new StringBuilder();
+                await foreach (var update in chatClient.GetStreamingResponseAsync(messages, chatOptions, ct))
                 {
-                    yield return new RagStreamChunk(update.Text);
+                    if (!string.IsNullOrEmpty(update.Text))
+                        rawBuffer.Append(update.Text);
+                }
+
+                var responseText = ExtractAndLogDiagnosticResponse(rawBuffer.ToString(), query);
+                if (!string.IsNullOrEmpty(responseText))
+                    writer.TryWrite(new RagStreamChunk(responseText));
+            }
+            else
+            {
+                await foreach (var update in chatClient.GetStreamingResponseAsync(messages, chatOptions, ct))
+                {
+                    if (!string.IsNullOrEmpty(update.Text))
+                        writer.TryWrite(new RagStreamChunk(update.Text));
                 }
             }
 
-            // Drain any remaining tool events after the stream ends.
-            while (pendingToolEvents.TryDequeue(out var remainingEvent))
-                yield return remainingEvent;
+            // Final chunk carries the merged sources.
+            var sources = CollectAllSources(relevant);
+            writer.TryWrite(new RagStreamChunk(null, sources));
+
+            writer.Complete();
         }
-
-        // Final chunk carries the merged sources.
-        var sources = CollectAllSources(relevant);
-
-        yield return new RagStreamChunk(null, sources);
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error in LLM streaming producer.");
+            writer.TryComplete(ex);
+        }
     }
 
     /// <summary>
@@ -399,39 +434,97 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         if (string.IsNullOrWhiteSpace(rawText))
             return rawText;
 
-        // Strip common markdown fences some models add despite the instruction.
+        // Try a series of increasingly aggressive strategies to find the JSON object.
+        // Small models often ignore the "respond as JSON only" instruction and wrap valid
+        // JSON in prose, markdown fences, or other text.
+        foreach (var candidate in EnumerateJsonCandidates(rawText))
+        {
+            try
+            {
+                var doc = JsonSerializer.Deserialize<DiagnosticLlmResponse>(candidate, _diagnosticJsonOptions);
+                if (doc is not null && !string.IsNullOrWhiteSpace(doc.Response))
+                {
+                    logger.LogInformation(
+                        "[DIAGNOSTIC] Query: {Query}\n[DIAGNOSTIC] Reasoning: {Reasoning}",
+                        query,
+                        doc.Reasoning ?? "(none)");
+                    return doc.Response;
+                }
+            }
+            catch (JsonException)
+            {
+                // Try the next candidate.
+            }
+        }
+
+        logger.LogWarning(
+            "[DIAGNOSTIC] Could not extract diagnostic JSON from LLM response. " +
+            "The model may not reliably produce structured output — consider using a " +
+            "larger model or disabling DiagnosticMode. Returning raw text.\n" +
+            "[DIAGNOSTIC] Raw (first 500 chars): {Raw}",
+            rawText.Length > 500 ? rawText[..500] : rawText);
+        return rawText;
+    }
+
+    /// <summary>
+    /// Yields candidate JSON strings extracted from the LLM's raw text, from most-likely to least-likely.
+    /// </summary>
+    internal static IEnumerable<string> EnumerateJsonCandidates(string rawText)
+    {
         var trimmed = rawText.Trim();
+
+        // 1. Try the full trimmed text as-is (best case: model followed instructions perfectly).
+        yield return trimmed;
+
+        // 2. Strip markdown fences (```json ... ``` or ``` ... ```).
         if (trimmed.StartsWith("```"))
         {
-            var firstNewline = trimmed.IndexOf('\n');
-            if (firstNewline >= 0)
-                trimmed = trimmed[(firstNewline + 1)..];
-            if (trimmed.EndsWith("```"))
-                trimmed = trimmed[..^3].TrimEnd();
+            var stripped = StripMarkdownFences(trimmed);
+            if (stripped != trimmed)
+                yield return stripped;
         }
 
-        try
+        // 3. Find the first '{' and last '}' and try the substring between them.
+        //    This handles prose before/after the JSON (e.g. "Here is the response: {...} Hope that helps!").
+        var firstBrace = trimmed.IndexOf('{');
+        var lastBrace = trimmed.LastIndexOf('}');
+        if (firstBrace >= 0 && lastBrace > firstBrace)
         {
-            var doc = JsonSerializer.Deserialize<DiagnosticLlmResponse>(trimmed, _diagnosticJsonOptions);
-            if (doc is not null && !string.IsNullOrWhiteSpace(doc.Response))
+            var extracted = trimmed[firstBrace..(lastBrace + 1)];
+            if (extracted != trimmed)
+                yield return extracted;
+        }
+
+        // 4. Try the same brace-extraction after stripping markdown fences,
+        //    in case the JSON is inside a fenced block with extra text.
+        if (trimmed.StartsWith("```"))
+        {
+            var stripped = StripMarkdownFences(trimmed);
+            var fb = stripped.IndexOf('{');
+            var lb = stripped.LastIndexOf('}');
+            if (fb >= 0 && lb > fb)
             {
-                logger.LogInformation(
-                    "[DIAGNOSTIC] Query: {Query}\n[DIAGNOSTIC] Reasoning: {Reasoning}",
-                    query,
-                    doc.Reasoning ?? "(none)");
-                return doc.Response;
+                var extracted = stripped[fb..(lb + 1)];
+                yield return extracted;
             }
+        }
+    }
 
-            logger.LogWarning(
-                "[DIAGNOSTIC] Parsed JSON but 'response' field was empty. Raw: {Raw}", rawText);
-            return rawText;
-        }
-        catch (JsonException ex)
+    /// <summary>
+    /// Strips a leading <c>```[lang]</c> line and a trailing <c>```</c> from a markdown-fenced block.
+    /// </summary>
+    private static string StripMarkdownFences(string text)
+    {
+        var result = text;
+        if (result.StartsWith("```"))
         {
-            logger.LogWarning(ex,
-                "[DIAGNOSTIC] Failed to parse LLM response as JSON. Returning raw text. Raw: {Raw}", rawText);
-            return rawText;
+            var firstNewline = result.IndexOf('\n');
+            if (firstNewline >= 0)
+                result = result[(firstNewline + 1)..];
+            if (result.TrimEnd().EndsWith("```"))
+                result = result.TrimEnd()[..^3].TrimEnd();
         }
+        return result;
     }
 
     /// <summary>Shape of the LLM's diagnostic JSON response.</summary>
