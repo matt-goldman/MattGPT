@@ -56,7 +56,7 @@ This brings the total vector store provider count to four: Qdrant (existing) + A
 |-------------|--------------------------------------|
 | **AWS Bedrock** | Good multi-model service, but the .NET SDK experience for M.E.AI integration is less mature. Could be added later. |
 | **Cohere** | Strong embedding model (Cohere Embed), but less popular as a primary chat provider. Could be added as an embedding-only option later. |
-| **Mistral AI** | Good models, but the API is OpenAI-compatible — users can point the OpenAI direct provider at Mistral's endpoint. Dedicated support isn't needed yet. |
+| **Mistral AI** | Good models with an OpenAI-compatible API. However, the current OpenAI direct provider implementation does not yet support overriding the endpoint, so Mistral cannot be used transparently via that path today. Dedicated support or endpoint-configuration work could be added later. |
 | **Milvus / Zilliz** | Popular vector DB, but Zilliz Cloud adoption trails Pinecone. Could be added later. |
 | **ChromaDB** | Primarily a local/embedded vector DB; the cloud offering is newer and less proven for production. |
 | **pgvector (PostgreSQL)** | Leverages existing PostgreSQL infra, but adds a full RDBMS dependency just for vectors. Better suited as a later addition for teams already running PostgreSQL. |
