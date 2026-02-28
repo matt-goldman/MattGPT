@@ -51,6 +51,24 @@ Some providers (Anthropic, Gemini) don't have native embedding APIs or have limi
 }
 ```
 
+## Document DB Settings
+
+The `DocumentDb` section controls where conversations and chat sessions are stored.
+
+```json
+{
+  "DocumentDb": {
+    "Provider": "MongoDB"
+  }
+}
+```
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `Provider` | Document database backend. Supported: `MongoDB`, `Postgres` | `MongoDB` |
+
+> **Note:** MongoDB is managed automatically by Aspire when running locally. When using `Postgres`, the same Postgres instance can serve as both the document DB and the vector store — see [Integrations](integrations.md#postgres).
+
 ## Vector Store Settings
 
 The `VectorStore` section controls where embeddings are stored and searched.
@@ -65,12 +83,12 @@ The `VectorStore` section controls where embeddings are stored and searched.
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| `Provider` | Vector store backend. Supported: `Qdrant`, `AzureAISearch`, `Pinecone`, `Weaviate` | `Qdrant` |
+| `Provider` | Vector store backend. Supported: `Qdrant`, `Postgres`, `AzureAISearch`, `Pinecone`, `Weaviate` | `Qdrant` |
 | `Endpoint` | Endpoint URL (required for `AzureAISearch`, `Weaviate`) | — |
 | `ApiKey` | API key (required for `AzureAISearch`, `Pinecone`; optional for `Weaviate`) | — |
 | `IndexName` | Index or collection name | `conversations` |
 
-> **Note:** Qdrant is managed automatically by Aspire when running locally. Cloud vector stores require manual setup — see [Integrations](integrations.md).
+> **Note:** Qdrant and Postgres are managed automatically by Aspire when running locally. Cloud vector stores require manual setup — see [Integrations](integrations.md).
 
 ## RAG Settings
 

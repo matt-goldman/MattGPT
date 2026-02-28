@@ -7,7 +7,7 @@ public class VectorStoreOptions
 
     /// <summary>
     /// The vector store provider to use.
-    /// Supported values: Qdrant, AzureAISearch, Pinecone, Weaviate.
+    /// Supported values: Qdrant, Postgres, AzureAISearch, Pinecone, Weaviate.
     /// </summary>
     public string Provider { get; set; } = "Qdrant";
 

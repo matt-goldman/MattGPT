@@ -17,6 +17,7 @@
   <ItemGroup>
     <PackageReference Include="Anthropic.SDK" Version="5.10.0" />
     <PackageReference Include="Aspire.MongoDB.Driver" Version="13.1.2" />
+    <PackageReference Include="Aspire.Npgsql" Version="13.1.2" />
     <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
     <PackageReference Include="Aspire.Qdrant.Client" Version="13.1.2" />
     <PackageReference Include="Azure.Search.Documents" Version="11.7.0" />
