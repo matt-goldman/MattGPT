@@ -89,7 +89,7 @@ if (!vectorStoreConfigured)
             // Postgres vector store without Postgres document DB — register Npgsql data source if not yet registered.
             if (!documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
             {
-                builder.AddNpgsqlDataSource("mattgptdb");
+                builder.AddNpgsqlDataSource("mattgpt_vectorstore");
             }
             builder.Services.AddSingleton<IVectorStore, PostgresVectorStore>();
             break;
