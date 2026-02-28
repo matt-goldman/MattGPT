@@ -23,20 +23,47 @@ builder.WebHost.ConfigureKestrel(options =>
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
-// Add MongoDB client via Aspire integration.
-builder.AddMongoDBClient("mattgptdb");
+// --- Document DB configuration ---
+builder.Services.Configure<DocumentDbOptions>(builder.Configuration.GetSection(DocumentDbOptions.SectionName));
+var documentDbOptions = builder.Configuration.GetSection(DocumentDbOptions.SectionName).Get<DocumentDbOptions>() ?? new DocumentDbOptions();
 
-// Add Qdrant client via Aspire integration.
-builder.AddQdrantClient("qdrant");
+// Track whether the vector store has already been configured (e.g. when Postgres serves both roles).
+var vectorStoreConfigured = false;
+
+// Register document DB services based on provider.
+if (documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+{
+    // Postgres document DB — register Npgsql data source and Postgres repository implementations.
+    builder.AddNpgsqlDataSource("mattgptdb");
+    builder.Services.AddSingleton<IConversationRepository, PostgresConversationRepository>();
+    builder.Services.AddSingleton<IProjectNameRepository, PostgresProjectNameRepository>();
+    builder.Services.AddSingleton<IUserProfileRepository, PostgresUserProfileRepository>();
+    builder.Services.AddSingleton<ISystemConfigRepository, PostgresSystemConfigRepository>();
+    builder.Services.AddSingleton<IChatSessionRepository, PostgresChatSessionRepository>();
+
+    // If the vector store is also Postgres, configure it here and set the flag.
+    var vsOptions = builder.Configuration.GetSection(VectorStoreOptions.SectionName).Get<VectorStoreOptions>() ?? new VectorStoreOptions();
+    if (vsOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+    {
+        builder.Services.AddSingleton<IVectorStore, PostgresVectorStore>();
+        vectorStoreConfigured = true;
+    }
+}
+else
+{
+    // MongoDB (default) — register MongoDB client and repository implementations.
+    builder.AddMongoDBClient("mattgptdb");
+    builder.Services.AddSingleton<IConversationRepository, ConversationRepository>();
+    builder.Services.AddSingleton<IProjectNameRepository, ProjectNameRepository>();
+    builder.Services.AddSingleton<IUserProfileRepository, UserProfileRepository>();
+    builder.Services.AddSingleton<ISystemConfigRepository, SystemConfigRepository>();
+    builder.Services.AddSingleton<IChatSessionRepository, ChatSessionRepository>();
+}
 
 // Add services to the container.
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<ConversationParser>();
 builder.Services.AddSingleton<ImportJobStore>();
-builder.Services.AddSingleton<IConversationRepository, ConversationRepository>();
-builder.Services.AddSingleton<IProjectNameRepository, ProjectNameRepository>();
-builder.Services.AddSingleton<IUserProfileRepository, UserProfileRepository>();
-builder.Services.AddSingleton<ISystemConfigRepository, SystemConfigRepository>();
 builder.Services.AddSingleton(Channel.CreateBounded<ImportJobRequest>(new BoundedChannelOptions(50)
 {
     FullMode = BoundedChannelFullMode.Wait,
@@ -47,58 +74,74 @@ builder.Services.AddScoped<SummarisationService>();
 builder.Services.AddScoped<EmbeddingService>();
 builder.Services.Configure<VectorStoreOptions>(builder.Configuration.GetSection(VectorStoreOptions.SectionName));
 var vectorStoreOptions = builder.Configuration.GetSection(VectorStoreOptions.SectionName).Get<VectorStoreOptions>() ?? new VectorStoreOptions();
-switch (vectorStoreOptions.Provider.ToLowerInvariant())
+
+// Skip vector store registration if it was already configured above (e.g. Postgres serving both roles).
+if (!vectorStoreConfigured)
 {
-    case "qdrant":
-        builder.Services.AddSingleton<IVectorStore, QdrantVectorStore>();
-        break;
+    switch (vectorStoreOptions.Provider.ToLowerInvariant())
+    {
+        case "qdrant":
+            builder.AddQdrantClient("qdrant");
+            builder.Services.AddSingleton<IVectorStore, QdrantVectorStore>();
+            break;
 
-    case "azureaisearch":
-        {
-            var searchEndpoint = new Uri(vectorStoreOptions.Endpoint
-                ?? throw new InvalidOperationException("VectorStore:Endpoint is required for AzureAISearch provider."));
-            var searchCredential = new AzureKeyCredential(vectorStoreOptions.ApiKey
-                ?? throw new InvalidOperationException("VectorStore:ApiKey is required for AzureAISearch provider."));
-            var searchClient = new SearchClient(searchEndpoint, vectorStoreOptions.IndexName, searchCredential);
-            var indexClient = new SearchIndexClient(searchEndpoint, searchCredential);
-            builder.Services.AddSingleton(searchClient);
-            builder.Services.AddSingleton(indexClient);
-            builder.Services.AddSingleton<IVectorStore, AzureAISearchVectorStore>();
-        }
-        break;
-
-    case "pinecone":
-        {
-            var pineconeClient = new PineconeClient(vectorStoreOptions.ApiKey
-                ?? throw new InvalidOperationException("VectorStore:ApiKey is required for Pinecone provider."));
-            builder.Services.AddSingleton(pineconeClient);
-            builder.Services.AddSingleton<IVectorStore>(sp =>
-                new PineconeVectorStore(
-                    pineconeClient,
-                    sp.GetRequiredService<ILogger<PineconeVectorStore>>(),
-                    vectorStoreOptions.IndexName));
-        }
-        break;
-
-    case "weaviate":
-        {
-            var weaviateEndpoint = vectorStoreOptions.Endpoint
-                ?? throw new InvalidOperationException("VectorStore:Endpoint is required for Weaviate provider.");
-            builder.Services.AddHttpClient<WeaviateVectorStore>(client =>
+        case "postgres":
+            // Postgres vector store without Postgres document DB — register Npgsql data source if not yet registered.
+            if (!documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
             {
-                client.BaseAddress = new Uri(weaviateEndpoint.TrimEnd('/') + "/");
-                if (!string.IsNullOrEmpty(vectorStoreOptions.ApiKey))
-                    client.DefaultRequestHeaders.Add("Authorization", $"Bearer {vectorStoreOptions.ApiKey}");
-            });
-            builder.Services.AddSingleton<IVectorStore>(sp =>
-                sp.GetRequiredService<WeaviateVectorStore>());
-        }
-        break;
+                builder.AddNpgsqlDataSource("mattgptdb");
+            }
+            builder.Services.AddSingleton<IVectorStore, PostgresVectorStore>();
+            break;
 
-    default:
-        Console.Error.WriteLine($"[WARNING] Unknown VectorStore:Provider '{vectorStoreOptions.Provider}'; falling back to Qdrant.");
-        builder.Services.AddSingleton<IVectorStore, QdrantVectorStore>();
-        break;
+        case "azureaisearch":
+            {
+                var searchEndpoint = new Uri(vectorStoreOptions.Endpoint
+                    ?? throw new InvalidOperationException("VectorStore:Endpoint is required for AzureAISearch provider."));
+                var searchCredential = new AzureKeyCredential(vectorStoreOptions.ApiKey
+                    ?? throw new InvalidOperationException("VectorStore:ApiKey is required for AzureAISearch provider."));
+                var searchClient = new SearchClient(searchEndpoint, vectorStoreOptions.IndexName, searchCredential);
+                var indexClient = new SearchIndexClient(searchEndpoint, searchCredential);
+                builder.Services.AddSingleton(searchClient);
+                builder.Services.AddSingleton(indexClient);
+                builder.Services.AddSingleton<IVectorStore, AzureAISearchVectorStore>();
+            }
+            break;
+
+        case "pinecone":
+            {
+                var pineconeClient = new PineconeClient(vectorStoreOptions.ApiKey
+                    ?? throw new InvalidOperationException("VectorStore:ApiKey is required for Pinecone provider."));
+                builder.Services.AddSingleton(pineconeClient);
+                builder.Services.AddSingleton<IVectorStore>(sp =>
+                    new PineconeVectorStore(
+                        pineconeClient,
+                        sp.GetRequiredService<ILogger<PineconeVectorStore>>(),
+                        vectorStoreOptions.IndexName));
+            }
+            break;
+
+        case "weaviate":
+            {
+                var weaviateEndpoint = vectorStoreOptions.Endpoint
+                    ?? throw new InvalidOperationException("VectorStore:Endpoint is required for Weaviate provider.");
+                builder.Services.AddHttpClient<WeaviateVectorStore>(client =>
+                {
+                    client.BaseAddress = new Uri(weaviateEndpoint.TrimEnd('/') + "/");
+                    if (!string.IsNullOrEmpty(vectorStoreOptions.ApiKey))
+                        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {vectorStoreOptions.ApiKey}");
+                });
+                builder.Services.AddSingleton<IVectorStore>(sp =>
+                    sp.GetRequiredService<WeaviateVectorStore>());
+            }
+            break;
+
+        default:
+            Console.Error.WriteLine($"[WARNING] Unknown VectorStore:Provider '{vectorStoreOptions.Provider}'; falling back to Qdrant.");
+            builder.AddQdrantClient("qdrant");
+            builder.Services.AddSingleton<IVectorStore, QdrantVectorStore>();
+            break;
+    }
 }
 builder.Services.AddScoped<RagService>();
 builder.Services.Configure<RagOptions>(builder.Configuration.GetSection(RagOptions.SectionName));
@@ -110,7 +153,6 @@ if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
     builder.Services.AddScoped<SearchMemoriesTool>();
 }
 
-builder.Services.AddSingleton<IChatSessionRepository, ChatSessionRepository>();
 builder.Services.AddScoped<ChatSessionService>();
 builder.Services.Configure<ChatSessionOptions>(builder.Configuration.GetSection(ChatSessionOptions.SectionName));
 

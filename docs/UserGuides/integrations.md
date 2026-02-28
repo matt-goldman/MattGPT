@@ -190,6 +190,43 @@ Microsoft's [Foundry Local](https://learn.microsoft.com/windows/ai/foundry-local
 
 ---
 
+### Postgres
+
+[PostgreSQL](https://www.postgresql.org/) with the [pgvector](https://github.com/pgvector/pgvector) extension can serve as both the document database and the vector store, eliminating the need for MongoDB and Qdrant.
+
+**Prerequisites:**
+- The `pgvector` extension must be installed in Postgres (included in the Aspire-managed container by default via the `ankane/pgvector` image)
+
+**Configuration — vector store only:**
+```json
+{
+  "VectorStore": {
+    "Provider": "Postgres"
+  }
+}
+```
+
+**Configuration — Postgres for both document DB and vector store:**
+```json
+{
+  "DocumentDb": {
+    "Provider": "Postgres"
+  },
+  "VectorStore": {
+    "Provider": "Postgres"
+  }
+}
+```
+
+**Notes:**
+- When running under Aspire, a single Postgres container is provisioned and shared between both roles — no duplicate resources.
+- All schemas are created automatically on first use (tables, indexes, and the `vector` extension).
+- When `DocumentDb:Provider` is `Postgres`, all repositories (conversations, chat sessions, user profile, system config, project names) use Postgres.
+- The vector store uses the [pgvector](https://github.com/pgvector/pgvector) `<=>` cosine distance operator with an HNSW index for fast approximate nearest-neighbour search.
+- Conversations are stored as JSONB documents with indexed scalar columns for efficient querying.
+
+---
+
 ### Azure AI Search
 
 [Azure AI Search](https://learn.microsoft.com/azure/search/) (formerly Azure Cognitive Search) for cloud-hosted vector search.
@@ -275,12 +312,13 @@ Microsoft's [Foundry Local](https://learn.microsoft.com/windows/ai/foundry-local
 
 You can mix and match LLM and vector store providers independently. For example:
 
-| Use case | LLM | Embeddings | Vector Store |
-|----------|-----|------------|--------------|
-| Fully local | Ollama | Ollama | Qdrant |
-| Cloud chat, local vectors | OpenAI | OpenAI | Qdrant |
-| Anthropic + Azure stack | Anthropic | AzureOpenAI | AzureAISearch |
-| Google + Pinecone | Gemini | OpenAI | Pinecone |
+| Use case | LLM | Embeddings | Vector Store | Document DB |
+|----------|-----|------------|--------------|-------------|
+| Fully local | Ollama | Ollama | Qdrant | MongoDB |
+| Postgres everywhere | Ollama | Ollama | Postgres | Postgres |
+| Cloud chat, local vectors | OpenAI | OpenAI | Qdrant | MongoDB |
+| Anthropic + Azure stack | Anthropic | AzureOpenAI | AzureAISearch | MongoDB |
+| Google + Pinecone | Gemini | OpenAI | Pinecone | MongoDB |
 
 The key constraint: your embedding model must be consistent across import and query. Changing the embedding model invalidates existing embeddings — re-embed via `POST /conversations/embed` after switching.
 

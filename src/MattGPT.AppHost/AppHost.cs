@@ -15,26 +15,57 @@ var embeddingProvider = builder.Configuration["LLM:EmbeddingProvider"];
 var embeddingApiKey = builder.Configuration["LLM:EmbeddingApiKey"];
 var embeddingEndpoint = builder.Configuration["LLM:EmbeddingEndpoint"];
 
-// --- Vector store configuration ---
+// --- Document DB and vector store configuration ---
+var documentDbProvider = builder.Configuration["DocumentDb:Provider"] ?? "MongoDB";
 var vectorStoreProvider = builder.Configuration["VectorStore:Provider"] ?? "Qdrant";
 var vectorStoreEndpoint = builder.Configuration["VectorStore:Endpoint"];
 var vectorStoreApiKey = builder.Configuration["VectorStore:ApiKey"];
 var vectorStoreIndexName = builder.Configuration["VectorStore:IndexName"];
 
 // --- Infrastructure resources ---
-var mongodb = builder.AddMongoDB("mongodb")
-    .WithDataVolume()
-    .AddDatabase("mattgptdb");
+
+// Postgres is provisioned when used for document DB, vector store, or both.
+var isPostgresDocumentDb = documentDbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase);
+var isPostgresVectorStore = vectorStoreProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase);
+
+IResourceBuilder<IResourceWithConnectionString>? postgresDb = null;
+if (isPostgresDocumentDb || isPostgresVectorStore)
+{
+    postgresDb = builder.AddPostgres("postgres")
+        .WithDataVolume()
+        .AddDatabase("mattgptdb");
+}
+
+IResourceBuilder<IResourceWithConnectionString>? mongodb = null;
+if (!isPostgresDocumentDb)
+{
+    mongodb = builder.AddMongoDB("mongodb")
+        .WithDataVolume()
+        .AddDatabase("mattgptdb");
+}
 
 // --- API service ---
 var apiService = builder.AddProject<Projects.MattGPT_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
-    .WithReference(mongodb)
-    .WaitFor(mongodb)
     .WithEnvironment("LLM__Provider", provider)
     .WithEnvironment("LLM__ModelId", modelId)
     .WithEnvironment("LLM__EmbeddingModelId", embeddingModelId)
+    .WithEnvironment("DocumentDb__Provider", documentDbProvider)
     .WithEnvironment("VectorStore__Provider", vectorStoreProvider);
+
+if (mongodb is not null)
+{
+    apiService
+        .WithReference(mongodb)
+        .WaitFor(mongodb);
+}
+
+if (postgresDb is not null)
+{
+    apiService
+        .WithReference(postgresDb)
+        .WaitFor(postgresDb);
+}
 
 // --- Qdrant (only when configured as the vector store provider) ---
 if (vectorStoreProvider.Equals("Qdrant", StringComparison.OrdinalIgnoreCase))
