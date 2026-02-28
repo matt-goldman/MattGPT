@@ -564,4 +564,61 @@ public class RagServiceTests
             Options.Create(new RagOptions()),
             NullLogger<SearchMemoriesTool>.Instance);
     }
+
+    // ── Diagnostic mode tests ──
+
+    [Fact]
+    public async Task ChatAsync_DiagnosticMode_ExtractsResponseFromJson()
+    {
+        var jsonResponse = """{"reasoning":"I thought about it carefully.","response":"Here is my answer."}""";
+        var service = CreateService([], llmResponse: jsonResponse,
+            ragOptions: new RagOptions { DiagnosticMode = true });
+
+        var result = await service.ChatAsync("What did we discuss?");
+
+        Assert.Equal("Here is my answer.", result.Answer);
+    }
+
+    [Fact]
+    public async Task ChatAsync_DiagnosticMode_FallsBackToRawOnParseFailure()
+    {
+        var rawResponse = "This is not JSON.";
+        var service = CreateService([], llmResponse: rawResponse,
+            ragOptions: new RagOptions { DiagnosticMode = true });
+
+        var result = await service.ChatAsync("query");
+
+        Assert.Equal(rawResponse, result.Answer);
+    }
+
+    [Fact]
+    public async Task ChatAsync_DiagnosticMode_StripsMdFencesBeforeParsing()
+    {
+        var fenced = "```json\n{\"reasoning\":\"R\",\"response\":\"Clean answer.\"}\n```";
+        var service = CreateService([], llmResponse: fenced,
+            ragOptions: new RagOptions { DiagnosticMode = true });
+
+        var result = await service.ChatAsync("query");
+
+        Assert.Equal("Clean answer.", result.Answer);
+    }
+
+    [Fact]
+    public void BuildMessages_DiagnosticInstruction_ContainsBothFields()
+    {
+        Assert.Contains("\"reasoning\"", RagService.DiagnosticInstruction);
+        Assert.Contains("\"response\"", RagService.DiagnosticInstruction);
+    }
+
+    [Fact]
+    public async Task ChatAsync_DiagnosticMode_Off_ReturnsRawResponse()
+    {
+        var rawResponse = "Normal response without JSON.";
+        var service = CreateService([], llmResponse: rawResponse,
+            ragOptions: new RagOptions { DiagnosticMode = false });
+
+        var result = await service.ChatAsync("query");
+
+        Assert.Equal(rawResponse, result.Answer);
+    }
 }

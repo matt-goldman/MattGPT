@@ -54,4 +54,14 @@ public class RagOptions
 
     /// <summary>Maximum results the <c>search_memories</c> tool can return per invocation.</summary>
     public int ToolMaxResults { get; set; } = 5;
+
+    /// <summary>
+    /// When true, the LLM is instructed to respond in a structured JSON format that includes
+    /// both its reasoning process and its final response. The reasoning is logged at Information
+    /// level for diagnostic analysis. The user always sees only the <c>response</c> field.
+    /// In streaming mode, tokens are buffered server-side and released as a single chunk after
+    /// JSON parsing, so streaming latency is traded for diagnostic visibility.
+    /// Default is <c>false</c>.
+    /// </summary>
+    public bool DiagnosticMode { get; set; } = false;
 }

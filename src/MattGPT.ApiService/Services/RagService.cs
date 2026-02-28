@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using MattGPT.ApiService.Models;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -66,6 +67,23 @@ public class RagService(
         "When the user asks about past conversations, topics, or things they may have discussed before, proactively use the search_memories tool to find relevant context.\n" +
         "If no relevant memories are found, answer from general knowledge but let the user know you don't have any relevant memories on that topic.";
 
+    /// <summary>
+    /// Instruction appended to the system message when <see cref="RagOptions.DiagnosticMode"/> is enabled.
+    /// Asks the LLM to respond as structured JSON so that its reasoning can be logged.
+    /// </summary>
+    internal const string DiagnosticInstruction = """
+
+=== DIAGNOSTIC MODE ===
+You MUST respond with a single JSON object and nothing else — no markdown fences, no extra text. Use this exact structure:
+{
+  "reasoning": "Your step-by-step reasoning: which memories you found relevant, why, and how you arrived at your answer",
+  "response": "Your actual response to the user, written exactly as you would normally write it"
+}
+=== END DIAGNOSTIC MODE ===
+""";
+
+    private static readonly JsonSerializerOptions _diagnosticJsonOptions = new() { PropertyNameCaseInsensitive = true };
+
     private readonly RagOptions _options = options.Value;
     private readonly ChatSessionOptions _chatOptions = chatOptions.Value;
 
@@ -110,7 +128,8 @@ public class RagService(
     /// </summary>
     public async Task<RagChatResponse> ChatAsync(string query, ChatSession? session = null, CancellationToken ct = default)
     {
-        logger.LogInformation("RAG ChatAsync called. Query: {Query}, Mode: {Mode}", query, _options.Mode);
+        logger.LogInformation("RAG ChatAsync called. Query: {Query}, Mode: {Mode}, DiagnosticMode: {Diagnostic}",
+            query, _options.Mode, _options.DiagnosticMode);
 
         // 1. Automatic retrieval (full, light, or none depending on mode).
         var (relevant, conversationLookup) = await AutoRetrieveAsync(query, ct);
@@ -123,8 +142,10 @@ public class RagService(
             ? await systemConfigRepository.GetAsync(ct)
             : null;
 
-        // 3. Build the augmented prompt.
+        // 3. Build the augmented prompt, adding the diagnostic instruction if enabled.
         var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt);
+        if (_options.DiagnosticMode)
+            AppendDiagnosticInstruction(messages);
 
         var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
         logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
@@ -132,25 +153,35 @@ public class RagService(
         // 4. Call the LLM (with tools if mode supports it).
         var chatOptions = BuildToolChatOptions();
         var response = await chatClient.GetResponseAsync(messages, chatOptions, ct);
+        var rawText = response.Text ?? string.Empty;
 
-        logger.LogDebug("LLM response length: {ResponseLength} chars.", response.Text?.Length ?? 0);
+        logger.LogDebug("LLM response length: {ResponseLength} chars.", rawText.Length);
 
-        // 5. Merge sources from auto-retrieval and any tool invocations.
+        // 5. In diagnostic mode, parse the JSON response and log the reasoning.
+        var answerText = _options.DiagnosticMode
+            ? ExtractAndLogDiagnosticResponse(rawText, query)
+            : rawText;
+
+        // 6. Merge sources from auto-retrieval and any tool invocations.
         var sources = CollectAllSources(relevant);
 
-        return new RagChatResponse(response.Text ?? string.Empty, sources);
+        return new RagChatResponse(answerText, sources);
     }
 
     /// <summary>
     /// Streaming variant of <see cref="ChatAsync"/>. Yields text tokens as they arrive
     /// from the LLM, then a final chunk containing the sources used.
+    /// In <see cref="RagOptions.DiagnosticMode"/>, tokens are buffered server-side; the
+    /// full response is JSON-parsed, the reasoning is logged, and only the <c>response</c>
+    /// field is emitted as a single text chunk.
     /// </summary>
     public async IAsyncEnumerable<RagStreamChunk> ChatStreamAsync(
         string query,
         ChatSession? session = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        logger.LogInformation("RAG ChatStreamAsync called. Query: {Query}, Mode: {Mode}", query, _options.Mode);
+        logger.LogInformation("RAG ChatStreamAsync called. Query: {Query}, Mode: {Mode}, DiagnosticMode: {Diagnostic}",
+            query, _options.Mode, _options.DiagnosticMode);
 
         // 1. Automatic retrieval (full, light, or none depending on mode).
         var (relevant, conversationLookup) = await AutoRetrieveAsync(query, ct);
@@ -163,8 +194,10 @@ public class RagService(
             ? await systemConfigRepository.GetAsync(ct)
             : null;
 
-        // 3. Build the augmented prompt.
+        // 3. Build the augmented prompt, adding the diagnostic instruction if enabled.
         var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt);
+        if (_options.DiagnosticMode)
+            AppendDiagnosticInstruction(messages);
 
         var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
         logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
@@ -185,23 +218,48 @@ public class RagService(
                 pendingToolEvents.Enqueue(new RagStreamChunk(null, ToolName: name, ToolEnd: true));
         }
 
-        await foreach (var update in chatClient.GetStreamingResponseAsync(messages, chatOptions, ct))
+        if (_options.DiagnosticMode)
         {
-            // Drain any tool events that arrived while the previous update was being processed.
-            while (pendingToolEvents.TryDequeue(out var toolEvent))
-                yield return toolEvent;
-
-            if (!string.IsNullOrEmpty(update.Text))
+            // In diagnostic mode, buffer the full response so we can parse and log the reasoning.
+            // Tool events are still emitted in real time so status indicators work normally.
+            var rawBuffer = new StringBuilder();
+            await foreach (var update in chatClient.GetStreamingResponseAsync(messages, chatOptions, ct))
             {
-                yield return new RagStreamChunk(update.Text);
+                while (pendingToolEvents.TryDequeue(out var toolEvent))
+                    yield return toolEvent;
+
+                if (!string.IsNullOrEmpty(update.Text))
+                    rawBuffer.Append(update.Text);
             }
+
+            while (pendingToolEvents.TryDequeue(out var remainingEvent))
+                yield return remainingEvent;
+
+            // Parse the buffered JSON response, log reasoning, emit the response text.
+            var responseText = ExtractAndLogDiagnosticResponse(rawBuffer.ToString(), query);
+            if (!string.IsNullOrEmpty(responseText))
+                yield return new RagStreamChunk(responseText);
+        }
+        else
+        {
+            await foreach (var update in chatClient.GetStreamingResponseAsync(messages, chatOptions, ct))
+            {
+                // Drain any tool events that arrived while the previous update was being processed.
+                while (pendingToolEvents.TryDequeue(out var toolEvent))
+                    yield return toolEvent;
+
+                if (!string.IsNullOrEmpty(update.Text))
+                {
+                    yield return new RagStreamChunk(update.Text);
+                }
+            }
+
+            // Drain any remaining tool events after the stream ends.
+            while (pendingToolEvents.TryDequeue(out var remainingEvent))
+                yield return remainingEvent;
         }
 
-        // Drain any remaining tool events after the stream ends.
-        while (pendingToolEvents.TryDequeue(out var remainingEvent))
-            yield return remainingEvent;
-
-        // 4. Final chunk carries the merged sources.
+        // Final chunk carries the merged sources.
         var sources = CollectAllSources(relevant);
 
         yield return new RagStreamChunk(null, sources);
@@ -312,6 +370,72 @@ public class RagService(
 
         return [.. sourcesDict.Values.OrderByDescending(s => s.Score)];
     }
+
+    /// <summary>
+    /// Appends the diagnostic JSON-format instruction to the first system message in the list.
+    /// If no system message is present, adds a new one.
+    /// </summary>
+    private static void AppendDiagnosticInstruction(List<AIChatMessage> messages)
+    {
+        var idx = messages.FindIndex(m => m.Role == ChatRole.System);
+        if (idx >= 0)
+        {
+            var existing = messages[idx].Text ?? string.Empty;
+            messages[idx] = new AIChatMessage(ChatRole.System, existing + DiagnosticInstruction);
+        }
+        else
+        {
+            messages.Insert(0, new AIChatMessage(ChatRole.System, DiagnosticInstruction));
+        }
+    }
+
+    /// <summary>
+    /// Attempts to deserialize a diagnostic JSON response from the LLM.
+    /// Logs the reasoning at Information level and returns the user-facing response text.
+    /// On parse failure, logs a warning and returns the raw text as-is.
+    /// </summary>
+    private string ExtractAndLogDiagnosticResponse(string rawText, string query)
+    {
+        if (string.IsNullOrWhiteSpace(rawText))
+            return rawText;
+
+        // Strip common markdown fences some models add despite the instruction.
+        var trimmed = rawText.Trim();
+        if (trimmed.StartsWith("```"))
+        {
+            var firstNewline = trimmed.IndexOf('\n');
+            if (firstNewline >= 0)
+                trimmed = trimmed[(firstNewline + 1)..];
+            if (trimmed.EndsWith("```"))
+                trimmed = trimmed[..^3].TrimEnd();
+        }
+
+        try
+        {
+            var doc = JsonSerializer.Deserialize<DiagnosticLlmResponse>(trimmed, _diagnosticJsonOptions);
+            if (doc is not null && !string.IsNullOrWhiteSpace(doc.Response))
+            {
+                logger.LogInformation(
+                    "[DIAGNOSTIC] Query: {Query}\n[DIAGNOSTIC] Reasoning: {Reasoning}",
+                    query,
+                    doc.Reasoning ?? "(none)");
+                return doc.Response;
+            }
+
+            logger.LogWarning(
+                "[DIAGNOSTIC] Parsed JSON but 'response' field was empty. Raw: {Raw}", rawText);
+            return rawText;
+        }
+        catch (JsonException ex)
+        {
+            logger.LogWarning(ex,
+                "[DIAGNOSTIC] Failed to parse LLM response as JSON. Returning raw text. Raw: {Raw}", rawText);
+            return rawText;
+        }
+    }
+
+    /// <summary>Shape of the LLM's diagnostic JSON response.</summary>
+    private sealed record DiagnosticLlmResponse(string? Reasoning, string? Response);
 
     /// <summary>
     /// Builds the chat message list with a system prompt that frames retrieved conversations
