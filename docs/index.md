@@ -69,6 +69,7 @@ This document is the **system of record** for project planning and issue trackin
 | 35 | 035-auto-scroll-chat.md | Auto-scroll chat to bottom | Done | Done/ | Depends on 12. JS interop scrollToBottom with near-bottom detection. |
 | 36 | 036-investigate-tool-search-results-ignored.md | Investigate LLM ignoring tool search results | Done | Done/ | Depends on 20, 32. Improved system prompt and tool description to be more directive. |
 | 37 | 037-sidebar-overlay-layout.md | Sidebar should overlay chat area, not push it | Done | Done/ | Depends on 22, 12. Fixed overlay with backdrop and transform animation. |
+| 38 | 038-add-cloud-provider-integrations.md | Add cloud LLM and vector store provider integrations | TODO | TODO/ | Depends on 3, 21. Anthropic, OpenAI direct, Gemini; Azure AI Search, Pinecone, Weaviate. See ADR-007. |
 
 ---
 
