@@ -4,33 +4,28 @@ using Qdrant.Client.Grpc;
 
 namespace MattGPT.ApiService.Services;
 
-/// <summary>A single search result returned from Qdrant.</summary>
-public record QdrantSearchResult(string ConversationId, float Score, string? Title, string? Summary);
+/// <summary>A provider-neutral vector search result.</summary>
+public record VectorSearchResult(string ConversationId, float Score, string? Title, string? Summary);
 
-/// <summary>Manages storage and similarity search of conversation embeddings in Qdrant.</summary>
-/// <remarks>
-/// TODO: Replace with a provider-agnostic <c>IVectorStore</c> abstraction before implementing
-/// config-driven vector store provider selection (analogous to <see cref="LlmOptions"/>).
-/// <c>QdrantService</c> would become one of several concrete implementations.
-/// </remarks>
-public interface IQdrantService
+/// <summary>Provider-agnostic abstraction for vector storage and similarity search.</summary>
+public interface IVectorStore
 {
-    /// <summary>Upsert a conversation embedding into Qdrant with its metadata payload.</summary>
+    /// <summary>Upsert a conversation embedding with its metadata payload.</summary>
     Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default);
 
     /// <summary>Search for the most similar conversations to the given query vector.</summary>
-    Task<IReadOnlyList<QdrantSearchResult>> SearchAsync(float[] queryVector, int limit = 5, CancellationToken ct = default);
+    Task<IReadOnlyList<VectorSearchResult>> SearchAsync(float[] queryVector, int limit = 5, CancellationToken ct = default);
 
     /// <summary>Return the number of points in the conversations collection, or null if the collection doesn't exist.</summary>
     Task<ulong?> GetPointCountAsync(CancellationToken ct = default);
 }
 
 /// <summary>
-/// Qdrant-backed implementation of <see cref="IQdrantService"/>.
+/// Qdrant-backed implementation of <see cref="IVectorStore"/>.
 /// Ensures the collection is created on first use and upserts points idempotently using
 /// the conversation UUID as the point ID.
 /// </summary>
-public class QdrantService(QdrantClient client, ILogger<QdrantService> logger) : IQdrantService
+public class QdrantVectorStore(QdrantClient client, ILogger<QdrantVectorStore> logger) : IVectorStore
 {
     private const string CollectionName = "conversations";
     private volatile bool _collectionEnsured;
@@ -66,7 +61,7 @@ public class QdrantService(QdrantClient client, ILogger<QdrantService> logger) :
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<QdrantSearchResult>> SearchAsync(
+    public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, CancellationToken ct = default)
     {
         if (!await client.CollectionExistsAsync(CollectionName, ct))
@@ -78,7 +73,7 @@ public class QdrantService(QdrantClient client, ILogger<QdrantService> logger) :
             limit: (ulong)limit,
             cancellationToken: ct);
 
-        return [.. results.Select(r => new QdrantSearchResult(
+        return [.. results.Select(r => new VectorSearchResult(
             ConversationId: GetPayloadString(r.Payload, "conversation_id") ?? string.Empty,
             Score: r.Score,
             Title: GetPayloadString(r.Payload, "title"),

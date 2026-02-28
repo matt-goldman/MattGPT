@@ -832,4 +832,132 @@ public class StoredMessageTests
 
         Assert.False(stored.IsHidden);
     }
+
+    // -----------------------------------------------------------------------
+    // Citations
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void From_ParsesCitationsFromMetadata()
+    {
+        var message = MakeMessage("m1", "assistant", "text", ["Answer text"]);
+        message.Metadata = new MessageMetadata
+        {
+            Citations =
+            [
+                new MessageCitation
+                {
+                    StartIndex = 0,
+                    EndIndex = 10,
+                    FormatType = "tether_og",
+                    Metadata = new CitationMetadata
+                    {
+                        Type = "webpage",
+                        Title = "Example Page",
+                        Url = "https://example.com",
+                        Text = "Some cited text",
+                    },
+                },
+            ],
+        };
+
+        var stored = StoredMessage.From(message);
+
+        Assert.NotNull(stored.Citations);
+        Assert.Single(stored.Citations);
+        var c = stored.Citations[0];
+        Assert.Equal(0, c.StartIndex);
+        Assert.Equal(10, c.EndIndex);
+        Assert.Equal("tether_og", c.FormatType);
+        Assert.Equal("webpage", c.Type);
+        Assert.Equal("Example Page", c.Name);
+        Assert.Equal("https://example.com", c.Source);
+        Assert.Equal("Some cited text", c.Text);
+    }
+
+    [Fact]
+    public void From_NullCitations_CitationsPropertyNull()
+    {
+        var message = MakeMessage("m1", "user", "text", ["Hello"]);
+        // No metadata / citations set
+
+        var stored = StoredMessage.From(message);
+
+        Assert.Null(stored.Citations);
+    }
+
+    // -----------------------------------------------------------------------
+    // Content References
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void From_FiltersHiddenContentReferences()
+    {
+        var message = MakeMessage("m1", "assistant", "text", ["Answer"]);
+        message.Metadata = new MessageMetadata
+        {
+            ContentReferences =
+            [
+                new MessageContentReference { Type = "hidden", Title = "Hidden ref" },
+                new MessageContentReference { Type = "attribution", Title = "Visible ref", Url = "https://example.com" },
+            ],
+        };
+
+        var stored = StoredMessage.From(message);
+
+        Assert.NotNull(stored.ContentReferences);
+        Assert.Single(stored.ContentReferences);
+        Assert.Equal("attribution", stored.ContentReferences[0].Type);
+    }
+
+    [Fact]
+    public void From_CapturesNonHiddenContentReferences()
+    {
+        var message = MakeMessage("m1", "assistant", "text", ["Answer"]);
+        message.Metadata = new MessageMetadata
+        {
+            ContentReferences =
+            [
+                new MessageContentReference
+                {
+                    Type = "grouped_webpages",
+                    Title = "Some Page",
+                    MatchedText = "matched",
+                    Snippet = "snip",
+                    Url = "https://example.com",
+                    Source = "web",
+                },
+            ],
+        };
+
+        var stored = StoredMessage.From(message);
+
+        Assert.NotNull(stored.ContentReferences);
+        Assert.Single(stored.ContentReferences);
+        var r = stored.ContentReferences[0];
+        Assert.Equal("grouped_webpages", r.Type);
+        Assert.Equal("Some Page", r.Name);
+        Assert.Equal("matched", r.MatchedText);
+        Assert.Equal("snip", r.Snippet);
+        Assert.Equal("https://example.com", r.Url);
+        Assert.Equal("web", r.Source);
+    }
+
+    [Fact]
+    public void From_AllHiddenContentReferences_ContentReferencesNull()
+    {
+        var message = MakeMessage("m1", "assistant", "text", ["Answer"]);
+        message.Metadata = new MessageMetadata
+        {
+            ContentReferences =
+            [
+                new MessageContentReference { Type = "hidden", Title = "Hidden 1" },
+                new MessageContentReference { Type = "hidden", Title = "Hidden 2" },
+            ],
+        };
+
+        var stored = StoredMessage.From(message);
+
+        Assert.Null(stored.ContentReferences);
+    }
 }

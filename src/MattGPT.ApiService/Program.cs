@@ -31,6 +31,7 @@ builder.Services.AddSingleton<ConversationParser>();
 builder.Services.AddSingleton<ImportJobStore>();
 builder.Services.AddSingleton<IConversationRepository, ConversationRepository>();
 builder.Services.AddSingleton<IProjectNameRepository, ProjectNameRepository>();
+builder.Services.AddSingleton<IUserProfileRepository, UserProfileRepository>();
 builder.Services.AddSingleton(Channel.CreateBounded<ImportJobRequest>(new BoundedChannelOptions(50)
 {
     FullMode = BoundedChannelFullMode.Wait,
@@ -39,7 +40,18 @@ builder.Services.AddSingleton(Channel.CreateBounded<ImportJobRequest>(new Bounde
 builder.Services.AddHostedService<ImportProcessingService>();
 builder.Services.AddScoped<SummarisationService>();
 builder.Services.AddScoped<EmbeddingService>();
-builder.Services.AddSingleton<IQdrantService, QdrantService>();
+builder.Services.Configure<VectorStoreOptions>(builder.Configuration.GetSection(VectorStoreOptions.SectionName));
+var vectorStoreOptions = builder.Configuration.GetSection(VectorStoreOptions.SectionName).Get<VectorStoreOptions>() ?? new VectorStoreOptions();
+switch (vectorStoreOptions.Provider.ToLowerInvariant())
+{
+    case "qdrant":
+        builder.Services.AddSingleton<IVectorStore, QdrantVectorStore>();
+        break;
+    default:
+        Console.Error.WriteLine($"[WARNING] Unknown VectorStore:Provider '{vectorStoreOptions.Provider}'; falling back to Qdrant.");
+        builder.Services.AddSingleton<IVectorStore, QdrantVectorStore>();
+        break;
+}
 builder.Services.AddScoped<RagService>();
 builder.Services.Configure<RagOptions>(builder.Configuration.GetSection(RagOptions.SectionName));
 var ragOptions = builder.Configuration.GetSection(RagOptions.SectionName).Get<RagOptions>() ?? new RagOptions();

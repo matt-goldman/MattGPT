@@ -11,7 +11,7 @@ public static class SearchEndpoints
         app.MapGet("/search", async (
             string q,
             IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
-            IQdrantService qdrantService,
+            IVectorStore vectorStore,
             CancellationToken ct,
             int limit = 5) =>
         {
@@ -23,7 +23,7 @@ public static class SearchEndpoints
             var embeddings = await embeddingGenerator.GenerateAsync([q], cancellationToken: ct);
             var queryVector = embeddings[0].Vector.ToArray();
 
-            var results = await qdrantService.SearchAsync(queryVector, limit, ct);
+            var results = await vectorStore.SearchAsync(queryVector, limit, ct);
 
             return Results.Ok(results.Select(r => new
             {

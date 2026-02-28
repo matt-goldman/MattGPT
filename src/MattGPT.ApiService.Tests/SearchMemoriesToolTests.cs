@@ -27,13 +27,13 @@ public class SearchMemoriesToolTests
     }
 
     private static SearchMemoriesTool CreateTool(
-        IReadOnlyList<QdrantSearchResult>? searchResults = null,
+        IReadOnlyList<VectorSearchResult>? searchResults = null,
         FakeConversationRepository? repository = null,
         RagOptions? options = null)
     {
         return new SearchMemoriesTool(
             new FakeEmbeddingGenerator(TestVector),
-            new FakeSearchQdrantService(searchResults ?? []),
+            new FakeSearchVectorStore(searchResults ?? []),
             repository ?? new FakeConversationRepository(),
             Options.Create(options ?? new RagOptions()),
             NullLogger<SearchMemoriesTool>.Instance);
@@ -53,7 +53,7 @@ public class SearchMemoriesToolTests
     [Fact]
     public async Task SearchMemoriesAsync_WithResults_ReturnsFormattedExcerpts()
     {
-        var searchResults = new List<QdrantSearchResult>
+        var searchResults = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "Python Help", "Helped with decorators"),
         };
@@ -74,7 +74,7 @@ public class SearchMemoriesToolTests
     [Fact]
     public async Task SearchMemoriesAsync_FiltersResultsBelowMinScore()
     {
-        var searchResults = new List<QdrantSearchResult>
+        var searchResults = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "High Score", "Good match"),
             new("c2", 0.3f, "Low Score", "Bad match"),
@@ -95,7 +95,7 @@ public class SearchMemoriesToolTests
     [Fact]
     public async Task SearchMemoriesAsync_RespectsMaxResults()
     {
-        var searchResults = new List<QdrantSearchResult>
+        var searchResults = new List<VectorSearchResult>
         {
             new("c1", 0.9f, "Title 1", "Summary 1"),
             new("c2", 0.8f, "Title 2", "Summary 2"),
@@ -149,7 +149,7 @@ public class SearchMemoriesToolTests
         // Use a throwing Qdrant service to simulate failure.
         var tool = new SearchMemoriesTool(
             new FakeEmbeddingGenerator(TestVector),
-            new ThrowingSearchQdrantService(),
+            new ThrowingSearchVectorStore(),
             new FakeConversationRepository(),
             Options.Create(new RagOptions()),
             NullLogger<SearchMemoriesTool>.Instance);
@@ -162,14 +162,14 @@ public class SearchMemoriesToolTests
 }
 
 /// <summary>
-/// Fake IQdrantService that always throws on search.
+/// Fake IVectorStore that always throws on search.
 /// </summary>
-internal sealed class ThrowingSearchQdrantService : IQdrantService
+internal sealed class ThrowingSearchVectorStore : IVectorStore
 {
     public Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
         => Task.CompletedTask;
 
-    public Task<IReadOnlyList<QdrantSearchResult>> SearchAsync(
+    public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, CancellationToken ct = default)
         => throw new InvalidOperationException("Qdrant unavailable");
 
