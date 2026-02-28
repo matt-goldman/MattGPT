@@ -60,6 +60,15 @@ This document is the **system of record** for project planning and issue trackin
 | 26 | 021-abstract-vector-store-interface.md | Abstract vector store behind provider-agnostic interface | Done | Done/ | Depends on 2, 10. Low urgency — code quality / extensibility. Existing TODO in QdrantService.cs. |
 | 27 | 024-capture-attachments-and-tool-metadata.md | Capture file attachments and author/tool metadata | Deferred | TODO/ | Depends on 4, 7, 17. Deferred per ADR-006 — marginal value without whole-zip import. |
 | 28 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | Deferred | TODO/ | Depends on 3; first step is choosing the approach. Very low priority and can come later as gold plating. |
+| 29 | 029-system-prompt-and-profile-ui.md | System prompt and user profile UI | TODO | TODO/ | Depends on 28, 12. View and edit system prompt and user profile from the UI. |
+| 30 | 030-show-message-timestamps.md | Show message and conversation timestamps | TODO | TODO/ | Depends on 12, 22. Display date/time on individual messages and date separators. |
+| 31 | 031-conversation-search.md | Conversation history search | TODO | TODO/ | Depends on 7, 10, 22. Traditional search bar for keyword/semantic search across all conversations. |
+| 32 | 032-tool-calling-status-indicators.md | Tool-calling status indicators in chat UI | TODO | TODO/ | Depends on 20, 12. Show "Searching memories..." etc. instead of generic spinner. |
+| 33 | 033-spa-chat-navigation.md | SPA-style chat navigation | TODO | TODO/ | Depends on 22, 12. Reload only the chat window when switching conversations, not the whole page. |
+| 34 | 034-new-chat-with-conversation-context.md | Start new chat with conversation as context | TODO | TODO/ | Depends on 12, 22, 25. "Continue this conversation" button on imported read-only chats. |
+| 35 | 035-auto-scroll-chat.md | Auto-scroll chat to bottom | TODO | TODO/ | Depends on 12. Scroll to bottom on new messages, streaming tokens, and conversation load. |
+| 36 | 036-investigate-tool-search-results-ignored.md | Investigate LLM ignoring tool search results | TODO | TODO/ | Depends on 20, 32. LLM calls search_memories but denies having it or ignores results. |
+| 37 | 037-sidebar-overlay-layout.md | Sidebar should overlay chat area, not push it | TODO | TODO/ | Depends on 22, 12. Sidebar toggle disturbs main chat layout; should slide over with higher z-index. |
 
 ---
 

@@ -42,6 +42,7 @@ if (!string.IsNullOrEmpty(ragMode))
 if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
 {
     var ollama = builder.AddOllama("ollama")
+        .WithDataVolume()
         .WithLifetime(ContainerLifetime.Persistent)
         .WithGPUSupport();
 
