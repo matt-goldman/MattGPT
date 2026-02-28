@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-28  
 **Status:** Accepted  
-**Related Issues:** [024-capture-attachments-and-tool-metadata.md](../TODO/024-capture-attachments-and-tool-metadata.md)
+**Related Issues:** [024-capture-attachments-and-tool-metadata.md](../Backlog/TODO/024-capture-attachments-and-tool-metadata.md)
 
 ### Context
 

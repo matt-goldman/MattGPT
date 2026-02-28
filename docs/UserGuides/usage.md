@@ -8,7 +8,7 @@
 
 ### Upload format
 
-- The file must be named `conversations.json` (or any `.json` file) and follow the [ChatGPT export schema](conversations.schema.json).
+- The file must be named `conversations.json` (or any `.json` file) and follow the [ChatGPT export schema](../TechnicalReference/conversations.schema.json).
 - Maximum file size: **200 MB** (the typical full export is ~148 MB for a large history).
 - Multi-file exports are supported — ChatGPT now splits large exports across several JSON files (e.g. `conversations-001.json`, `conversations-002.json`, etc.).
 
@@ -18,12 +18,12 @@
 2. Select your `conversations.json` file (or multiple files for split exports).
 3. Click **Upload & Process**.
 
-   ![Upload and process](../assets/screenshot-importing.png)
+   ![Upload and process](../../assets/screenshot-importing.png)
 
 4. The UI shows upload progress, then switches to processing status.
 5. Processing runs in the background. The UI polls for progress and shows the number of conversations processed.
 
-   ![Upload complete](../assets/screenshot-post-upload.png)
+   ![Upload complete](../../assets/screenshot-post-upload.png)
 
 6. When complete, a success message is shown.
 
@@ -48,7 +48,7 @@ The background pipeline performs the following steps automatically:
 5. Below each response, click **"N source(s) used"** to expand the list of retrieved conversations that informed the response, including their titles and relevance scores.
 6. Continue the conversation — each new message is processed independently with fresh RAG retrieval.
 
-   ![Chat UI with RAG sources](../assets/screenshot-chat.png)
+   ![Chat UI with RAG sources](../../assets/screenshot-chat.png)
 
 ### Chat history
 
@@ -73,3 +73,7 @@ The API service exposes several endpoints for programmatic access:
 | `GET /conversations/{id}` | Get a specific conversation |
 | `POST /chat` | Send a chat message (with RAG) |
 | `GET /llm/status` | Check LLM connectivity |
+
+---
+
+← [Previous: Getting Started](getting-started.md) | [User Guides](index.md) | [Next: Configuration →](configuration.md)

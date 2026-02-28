@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-27
 **Status:** Accepted
-**Related Issues:** [020-tool-calling-rag-retrieval.md](../Done/020-tool-calling-rag-retrieval.md)
+**Related Issues:** [020-tool-calling-rag-retrieval.md](../Backlog/Done/020-tool-calling-rag-retrieval.md)
 
 ### Context
 
