@@ -71,6 +71,8 @@ public class StoredMessage
     /// <summary>Content references parsed from message metadata (hidden type excluded). Null if none were present.</summary>
     public List<StoredContentReference>? ContentReferences { get; set; }
 
+    private const string HiddenContentReferenceType = "hidden";
+
     internal static StoredMessage From(Message message)
     {
         var stored = new StoredMessage
@@ -101,7 +103,7 @@ public class StoredMessage
 
         if (message.Metadata?.ContentReferences is { Count: > 0 } refs)
         {
-            var nonHidden = refs.Where(r => r.Type != "hidden").ToList();
+            var nonHidden = refs.Where(r => r.Type != HiddenContentReferenceType).ToList();
             if (nonHidden.Count > 0)
             {
                 stored.ContentReferences = nonHidden.Select(r => new StoredContentReference

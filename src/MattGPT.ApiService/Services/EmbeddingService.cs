@@ -182,9 +182,8 @@ public class EmbeddingService(
             {
                 foreach (var citation in msg.Citations)
                 {
-                    var citName = !string.IsNullOrWhiteSpace(citation.Name)
-                        ? citation.Name
-                        : !string.IsNullOrWhiteSpace(citation.Source) ? citation.Source : null;
+                    var citName = !string.IsNullOrWhiteSpace(citation.Name) ? citation.Name
+                        : citation.Source;
                     if (citName is not null)
                     {
                         var citLine = $"[Cited: {citName}]\n";
