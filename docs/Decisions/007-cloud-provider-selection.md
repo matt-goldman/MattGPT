@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-28
 **Status:** Accepted
-**Related Issues:** [038-add-cloud-provider-integrations.md](../Done/038-add-cloud-provider-integrations.md)
+**Related Issues:** [038-add-cloud-provider-integrations.md](../Backlog/Done/038-add-cloud-provider-integrations.md)
 
 ### Context
 

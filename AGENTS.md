@@ -4,7 +4,7 @@ Instructions for AI coding agents working on this repository.
 
 ## Project Overview
 
-**MattGPT** is a .NET Aspire application that imports ChatGPT conversation history and makes it available as RAG memory for any LLM. See [README.md](README.md) for goals and [conversation-restore-outline.md](docs/conversation-restore-outline.md) for the technical approach.
+**MattGPT** is a .NET Aspire application that imports ChatGPT conversation history and makes it available as RAG memory for any LLM. See [README.md](README.md) for goals and [conversation-restore-outline.md](docs/TechnicalReference/conversation-restore-outline.md) for the technical approach.
 
 ## Quick Start
 
@@ -18,16 +18,16 @@ The Aspire dashboard will be available at the URL printed on startup. All servic
 
 ## Backlog & Issue Tracking
 
-**The system of record is [`docs/index.md`](docs/index.md).** Read it before starting any work.
+**The system of record is [`docs/Backlog/index.md`](docs/Backlog/index.md).** Read it before starting any work.
 
 ### Workflow Summary
 
-1. Open [`docs/index.md`](docs/index.md) and find the next issue with status `TODO` (lowest sequence number).
-2. Read the full issue file in `docs/TODO/`.
+1. Open [`docs/Backlog/index.md`](docs/Backlog/index.md) and find the next issue with status `TODO` (lowest sequence number).
+2. Read the full issue file in `docs/Backlog/TODO/`.
 3. Update the index table: set the issue status to `In Progress`.
 4. Implement the issue. Commit early and often.
 5. When complete:
-   - Move the issue file from `docs/TODO/` to `docs/Done/`.
+   - Move the issue file from `docs/Backlog/TODO/` to `docs/Backlog/Done/`.
    - **Update the issue file itself:** set `**Status:**` to `Done` and tick all acceptance criteria checkboxes (`- [ ]` → `- [x]`).
    - Update the index table: set the status to `Done` and the location to `Done/`.
 6. If you make a significant architectural decision, create an ADR in `docs/Decisions/` using the template there (`000-template.md`).
@@ -53,12 +53,21 @@ MattGPT/
 ├── README.md                               ← Project goals and vision
 ├── MattGPT.slnx                            ← Solution file
 ├── docs/
-│   ├── index.md                            ← Backlog & project tracking (system of record)
-│   ├── conversation-restore-outline.md     ← Technical approach for RAG pipeline
-│   ├── conversations.schema.json           ← Full JSON schema for ChatGPT export
-│   ├── TODO/                               ← Issue files awaiting implementation
-│   ├── Done/                               ← Completed issue files
-│   └── Decisions/                          ← Architecture Decision Records (ADRs)
+│   ├── index.md                            ← Documentation home (navigation hub)
+│   ├── Backlog/                            ← Project tracking (system of record)
+│   │   ├── index.md                        ← Backlog & issue tracking index
+│   │   ├── TODO/                           ← Issue files awaiting implementation
+│   │   └── Done/                           ← Completed issue files
+│   ├── Decisions/                          ← Architecture Decision Records (ADRs)
+│   ├── UserGuides/                         ← End-user documentation
+│   │   ├── getting-started.md
+│   │   ├── usage.md
+│   │   ├── configuration.md
+│   │   ├── integrations.md
+│   │   └── troubleshooting.md
+│   └── TechnicalReference/                 ← Technical docs (schema, pipeline, analysis)
+│       ├── conversation-restore-outline.md ← Technical approach for RAG pipeline
+│       └── conversations.schema.json       ← Full JSON schema for ChatGPT export
 └── src/
     ├── AGENTS.md                           ← Aspire-specific agent instructions
     ├── MattGPT.AppHost/                    ← Aspire orchestration (entry point)

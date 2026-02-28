@@ -59,3 +59,9 @@
 - [Upload your ChatGPT conversations](usage.md)
 - [Configure providers and RAG settings](configuration.md)
 - [Set up cloud LLM or vector store integrations](integrations.md)
+
+---
+
+← [User Guides](index.md)
+
+→ Next: [Usage](usage.md)

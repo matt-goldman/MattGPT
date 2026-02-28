@@ -121,3 +121,7 @@ The `RAG` section controls retrieval behaviour.
 Update `appsettings.json` and restart the API service. No data migration is required — conversations remain in MongoDB and embeddings in the vector store.
 
 > **Important:** If you change the embedding model, existing embeddings become incompatible. Re-embed by calling `POST /conversations/embed` on the API, or re-import your conversations.
+
+---
+
+← [Previous: Usage](usage.md) | [User Guides](index.md) | [Next: Integrations →](integrations.md)

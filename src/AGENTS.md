@@ -1,6 +1,6 @@
 # Copilot Instructions — Aspire
 
-These are Aspire-specific instructions for working in the `src/` directory. For project-wide instructions — including the backlog, issue tracking workflow, and architecture decisions — see the root [`AGENTS.md`](../AGENTS.md) and [`docs/index.md`](../docs/index.md).
+These are Aspire-specific instructions for working in the `src/` directory. For project-wide instructions — including the backlog, issue tracking workflow, and architecture decisions — see the root [`AGENTS.md`](../AGENTS.md) and [`docs/Backlog/index.md`](../docs/Backlog/index.md).
 
 ---
 
