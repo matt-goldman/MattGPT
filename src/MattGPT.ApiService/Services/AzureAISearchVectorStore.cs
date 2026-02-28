@@ -17,7 +17,7 @@ public class AzureAISearchVectorStore(
     SearchIndexClient indexClient,
     ILogger<AzureAISearchVectorStore> logger) : IVectorStore
 {
-    private const string IndexName = "conversations";
+    private readonly string IndexName = searchClient.IndexName;
     private volatile bool _indexEnsured;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
