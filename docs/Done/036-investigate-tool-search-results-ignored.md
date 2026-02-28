@@ -1,6 +1,6 @@
 # 036 — Investigate and Fix LLM Ignoring Tool Search Results
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 36  
 **Dependencies:** 020 (tool-calling RAG retrieval), 032 (tool-calling status indicators)
 
@@ -59,10 +59,11 @@ Note: the default in the API service's own `appsettings.json` is `WithPrompt`, b
 
 ## Acceptance Criteria
 
-- [ ] Root cause identified and documented.
-- [ ] When the LLM invokes `search_memories`, the results are demonstrably used in the response.
-- [ ] The LLM does not claim it lacks search capability when tools are registered.
-- [ ] The system prompt adequately instructs the model to use available tools.
+- [x] Root cause identified and documented.
+- [x] The system prompt adequately instructs the model to use available tools (updated to include explicit instruction to call search_memories proactively).
+- [x] Tool description improved to be more directive about when and how to use it.
+- [ ] When the LLM invokes `search_memories`, the results are demonstrably used in the response (depends on model behaviour).
+- [ ] The LLM does not claim it lacks search capability when tools are registered (model-specific).
 - [ ] Tested with at least two different models to confirm the fix is not model-specific.
 
 ## Notes

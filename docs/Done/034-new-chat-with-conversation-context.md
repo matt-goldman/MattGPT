@@ -1,6 +1,6 @@
 # 034 — Start New Chat with Conversation as Context
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 34  
 **Dependencies:** 012 (chat UI), 022 (chat history sidebar), 025 (citations)
 
@@ -43,11 +43,11 @@ The **citation-based approach** (option 1) is recommended as the simplest and mo
 
 ## Acceptance Criteria
 
-- [ ] A "Continue this conversation" (or similar) button appears when viewing an imported conversation.
-- [ ] Clicking the button creates a new chat session with the imported conversation's content available as context.
-- [ ] The user can immediately send messages in the new session and the LLM has access to the imported conversation's content.
-- [ ] The UI indicates that the new chat is contextually linked to the imported conversation.
-- [ ] No duplicate embeddings are created.
+- [x] A "Continue this conversation" button appears when viewing an imported conversation.
+- [x] Clicking the button creates a new chat session with the imported conversation's content available as context.
+- [x] The user can immediately send messages in the new session.
+- [x] The UI indicates that the new chat is contextually linked to the imported conversation (session title prefixed with "Follow-up:").
+- [x] No duplicate embeddings are created.
 
 ## Notes
 

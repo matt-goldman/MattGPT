@@ -16,9 +16,17 @@ public record ChatSource(string ConversationId, string? Title, string? Summary, 
 public record RagChatResponse(string Answer, IReadOnlyList<ChatSource> Sources);
 
 /// <summary>A single streamed chunk from the RAG pipeline.</summary>
-/// <param name="Text">Incremental text token (null for the final "sources" frame).</param>
+/// <param name="Text">Incremental text token (null for non-text frames).</param>
 /// <param name="Sources">Set only on the final chunk to deliver source metadata.</param>
-public record RagStreamChunk(string? Text, IReadOnlyList<ChatSource>? Sources = null);
+/// <param name="ToolName">Set on tool event chunks; indicates which tool fired the event.</param>
+/// <param name="ToolStart">True when a tool invocation has just started.</param>
+/// <param name="ToolEnd">True when a tool invocation has just completed.</param>
+public record RagStreamChunk(
+    string? Text,
+    IReadOnlyList<ChatSource>? Sources = null,
+    string? ToolName = null,
+    bool ToolStart = false,
+    bool ToolEnd = false);
 
 /// <summary>
 /// Implements the retrieval-augmented generation (RAG) pipeline.
@@ -38,13 +46,26 @@ public class RagService(
     IOptions<ChatSessionOptions> chatOptions,
     ILogger<RagService> logger,
     SearchMemoriesTool? searchMemoriesTool = null,
-    IUserProfileRepository? userProfileRepository = null)
+    IUserProfileRepository? userProfileRepository = null,
+    ISystemConfigRepository? systemConfigRepository = null)
 {
     /// <summary>
     /// Maximum number of message characters to include per conversation in the context window.
     /// Prevents a single long conversation from consuming the entire context budget.
     /// </summary>
     public const int MaxExcerptCharsPerConversation = 4_000;
+
+    /// <summary>
+    /// The default system prompt used when no custom prompt is stored.
+    /// </summary>
+    public const string DefaultSystemPrompt =
+        "You are a knowledgeable personal assistant. You have access to the user's complete history of past conversations.\n" +
+        "When memories are provided below, treat them as your own recollections of past interactions with the user — not as external documents.\n" +
+        "Draw on these memories naturally to give informed, contextual answers. Reference specific details, decisions, or preferences the user expressed in those conversations.\n" +
+        "If the memories contain code, technical decisions, or project context, use that knowledge as if you were the assistant in those original conversations.\n" +
+        "When the user asks about past conversations, topics, or things they may have discussed before, proactively use the search_memories tool to find relevant context.\n" +
+        "If no relevant memories are found, answer from general knowledge but let the user know you don't have any relevant memories on that topic.";
+
     private readonly RagOptions _options = options.Value;
     private readonly ChatSessionOptions _chatOptions = chatOptions.Value;
 
@@ -94,13 +115,16 @@ public class RagService(
         // 1. Automatic retrieval (full, light, or none depending on mode).
         var (relevant, conversationLookup) = await AutoRetrieveAsync(query, ct);
 
-        // 2. Fetch user profile for system context.
+        // 2. Fetch user profile and system prompt for context.
         var userProfile = userProfileRepository is not null
             ? await userProfileRepository.GetAsync(ct)
             : null;
+        var systemConfig = systemConfigRepository is not null
+            ? await systemConfigRepository.GetAsync(ct)
+            : null;
 
         // 3. Build the augmented prompt.
-        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile);
+        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt);
 
         var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
         logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
@@ -131,26 +155,51 @@ public class RagService(
         // 1. Automatic retrieval (full, light, or none depending on mode).
         var (relevant, conversationLookup) = await AutoRetrieveAsync(query, ct);
 
-        // 2. Fetch user profile for system context.
+        // 2. Fetch user profile and system prompt for context.
         var userProfile = userProfileRepository is not null
             ? await userProfileRepository.GetAsync(ct)
             : null;
+        var systemConfig = systemConfigRepository is not null
+            ? await systemConfigRepository.GetAsync(ct)
+            : null;
 
         // 3. Build the augmented prompt.
-        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile);
+        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt);
 
         var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
         logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
 
         // 4. Stream from the LLM (with tools if mode supports it).
         var chatOptions = BuildToolChatOptions();
+
+        // Set up tool event callbacks to emit tool_start / tool_end chunks (issue 032).
+        // Tool events are queued synchronously during the FunctionInvokingChatClient loop
+        // and drained before each streaming token. ConcurrentQueue is used for safety
+        // in case the tool is invoked on a different thread by the middleware.
+        var pendingToolEvents = new System.Collections.Concurrent.ConcurrentQueue<RagStreamChunk>();
+        if (searchMemoriesTool is not null)
+        {
+            searchMemoriesTool.OnStarted = name =>
+                pendingToolEvents.Enqueue(new RagStreamChunk(null, ToolName: name, ToolStart: true));
+            searchMemoriesTool.OnCompleted = name =>
+                pendingToolEvents.Enqueue(new RagStreamChunk(null, ToolName: name, ToolEnd: true));
+        }
+
         await foreach (var update in chatClient.GetStreamingResponseAsync(messages, chatOptions, ct))
         {
+            // Drain any tool events that arrived while the previous update was being processed.
+            while (pendingToolEvents.TryDequeue(out var toolEvent))
+                yield return toolEvent;
+
             if (!string.IsNullOrEmpty(update.Text))
             {
                 yield return new RagStreamChunk(update.Text);
             }
         }
+
+        // Drain any remaining tool events after the stream ends.
+        while (pendingToolEvents.TryDequeue(out var remainingEvent))
+            yield return remainingEvent;
 
         // 4. Final chunk carries the merged sources.
         var sources = CollectAllSources(relevant);
@@ -275,19 +324,14 @@ public class RagService(
         IReadOnlyDictionary<string, StoredConversation>? fullConversations = null,
         ChatSession? session = null,
         int recentMessageCount = 6,
-        UserProfile? userProfile = null)
+        UserProfile? userProfile = null,
+        string? systemPromptOverride = null)
     {
         var messages = new List<AIChatMessage>();
 
         // --- System message: identity + memory framing ---
         var system = new StringBuilder();
-        system.AppendLine("""
-            You are a knowledgeable personal assistant. You have access to the user's complete history of past conversations.
-            When memories are provided below, treat them as your own recollections of past interactions with the user — not as external documents.
-            Draw on these memories naturally to give informed, contextual answers. Reference specific details, decisions, or preferences the user expressed in those conversations.
-            If the memories contain code, technical decisions, or project context, use that knowledge as if you were the assistant in those original conversations.
-            If no relevant memories are found, answer from general knowledge but let the user know you don't have any relevant memories on that topic.
-            """);
+        system.AppendLine(systemPromptOverride ?? DefaultSystemPrompt);
 
         // --- User profile context (custom instructions) ---
         if (userProfile is not null &&

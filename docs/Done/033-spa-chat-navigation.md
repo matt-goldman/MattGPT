@@ -1,6 +1,6 @@
 # 033 — SPA-Style Chat Navigation
 
-**Status:** TODO  
+**Status:** Done  
 **Sequence:** 33  
 **Dependencies:** 022 (chat history sidebar), 012 (chat UI)
 
@@ -30,10 +30,10 @@ The goal is to make all navigation feel instant and SPA-like — only the messag
 
 ## Acceptance Criteria
 
-- [ ] Clicking any conversation (native or imported) in the sidebar updates only the chat message area.
-- [ ] The sidebar does not visibly re-render or lose state when switching conversations.
-- [ ] Deep links to imported conversations (`/chat/conversation/{id}`) still work on initial page load.
-- [ ] Navigation between conversations feels instant and smooth.
+- [x] Clicking any conversation (native or imported) in the sidebar updates only the chat message area.
+- [x] The sidebar does not visibly re-render or lose state when switching conversations.
+- [x] Deep links to imported conversations (`/chat/conversation/{id}`) still work on initial page load.
+- [x] Navigation between conversations feels instant and smooth.
 
 ## Notes
 

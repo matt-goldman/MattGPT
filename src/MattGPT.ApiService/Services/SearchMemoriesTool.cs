@@ -35,10 +35,25 @@ public class SearchMemoriesTool(
         return AIFunctionFactory.Create(
             SearchMemoriesAsync,
             name: "search_memories",
-            description: "Search the user's past conversation history by topic or query. " +
-                "Use this when the user asks about something you discussed before, references a past project, " +
-                "or when additional context from prior conversations would help you give a better answer.");
+            description: "Search the user's past conversation history by topic or keyword. " +
+                "ALWAYS call this tool when the user asks about past conversations, references something they may have discussed before, " +
+                "mentions a project, person, topic, or event that could be in their history, " +
+                "or when you are uncertain whether you have relevant context. " +
+                "The search results contain actual conversation excerpts you should use to answer the user's question. " +
+                "After calling this tool, incorporate the returned information directly into your response.");
     }
+
+    /// <summary>
+    /// Callback invoked just before the tool search begins, with the tool name.
+    /// Used to emit tool_start SSE events in the streaming pipeline.
+    /// </summary>
+    public Action<string>? OnStarted { get; set; }
+
+    /// <summary>
+    /// Callback invoked after the tool search completes, with the tool name.
+    /// Used to emit tool_end SSE events in the streaming pipeline.
+    /// </summary>
+    public Action<string>? OnCompleted { get; set; }
 
     /// <summary>
     /// Searches past conversation history by embedding the query and retrieving
@@ -57,6 +72,8 @@ public class SearchMemoriesTool(
         logger.LogInformation(
             "search_memories tool invoked. Query: {Query}, MaxResults: {MaxResults}",
             query, limit);
+
+        OnStarted?.Invoke("search_memories");
 
         try
         {
@@ -120,6 +137,10 @@ public class SearchMemoriesTool(
             logger.LogError(ex, "search_memories tool failed.");
             LastSources = [];
             return $"Memory search failed: {ex.Message}. Responding without memory context.";
+        }
+        finally
+        {
+            OnCompleted?.Invoke("search_memories");
         }
     }
 }

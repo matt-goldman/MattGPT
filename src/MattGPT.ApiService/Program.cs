@@ -32,6 +32,7 @@ builder.Services.AddSingleton<ImportJobStore>();
 builder.Services.AddSingleton<IConversationRepository, ConversationRepository>();
 builder.Services.AddSingleton<IProjectNameRepository, ProjectNameRepository>();
 builder.Services.AddSingleton<IUserProfileRepository, UserProfileRepository>();
+builder.Services.AddSingleton<ISystemConfigRepository, SystemConfigRepository>();
 builder.Services.AddSingleton(Channel.CreateBounded<ImportJobRequest>(new BoundedChannelOptions(50)
 {
     FullMode = BoundedChannelFullMode.Wait,
@@ -169,6 +170,7 @@ app.MapWeatherEndpoints();
 app.MapConversationsEndpoints();
 app.MapSearchEndpoints();
 app.MapChatEndpoints();
+app.MapSettingsEndpoints();
 app.MapDiagnosticsEndpoints();
 
 app.MapDefaultEndpoints();
