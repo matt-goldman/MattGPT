@@ -69,6 +69,7 @@ This document is the **system of record** for project planning and issue trackin
 | 35 | 035-auto-scroll-chat.md | Auto-scroll chat to bottom | Done | Done/ | Depends on 12. JS interop scrollToBottom with near-bottom detection. |
 | 36 | 036-investigate-tool-search-results-ignored.md | Investigate LLM ignoring tool search results | Done | Done/ | Depends on 20, 32. Improved system prompt and tool description to be more directive. |
 | 37 | 037-sidebar-overlay-layout.md | Sidebar should overlay chat area, not push it | Done | Done/ | Depends on 22, 12. Fixed overlay with backdrop and transform animation. |
+| 38 | 038-add-cloud-provider-integrations.md | Add cloud LLM and vector store provider integrations | Done | Done/ | Depends on 3, 21. Anthropic, OpenAI direct, Gemini; Azure AI Search, Pinecone, Weaviate. See ADR-007. |
 
 ---
 
@@ -103,5 +104,5 @@ Significant architectural decisions must be recorded as ADRs in `docs/Decisions/
 | Web Frontend | Blazor Server | Upload UI, chat UI, progress monitoring |
 | API Service | ASP.NET Core Minimal API | Business logic, parsing, RAG pipeline |
 | Document DB | MongoDB | Full conversation storage, metadata |
-| Vector DB | Qdrant | Embedding storage and similarity search |
-| LLM | Foundry Local / Ollama / Azure OpenAI (config-driven) | Summary generation, chat, embeddings |
+| Vector DB | Qdrant / Azure AI Search / Pinecone / Weaviate (config-driven) | Embedding storage and similarity search |
+| LLM | Ollama / Foundry Local / Azure OpenAI / OpenAI / Anthropic / Gemini (config-driven) | Summary generation, chat, embeddings |
