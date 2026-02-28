@@ -213,18 +213,36 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
     {
         await EnsureSchemaAsync(ct);
 
+        // Single query using DISTINCT ON to get both the aggregate stats and the most recent
+        // title in one pass, avoiding an N+1 round trip per project.
         await using var cmd = dataSource.CreateCommand(
             $"""
             SELECT
-                conversation_template_id,
-                COUNT(*) AS conversation_count,
-                MAX(update_time) AS latest_update_time,
-                MIN(create_time) AS earliest_create_time
-            FROM {TableName}
-            WHERE gizmo_type = 'snorlax'
-              AND conversation_template_id IS NOT NULL
-            GROUP BY conversation_template_id
-            ORDER BY latest_update_time DESC NULLS LAST
+                agg.conversation_template_id,
+                agg.conversation_count,
+                agg.latest_update_time,
+                agg.earliest_create_time,
+                recent.title
+            FROM (
+                SELECT
+                    conversation_template_id,
+                    COUNT(*)    AS conversation_count,
+                    MAX(update_time) AS latest_update_time,
+                    MIN(create_time) AS earliest_create_time
+                FROM {TableName}
+                WHERE gizmo_type = 'snorlax'
+                  AND conversation_template_id IS NOT NULL
+                GROUP BY conversation_template_id
+            ) agg
+            JOIN LATERAL (
+                SELECT data->>'title' AS title
+                FROM {TableName}
+                WHERE gizmo_type = 'snorlax'
+                  AND conversation_template_id = agg.conversation_template_id
+                ORDER BY update_time DESC NULLS LAST
+                LIMIT 1
+            ) recent ON true
+            ORDER BY agg.latest_update_time DESC NULLS LAST
             """);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -238,23 +256,8 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
                 ConversationCount = (int)reader.GetInt64(1),
                 LatestUpdateTime = reader.IsDBNull(2) ? null : reader.GetDouble(2),
                 EarliestCreateTime = reader.IsDBNull(3) ? null : reader.GetDouble(3),
+                MostRecentTitle = reader.IsDBNull(4) ? null : reader.GetString(4),
             });
-        }
-
-        // Fetch the most recent title for each project.
-        foreach (var project in projects)
-        {
-            await using var titleCmd = dataSource.CreateCommand(
-                $"""
-                SELECT data->>'title'
-                FROM {TableName}
-                WHERE gizmo_type = 'snorlax'
-                  AND conversation_template_id = $1
-                ORDER BY update_time DESC NULLS LAST
-                LIMIT 1
-                """);
-            titleCmd.Parameters.AddWithValue(project.TemplateId);
-            project.MostRecentTitle = (string?)await titleCmd.ExecuteScalarAsync(ct);
         }
 
         return projects;

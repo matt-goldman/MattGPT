@@ -31,9 +31,14 @@ var isPostgresVectorStore = vectorStoreProvider.Equals("Postgres", StringCompari
 IResourceBuilder<IResourceWithConnectionString>? postgresDb = null;
 if (isPostgresDocumentDb || isPostgresVectorStore)
 {
+    // When Postgres serves as the document DB (with or without the vector store), the shared
+    // database name is "mattgptdb". When Postgres is the vector store only, a distinct name
+    // "mattgpt_vectorstore" avoids conflicting with the MongoDB "mattgptdb" resource.
+    var pgDbName = isPostgresDocumentDb ? "mattgptdb" : "mattgpt_vectorstore";
+
     postgresDb = builder.AddPostgres("postgres")
         .WithDataVolume()
-        .AddDatabase("mattgptdb");
+        .AddDatabase(pgDbName);
 }
 
 IResourceBuilder<IResourceWithConnectionString>? mongodb = null;

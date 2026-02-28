@@ -111,7 +111,10 @@ public class PostgresVectorStore(NpgsqlDataSource dataSource, ILogger<PostgresVe
 
     /// <summary>
     /// Ensures the pgvector extension and conversations vector table exist.
-    /// Called lazily on the first upsert; subsequent calls are no-ops.
+    /// On first call the schema is created with the given <paramref name="dimensions"/>.
+    /// If the table already exists its vector column dimension is validated; a mismatch
+    /// throws <see cref="InvalidOperationException"/> with a clear diagnostic message.
+    /// Subsequent calls are no-ops once the schema has been verified.
     /// </summary>
     private async Task EnsureSchemaAsync(int dimensions, CancellationToken ct)
     {
@@ -122,10 +125,33 @@ public class PostgresVectorStore(NpgsqlDataSource dataSource, ILogger<PostgresVe
         {
             if (_schemaEnsured) return;
 
+            // Enable the extension before touching the table.
+            await using var extCmd = dataSource.CreateCommand("CREATE EXTENSION IF NOT EXISTS vector");
+            await extCmd.ExecuteNonQueryAsync(ct);
+
+            // Check whether the table already exists and, if so, validate the stored dimension.
+            await using var dimCmd = dataSource.CreateCommand(
+                """
+                SELECT atttypmod
+                FROM   pg_attribute
+                JOIN   pg_class ON pg_class.oid = pg_attribute.attrelid
+                WHERE  pg_class.relname = $1
+                AND    attname = 'embedding'
+                AND    attnum > 0
+                """);
+            dimCmd.Parameters.AddWithValue(TableName);
+            var existing = await dimCmd.ExecuteScalarAsync(ct);
+
+            if (existing is int storedDim && storedDim > 0 && storedDim != dimensions)
+            {
+                throw new InvalidOperationException(
+                    $"Postgres vector store dimension mismatch: table '{TableName}' was created " +
+                    $"with {storedDim} dimensions but the current embedding model produces {dimensions}. " +
+                    "Re-embed all conversations via POST /conversations/embed after changing the embedding model.");
+            }
+
             await using var cmd = dataSource.CreateCommand(
                 $$"""
-                CREATE EXTENSION IF NOT EXISTS vector;
-
                 CREATE TABLE IF NOT EXISTS {{TableName}} (
                     conversation_id TEXT PRIMARY KEY,
                     title           TEXT,
