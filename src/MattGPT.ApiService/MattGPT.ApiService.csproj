@@ -26,7 +26,6 @@
     <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.1.2-beta.518" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.3.0" />
     <PackageReference Include="Pinecone.Client" Version="4.0.2" />
-    <PackageReference Include="WeaviateNET" Version="1.23.9.1" />
   </ItemGroup>
 
 </Project>
