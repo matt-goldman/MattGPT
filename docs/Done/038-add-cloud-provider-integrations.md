@@ -68,7 +68,7 @@ See **ADR-007** for the rationale behind provider selection.
 
 ## Acceptance Criteria
 
-- [x] Setting `LLM:Provider=Anthropic` with a valid API key registers Claude as the chat and embedding provider.
+- [x] Setting `LLM:Provider=Anthropic` with a valid API key registers Claude as the chat provider. Because Anthropic has no embedding API, a separate `LLM:EmbeddingProvider` (e.g. `OpenAI`) must be configured to supply `IEmbeddingGenerator`.
 - [x] Setting `LLM:Provider=OpenAI` with a valid API key registers OpenAI directly (not via Azure).
 - [x] Setting `LLM:Provider=Gemini` with a valid API key registers Google Gemini.
 - [x] Setting `VectorStore:Provider=AzureAISearch` registers Azure AI Search as the vector store.
