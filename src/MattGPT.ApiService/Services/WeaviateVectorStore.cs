@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MattGPT.ApiService.Models;
+using Microsoft.Extensions.Options;
 
 namespace MattGPT.ApiService.Services;
 
@@ -11,16 +13,20 @@ namespace MattGPT.ApiService.Services;
 /// as the .NET client ecosystem is immature.
 /// </summary>
 /// <remarks>
-/// Requires a Weaviate instance with the "conversations" class. The class is auto-created
-/// on first upsert if it doesn't exist.
+/// The Weaviate class name is derived from <see cref="VectorStoreOptions.IndexName"/>
+/// (first letter uppercased to satisfy Weaviate's naming convention). The class is
+/// auto-created on first upsert if it doesn't exist.
 /// </remarks>
 public class WeaviateVectorStore(
     HttpClient httpClient,
+    IOptions<VectorStoreOptions> options,
     ILogger<WeaviateVectorStore> logger) : IVectorStore
 {
     private volatile bool _classEnsured;
     private readonly SemaphoreSlim _initLock = new(1, 1);
-    private const string ClassName = "Conversation";
+
+    // Weaviate class names must start with an uppercase letter.
+    private readonly string ClassName = CapitalizeFirst(options.Value.IndexName);
 
     /// <inheritdoc/>
     public async Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
@@ -68,7 +74,7 @@ public class WeaviateVectorStore(
     public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, CancellationToken ct = default)
     {
-        var vectorStr = string.Join(", ", queryVector.Select(v => v.ToString("G")));
+        var vectorStr = string.Join(", ", queryVector.Select(v => v.ToString("G", CultureInfo.InvariantCulture)));
         var graphql = new
         {
             query = $$"""
@@ -234,4 +240,8 @@ public class WeaviateVectorStore(
         // Take the first 16 bytes of the hash to form a GUID.
         return new Guid(hash.AsSpan(0, 16)).ToString("D");
     }
+
+    /// <summary>Returns the input string with its first character uppercased.</summary>
+    private static string CapitalizeFirst(string value) =>
+        string.IsNullOrEmpty(value) ? value : char.ToUpperInvariant(value[0]) + value[1..];
 }
