@@ -1,0 +1,188 @@
+@page "/register"
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Navigation
+@inject Microsoft.Extensions.Options.IOptions<MattGPT.Web.AuthOptions> AuthConfig
+
+<PageTitle>Register — MattGPT</PageTitle>
+
+<div class="flex items-center justify-center min-h-[60vh]">
+    <div class="w-full max-w-sm space-y-6">
+        <h1 class="text-2xl font-bold text-center">Create Account</h1>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="bg-danger-50 border border-danger-200 text-danger-700 p-3 rounded-lg text-sm">
+                @_error
+            </div>
+        }
+
+        <EditForm Model="_model" OnValidSubmit="HandleRegister" FormName="register">
+            <div class="space-y-4">
+                <div>
+                    <label for="email" class="block text-sm font-medium mb-1">Email</label>
+                    <InputText id="email" @bind-Value="_model.Email"
+                               class="w-full px-3 py-2 border border-default-300 rounded-lg bg-default-100 focus:outline-none focus:ring-2 focus:ring-primary" />
+                </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium mb-1">Password</label>
+                    <InputText id="password" @bind-Value="_model.Password" type="password"
+                               class="w-full px-3 py-2 border border-default-300 rounded-lg bg-default-100 focus:outline-none focus:ring-2 focus:ring-primary" />
+                </div>
+                <div>
+                    <label for="confirm" class="block text-sm font-medium mb-1">Confirm Password</label>
+                    <InputText id="confirm" @bind-Value="_model.ConfirmPassword" type="password"
+                               class="w-full px-3 py-2 border border-default-300 rounded-lg bg-default-100 focus:outline-none focus:ring-2 focus:ring-primary" />
+                </div>
+                <button type="submit" disabled="@_loading"
+                        class="w-full py-2 px-4 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 disabled:opacity-50">
+                    @(_loading ? "Creating account…" : "Create account")
+                </button>
+            </div>
+        </EditForm>
+
+        <p class="text-center text-sm text-default-500">
+            Already have an account?
+            <a href="/login" class="text-primary hover:underline">Sign in</a>
+        </p>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+#pragma warning disable BL0008
+    [SupplyParameterFromForm] private RegisterModel _model { get; set; } = new();
+#pragma warning restore BL0008
+
+    private string? _error;
+    private bool _loading;
+
+    protected override void OnInitialized()
+    {
+        if (!AuthConfig.Value.Enabled)
+            Navigation.NavigateTo("/", forceLoad: true);
+    }
+
+    private async Task HandleRegister()
+    {
+        _error = null;
+        _loading = true;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_model.Email) || string.IsNullOrWhiteSpace(_model.Password))
+            {
+                _error = "Email and password are required.";
+                return;
+            }
+
+            if (_model.Password != _model.ConfirmPassword)
+            {
+                _error = "Passwords do not match.";
+                return;
+            }
+
+            var client = HttpClientFactory.CreateClient("apiservice");
+
+            // 1. Register via the Identity API endpoint.
+            var registerResponse = await client.PostAsJsonAsync("/auth/register", new
+            {
+                email = _model.Email,
+                password = _model.Password,
+            });
+
+            if (!registerResponse.IsSuccessStatusCode)
+            {
+                var body = await registerResponse.Content.ReadAsStringAsync();
+                _error = $"Registration failed: {body}";
+                return;
+            }
+
+            // 2. Auto-login: get a bearer token.
+            var loginResponse = await client.PostAsJsonAsync("/auth/login", new
+            {
+                email = _model.Email,
+                password = _model.Password,
+            });
+
+            if (!loginResponse.IsSuccessStatusCode)
+            {
+                // Account created but auto-login failed; redirect to login page.
+                Navigation.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            var tokenResult = await loginResponse.Content.ReadFromJsonAsync<TokenResponse>();
+            if (tokenResult?.AccessToken is null)
+            {
+                Navigation.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            // 3. Retrieve user info using the bearer token.
+            var meRequest = new HttpRequestMessage(HttpMethod.Get, "/auth/me");
+            meRequest.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokenResult.AccessToken);
+            var meResponse = await client.SendAsync(meRequest);
+
+            if (!meResponse.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            var userInfo = await meResponse.Content.ReadFromJsonAsync<UserInfo>();
+            if (userInfo?.Id is null)
+            {
+                Navigation.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            // 4. Create a local Blazor cookie with the user's claims.
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, userInfo.Id),
+            };
+            if (userInfo.Email is not null)
+                claims.Add(new Claim(ClaimTypes.Email, userInfo.Email));
+
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+
+            if (HttpContext is not null)
+            {
+                await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+            }
+
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+        catch
+        {
+            _error = "Could not reach the server. Please try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private sealed class RegisterModel
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    private sealed record TokenResponse(
+        [property: System.Text.Json.Serialization.JsonPropertyName("tokenType")] string? TokenType,
+        [property: System.Text.Json.Serialization.JsonPropertyName("accessToken")] string? AccessToken,
+        [property: System.Text.Json.Serialization.JsonPropertyName("expiresIn")] int ExpiresIn,
+        [property: System.Text.Json.Serialization.JsonPropertyName("refreshToken")] string? RefreshToken);
+
+    private sealed record UserInfo(
+        [property: System.Text.Json.Serialization.JsonPropertyName("id")] string? Id,
+        [property: System.Text.Json.Serialization.JsonPropertyName("email")] string? Email);
+}

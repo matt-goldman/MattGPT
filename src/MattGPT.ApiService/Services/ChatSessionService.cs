@@ -14,6 +14,7 @@ public class ChatSessionService(
     IChatSessionRepository repository,
     IChatClient chatClient,
     IOptions<ChatSessionOptions> options,
+    ICurrentUserService currentUser,
     ILogger<ChatSessionService> logger)
 {
     /// <summary>Approximate characters per token for estimation (English text).</summary>
@@ -34,7 +35,7 @@ public class ChatSessionService(
             logger.LogWarning("Session {SessionId} not found, creating new session.", sessionId.Value);
         }
 
-        var session = new ChatSession();
+        var session = new ChatSession { UserId = currentUser.UserId };
         await repository.CreateAsync(session, ct);
         logger.LogInformation("Created new chat session {SessionId}.", session.SessionId);
         return session;

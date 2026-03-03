@@ -43,4 +43,10 @@ public class ChatSession
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public ChatSessionStatus Status { get; set; } = ChatSessionStatus.Active;
+
+    /// <summary>
+    /// The Identity user ID of the owner, or <c>null</c> for sessions created without authentication.
+    /// Used to scope chat sessions to individual users when auth is enabled.
+    /// </summary>
+    public string? UserId { get; set; }
 }

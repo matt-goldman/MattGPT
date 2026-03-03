@@ -1,4 +1,5 @@
 ﻿@rendermode InteractiveServer
+@inject Microsoft.Extensions.Options.IOptions<MattGPT.Web.AuthOptions> AuthConfig
 
 <LumexNavbar Bordered="true">
     <LumexNavbarBrand>
@@ -28,5 +29,26 @@
                 Settings
             </NavLink>
         </LumexNavbarItem>
+
+        @if (AuthConfig.Value.Enabled)
+        {
+            <AuthorizeView>
+                <Authorized>
+                    <LumexNavbarItem>
+                        <span class="text-sm text-default-500">@(context.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? context.User.Identity?.Name)</span>
+                    </LumexNavbarItem>
+                    <LumexNavbarItem>
+                        <a href="/logout" class="text-sm font-medium hover:opacity-75">Logout</a>
+                    </LumexNavbarItem>
+                </Authorized>
+                <NotAuthorized>
+                    <LumexNavbarItem>
+                        <NavLink href="login" class="text-sm font-medium hover:opacity-75">
+                            Login
+                        </NavLink>
+                    </LumexNavbarItem>
+                </NotAuthorized>
+            </AuthorizeView>
+        }
     </LumexNavbarContent>
 </LumexNavbar>

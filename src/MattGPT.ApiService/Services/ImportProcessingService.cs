@@ -6,7 +6,7 @@ namespace MattGPT.ApiService.Services;
 /// <summary>
 /// Identifies a pending import job and the temp file path containing the uploaded data.
 /// </summary>
-public record ImportJobRequest(string JobId, string TempFilePath);
+public record ImportJobRequest(string JobId, string TempFilePath, string? UserId = null);
 
 /// <summary>
 /// Background service that dequeues import job requests and processes them using
@@ -64,7 +64,7 @@ public class ImportProcessingService(
                         }
 
                         // Upsert the conversation into MongoDB, then count it.
-                        await repository.UpsertAsync(StoredConversation.From(conversation), stoppingToken);
+                        await repository.UpsertAsync(StoredConversation.From(conversation, request.UserId), stoppingToken);
                         job.ProcessedConversations++;
                     }
                     catch (Exception ex)

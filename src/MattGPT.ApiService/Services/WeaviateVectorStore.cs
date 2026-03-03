@@ -49,6 +49,7 @@ public class WeaviateVectorStore(
                 ["default_model_slug"] = conversation.DefaultModelSlug ?? string.Empty,
                 ["gizmo_id"] = conversation.GizmoId ?? string.Empty,
                 ["is_archived"] = conversation.IsArchived ?? false,
+                ["user_id"] = conversation.UserId ?? string.Empty,
             },
             vector
         };
@@ -72,9 +73,15 @@ public class WeaviateVectorStore(
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
-        float[] queryVector, int limit = 5, CancellationToken ct = default)
+        float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
     {
         var vectorStr = string.Join(", ", queryVector.Select(v => v.ToString("G", CultureInfo.InvariantCulture)));
+
+        // Build the optional user_id filter. Escape backslashes and double-quotes to prevent injection.
+        var whereClause = userId is not null
+            ? $"where: {{ path: [\"user_id\"], operator: Equal, valueText: \"{EscapeGraphQLString(userId)}\" }}"
+            : string.Empty;
+
         var graphql = new
         {
             query = $$"""
@@ -83,6 +90,7 @@ public class WeaviateVectorStore(
                 {{ClassName}}(
                   limit: {{limit}}
                   nearVector: { vector: [{{vectorStr}}] }
+                  {{whereClause}}
                 ) {
                   conversation_id
                   title
@@ -187,6 +195,19 @@ public class WeaviateVectorStore(
             var existsResponse = await httpClient.GetAsync($"v1/schema/{ClassName}", ct);
             if (existsResponse.IsSuccessStatusCode)
             {
+                // Ensure the user_id property exists on pre-existing classes (idempotent).
+                var addPropResponse = await httpClient.PostAsJsonAsync(
+                    $"v1/schema/{ClassName}/properties",
+                    new { name = "user_id", dataType = new[] { "text" } },
+                    ct);
+                // 200 = added, 422 = already exists — both are acceptable.
+                if (!addPropResponse.IsSuccessStatusCode && (int)addPropResponse.StatusCode != 422)
+                {
+                    logger.LogWarning(
+                        "Could not ensure user_id property on Weaviate class '{Class}': {Status}",
+                        ClassName, addPropResponse.StatusCode);
+                }
+
                 _classEnsured = true;
                 return;
             }
@@ -206,6 +227,7 @@ public class WeaviateVectorStore(
                     new { name = "default_model_slug", dataType = new[] { "text" } },
                     new { name = "gizmo_id", dataType = new[] { "text" } },
                     new { name = "is_archived", dataType = new[] { "boolean" } },
+                    new { name = "user_id", dataType = new[] { "text" } },
                 }
             };
 
@@ -244,4 +266,11 @@ public class WeaviateVectorStore(
     /// <summary>Returns the input string with its first character uppercased.</summary>
     private static string CapitalizeFirst(string value) =>
         string.IsNullOrEmpty(value) ? value : char.ToUpperInvariant(value[0]) + value[1..];
+
+    /// <summary>
+    /// Escapes a string for safe interpolation into a GraphQL string literal
+    /// by escaping backslashes and double-quote characters.
+    /// </summary>
+    private static string EscapeGraphQLString(string value) =>
+        value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }

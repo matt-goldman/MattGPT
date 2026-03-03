@@ -28,6 +28,7 @@ public class PineconeVectorStore(
             ["default_model_slug"] = conversation.DefaultModelSlug ?? string.Empty,
             ["gizmo_id"] = conversation.GizmoId ?? string.Empty,
             ["is_archived"] = conversation.IsArchived ?? false,
+            ["user_id"] = conversation.UserId ?? string.Empty,
         };
 
         await index.UpsertAsync(new UpsertRequest
@@ -50,9 +51,10 @@ public class PineconeVectorStore(
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
-        float[] queryVector, int limit = 5, CancellationToken ct = default)
+        float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
     {
         var index = client.Index(indexName);
+        var filterValue = userId ?? string.Empty;
 
         var response = await index.QueryAsync(new QueryRequest
         {
@@ -60,6 +62,7 @@ public class PineconeVectorStore(
             TopK = (uint)limit,
             IncludeMetadata = true,
             IncludeValues = false,
+            Filter = new Metadata { ["user_id"] = filterValue }
         }, cancellationToken: ct);
 
         if (response.Matches is null || !response.Matches.Any())

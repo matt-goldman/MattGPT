@@ -25,6 +25,6 @@ public interface IChatSessionRepository
     /// <summary>Update the session status (e.g., Active → Completed).</summary>
     Task UpdateStatusAsync(Guid sessionId, ChatSessionStatus status, CancellationToken ct = default);
 
-    /// <summary>Return the most recent sessions ordered by <see cref="ChatSession.UpdatedAt"/> descending.</summary>
-    Task<List<ChatSession>> ListRecentAsync(int limit = 50, CancellationToken ct = default);
+    /// <summary>Return the most recent sessions ordered by <see cref="ChatSession.UpdatedAt"/> descending, scoped to the given user.</summary>
+    Task<List<ChatSession>> ListRecentAsync(int limit = 50, string? userId = null, CancellationToken ct = default);
 }

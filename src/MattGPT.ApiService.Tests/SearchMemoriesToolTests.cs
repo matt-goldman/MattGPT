@@ -36,6 +36,7 @@ public class SearchMemoriesToolTests
             new FakeSearchVectorStore(searchResults ?? []),
             repository ?? new FakeConversationRepository(),
             Options.Create(options ?? new RagOptions()),
+            new NullCurrentUserService(),
             NullLogger<SearchMemoriesTool>.Instance);
     }
 
@@ -152,6 +153,7 @@ public class SearchMemoriesToolTests
             new ThrowingSearchVectorStore(),
             new FakeConversationRepository(),
             Options.Create(new RagOptions()),
+            new NullCurrentUserService(),
             NullLogger<SearchMemoriesTool>.Instance);
 
         var result = await tool.SearchMemoriesAsync("query");
@@ -170,7 +172,7 @@ internal sealed class ThrowingSearchVectorStore : IVectorStore
         => Task.CompletedTask;
 
     public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
-        float[] queryVector, int limit = 5, CancellationToken ct = default)
+        float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
         => throw new InvalidOperationException("Qdrant unavailable");
 
     public Task<ulong?> GetPointCountAsync(CancellationToken ct = default)

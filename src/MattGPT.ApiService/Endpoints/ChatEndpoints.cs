@@ -110,10 +110,10 @@ public static class ChatEndpoints
         .WithName("ChatStream");
 
         // List recent chat sessions for the sidebar.
-        app.MapGet("/chat/sessions", async (IChatSessionRepository sessionRepo, int limit = 50) =>
+        app.MapGet("/chat/sessions", async (IChatSessionRepository sessionRepo, ICurrentUserService currentUser, int limit = 50) =>
         {
             if (limit is < 1 or > 200) limit = 50;
-            var sessions = await sessionRepo.ListRecentAsync(limit);
+            var sessions = await sessionRepo.ListRecentAsync(limit, currentUser.UserId);
             return Results.Ok(sessions.Select(s => new
             {
                 sessionId = s.SessionId,
