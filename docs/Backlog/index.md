@@ -71,7 +71,7 @@ This document is the **system of record** for project planning and issue trackin
 | 37 | 037-sidebar-overlay-layout.md | Sidebar should overlay chat area, not push it | Done | Done/ | Depends on 22, 12. Fixed overlay with backdrop and transform animation. |
 | 38 | 038-add-cloud-provider-integrations.md | Add cloud LLM and vector store provider integrations | Done | Done/ | Depends on 3, 21. Anthropic, OpenAI direct, Gemini; Azure AI Search, Pinecone, Weaviate. See ADR-007. |
 | 39 | 039-add-postgres-provider.md | Add Postgres as document DB and vector store provider | Done | Done/ | Depends on 38. Postgres via pgvector for both document DB and vector store, with shared Aspire resource. |
-| 40 | 040-optional-authentication.md | Optional authentication with user-scoped data | TODO | TODO/ | Depends on 39. ASP.NET Core Identity; user-scoped conversations, chat sessions, and vector search. See ADR-008. |
+| 40 | 040-optional-authentication.md | Optional authentication with user-scoped data | Done | Done/ | Depends on 39. ASP.NET Core Identity; user-scoped conversations, chat sessions, and vector search. See ADR-008. |
 
 ---
 

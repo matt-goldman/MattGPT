@@ -32,14 +32,15 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
             $"""
             INSERT INTO {TableName}
                 (conversation_id, processing_status, create_time, update_time,
-                 gizmo_type, conversation_template_id, data)
-            VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+                 gizmo_type, conversation_template_id, user_id, data)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
             ON CONFLICT (conversation_id) DO UPDATE SET
                 processing_status        = EXCLUDED.processing_status,
                 create_time              = EXCLUDED.create_time,
                 update_time              = EXCLUDED.update_time,
                 gizmo_type               = EXCLUDED.gizmo_type,
                 conversation_template_id = EXCLUDED.conversation_template_id,
+                user_id                  = EXCLUDED.user_id,
                 data                     = EXCLUDED.data
             """);
 
@@ -49,6 +50,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
         cmd.Parameters.AddWithValue((object?)conversation.UpdateTime ?? DBNull.Value);
         cmd.Parameters.AddWithValue((object?)conversation.GizmoType ?? DBNull.Value);
         cmd.Parameters.AddWithValue((object?)conversation.ConversationTemplateId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue((object?)conversation.UserId ?? DBNull.Value);
         cmd.Parameters.AddWithValue(data);
 
         await cmd.ExecuteNonQueryAsync(ct);
@@ -56,20 +58,23 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
 
     /// <inheritdoc/>
     public async Task<(List<StoredConversation> Items, long Total)> GetPageAsync(
-        int page, int pageSize, CancellationToken ct = default)
+        int page, int pageSize, string? userId = null, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
 
         await using var countCmd = dataSource.CreateCommand(
-            $"SELECT COUNT(*) FROM {TableName}");
+            $"SELECT COUNT(*) FROM {TableName} WHERE user_id IS NOT DISTINCT FROM $1");
+        countCmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
         var total = (long)(await countCmd.ExecuteScalarAsync(ct))!;
 
         await using var cmd = dataSource.CreateCommand(
             $"""
             SELECT data FROM {TableName}
+            WHERE user_id IS NOT DISTINCT FROM $1
             ORDER BY update_time DESC NULLS LAST
-            LIMIT $1 OFFSET $2
+            LIMIT $2 OFFSET $3
             """);
+        cmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
         cmd.Parameters.AddWithValue(pageSize);
         cmd.Parameters.AddWithValue((page - 1) * pageSize);
 
@@ -185,12 +190,13 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
     }
 
     /// <inheritdoc/>
-    public async Task<Dictionary<ConversationProcessingStatus, long>> GetStatusCountsAsync(CancellationToken ct = default)
+    public async Task<Dictionary<ConversationProcessingStatus, long>> GetStatusCountsAsync(string? userId = null, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
 
         await using var cmd = dataSource.CreateCommand(
-            $"SELECT processing_status, COUNT(*) FROM {TableName} GROUP BY processing_status");
+            $"SELECT processing_status, COUNT(*) FROM {TableName} WHERE user_id IS NOT DISTINCT FROM $1 GROUP BY processing_status");
+        cmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         var counts = new Dictionary<ConversationProcessingStatus, long>();
@@ -209,7 +215,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
     }
 
     /// <inheritdoc/>
-    public async Task<List<ConversationProject>> GetProjectsAsync(CancellationToken ct = default)
+    public async Task<List<ConversationProject>> GetProjectsAsync(string? userId = null, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
 
@@ -232,6 +238,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
                 FROM {TableName}
                 WHERE gizmo_type = 'snorlax'
                   AND conversation_template_id IS NOT NULL
+                  AND user_id IS NOT DISTINCT FROM $1
                 GROUP BY conversation_template_id
             ) agg
             JOIN LATERAL (
@@ -239,11 +246,13 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
                 FROM {TableName}
                 WHERE gizmo_type = 'snorlax'
                   AND conversation_template_id = agg.conversation_template_id
+                  AND user_id IS NOT DISTINCT FROM $1
                 ORDER BY update_time DESC NULLS LAST
                 LIMIT 1
             ) recent ON true
             ORDER BY agg.latest_update_time DESC NULLS LAST
             """);
+        cmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         var projects = new List<ConversationProject>();
@@ -265,7 +274,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
 
     /// <inheritdoc/>
     public async Task<(List<StoredConversation> Items, long Total)> GetProjectConversationsAsync(
-        string templateId, int page, int pageSize, CancellationToken ct = default)
+        string templateId, int page, int pageSize, string? userId = null, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
 
@@ -273,18 +282,22 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
             $"""
             SELECT COUNT(*) FROM {TableName}
             WHERE gizmo_type = 'snorlax' AND conversation_template_id = $1
+              AND user_id IS NOT DISTINCT FROM $2
             """);
         countCmd.Parameters.AddWithValue(templateId);
+        countCmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
         var total = (long)(await countCmd.ExecuteScalarAsync(ct))!;
 
         await using var cmd = dataSource.CreateCommand(
             $"""
             SELECT data FROM {TableName}
             WHERE gizmo_type = 'snorlax' AND conversation_template_id = $1
+              AND user_id IS NOT DISTINCT FROM $2
             ORDER BY update_time DESC NULLS LAST
-            LIMIT $2 OFFSET $3
+            LIMIT $3 OFFSET $4
             """);
         cmd.Parameters.AddWithValue(templateId);
+        cmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
         cmd.Parameters.AddWithValue(pageSize);
         cmd.Parameters.AddWithValue((page - 1) * pageSize);
 
@@ -293,26 +306,30 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
 
     /// <inheritdoc/>
     public async Task<(List<StoredConversation> Items, long Total)> GetNonProjectConversationsAsync(
-        int page, int pageSize, CancellationToken ct = default)
+        int page, int pageSize, string? userId = null, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
 
         await using var countCmd = dataSource.CreateCommand(
             $"""
             SELECT COUNT(*) FROM {TableName}
-            WHERE gizmo_type IS DISTINCT FROM 'snorlax'
-               OR conversation_template_id IS NULL
+            WHERE (gizmo_type IS DISTINCT FROM 'snorlax'
+               OR conversation_template_id IS NULL)
+              AND user_id IS NOT DISTINCT FROM $1
             """);
+        countCmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
         var total = (long)(await countCmd.ExecuteScalarAsync(ct))!;
 
         await using var cmd = dataSource.CreateCommand(
             $"""
             SELECT data FROM {TableName}
-            WHERE gizmo_type IS DISTINCT FROM 'snorlax'
-               OR conversation_template_id IS NULL
+            WHERE (gizmo_type IS DISTINCT FROM 'snorlax'
+               OR conversation_template_id IS NULL)
+              AND user_id IS NOT DISTINCT FROM $1
             ORDER BY update_time DESC NULLS LAST
-            LIMIT $1 OFFSET $2
+            LIMIT $2 OFFSET $3
             """);
+        cmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
         cmd.Parameters.AddWithValue(pageSize);
         cmd.Parameters.AddWithValue((page - 1) * pageSize);
 
@@ -358,6 +375,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
                     update_time              DOUBLE PRECISION,
                     gizmo_type               TEXT,
                     conversation_template_id TEXT,
+                    user_id                  TEXT,
                     data                     JSONB NOT NULL
                 );
 
@@ -375,6 +393,9 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
 
                 CREATE INDEX IF NOT EXISTS {TableName}_template_id_idx
                     ON {TableName} (conversation_template_id);
+
+                CREATE INDEX IF NOT EXISTS {TableName}_user_id_idx
+                    ON {TableName} (user_id);
                 """);
 
             await cmd.ExecuteNonQueryAsync(ct);

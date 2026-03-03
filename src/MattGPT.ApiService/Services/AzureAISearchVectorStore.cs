@@ -37,6 +37,7 @@ public class AzureAISearchVectorStore(
             ["default_model_slug"] = conversation.DefaultModelSlug ?? string.Empty,
             ["gizmo_id"] = conversation.GizmoId ?? string.Empty,
             ["is_archived"] = conversation.IsArchived ?? false,
+            ["user_id"] = conversation.UserId ?? string.Empty,
             ["vector"] = vector
         };
 
@@ -49,8 +50,10 @@ public class AzureAISearchVectorStore(
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
-        float[] queryVector, int limit = 5, CancellationToken ct = default)
+        float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
     {
+        var filterValue = userId ?? string.Empty;
+
         var searchOptions = new SearchOptions
         {
             VectorSearch = new()
@@ -65,6 +68,7 @@ public class AzureAISearchVectorStore(
                 }
             },
             Size = limit,
+            Filter = $"user_id eq '{filterValue}'",
             Select = { "conversation_id", "title", "summary" }
         };
 
@@ -127,6 +131,7 @@ public class AzureAISearchVectorStore(
                     new SimpleField("default_model_slug", SearchFieldDataType.String) { IsFilterable = true },
                     new SimpleField("gizmo_id", SearchFieldDataType.String) { IsFilterable = true },
                     new SimpleField("is_archived", SearchFieldDataType.Boolean) { IsFilterable = true },
+                    new SimpleField("user_id", SearchFieldDataType.String) { IsFilterable = true },
                     new SearchField("vector", SearchFieldDataType.Collection(SearchFieldDataType.Single))
                     {
                         IsSearchable = true,

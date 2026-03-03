@@ -51,7 +51,7 @@ public static class DiagnosticsEndpoints
             var llm = llmOptions.Value;
 
             // 1. MongoDB conversation counts by processing status.
-            var statusCounts = await repository.GetStatusCountsAsync(ct);
+            var statusCounts = await repository.GetStatusCountsAsync(ct: ct);
 
             // 2. Qdrant point count.
             ulong? qdrantPoints = null;

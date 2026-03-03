@@ -30,12 +30,13 @@ public class PostgresChatSessionRepository(NpgsqlDataSource dataSource, ILogger<
         await using var cmd = dataSource.CreateCommand(
             $"""
             INSERT INTO {TableName}
-                (session_id, status, created_at, updated_at, data)
-            VALUES ($1, $2, $3, $4, $5::jsonb)
+                (session_id, status, user_id, created_at, updated_at, data)
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb)
             """);
 
         cmd.Parameters.AddWithValue(session.SessionId.ToString());
         cmd.Parameters.AddWithValue(session.Status.ToString());
+        cmd.Parameters.AddWithValue((object?)session.UserId ?? DBNull.Value);
         cmd.Parameters.AddWithValue(session.CreatedAt.UtcDateTime);
         cmd.Parameters.AddWithValue(session.UpdatedAt.UtcDateTime);
         cmd.Parameters.AddWithValue(data);
@@ -157,7 +158,7 @@ public class PostgresChatSessionRepository(NpgsqlDataSource dataSource, ILogger<
     }
 
     /// <inheritdoc/>
-    public async Task<List<ChatSession>> ListRecentAsync(int limit = 50, CancellationToken ct = default)
+    public async Task<List<ChatSession>> ListRecentAsync(int limit = 50, string? userId = null, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
 
@@ -166,9 +167,11 @@ public class PostgresChatSessionRepository(NpgsqlDataSource dataSource, ILogger<
             $"""
             SELECT data - 'messages' - 'rollingSummary'
             FROM {TableName}
+            WHERE user_id IS NOT DISTINCT FROM $1
             ORDER BY updated_at DESC
-            LIMIT $1
+            LIMIT $2
             """);
+        cmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
         cmd.Parameters.AddWithValue(limit);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -197,6 +200,7 @@ public class PostgresChatSessionRepository(NpgsqlDataSource dataSource, ILogger<
                 CREATE TABLE IF NOT EXISTS {TableName} (
                     session_id  TEXT PRIMARY KEY,
                     status      TEXT NOT NULL DEFAULT 'Active',
+                    user_id     TEXT,
                     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     data        JSONB NOT NULL
@@ -207,6 +211,9 @@ public class PostgresChatSessionRepository(NpgsqlDataSource dataSource, ILogger<
 
                 CREATE INDEX IF NOT EXISTS {TableName}_status_idx
                     ON {TableName} (status);
+
+                CREATE INDEX IF NOT EXISTS {TableName}_user_id_idx
+                    ON {TableName} (user_id);
                 """);
 
             await cmd.ExecuteNonQueryAsync(ct);

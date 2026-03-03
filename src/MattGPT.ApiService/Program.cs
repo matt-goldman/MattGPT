@@ -1,11 +1,16 @@
 using Azure.AI.OpenAI;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using MattGPT.ApiService;
 using MattGPT.ApiService.Endpoints;
 using MattGPT.ApiService.Services;
 using OpenAI;
 using System.ClientModel;
+using System.Security.Claims;
 using System.Threading.Channels;
 using Azure;
 using Azure.Search.Documents;
@@ -23,9 +28,51 @@ builder.WebHost.ConfigureKestrel(options =>
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
-// --- Document DB configuration ---
+// --- Optional authentication ---
+builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.SectionName));
+var authOptions = builder.Configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>() ?? new AuthOptions();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+// Read document DB provider early so we can configure Identity's backing store.
 builder.Services.Configure<DocumentDbOptions>(builder.Configuration.GetSection(DocumentDbOptions.SectionName));
 var documentDbOptions = builder.Configuration.GetSection(DocumentDbOptions.SectionName).Get<DocumentDbOptions>() ?? new DocumentDbOptions();
+
+if (authOptions.Enabled)
+{
+    // ASP.NET Core Identity with standard API endpoints.
+    builder.Services.AddIdentityApiEndpoints<IdentityUser>()
+        .AddEntityFrameworkStores<AppIdentityDbContext>();
+
+    // Identity backing store: same Postgres instance when available, otherwise SQLite.
+    if (documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+    {
+        builder.AddNpgsqlDbContext<AppIdentityDbContext>("mattgptdb");
+    }
+    else
+    {
+        builder.Services.AddDbContext<AppIdentityDbContext>(options =>
+            options.UseSqlite("Data Source=mattgpt-identity.db"));
+    }
+
+    // Trusted header scheme for Blazor BFF → API service-to-service calls.
+    builder.Services.AddAuthentication()
+        .AddScheme<AuthenticationSchemeOptions, ServiceToServiceAuthHandler>(
+            ServiceToServiceAuthHandler.SchemeName, null);
+
+    builder.Services.AddAuthorization(options =>
+    {
+        options.FallbackPolicy = new AuthorizationPolicyBuilder()
+            .AddAuthenticationSchemes(
+                IdentityConstants.BearerScheme,
+                IdentityConstants.ApplicationScheme,
+                ServiceToServiceAuthHandler.SchemeName)
+            .RequireAuthenticatedUser()
+            .Build();
+    });
+}
+
+// --- Document DB configuration (options already read above for Identity backing-store selection) ---
 
 // Track whether the vector store has already been configured (e.g. when Postgres serves both roles).
 var vectorStoreConfigured = false;
@@ -333,9 +380,39 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 app.UseExceptionHandler();
 
+if (authOptions.Enabled)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+}
+
+if (authOptions.Enabled)
+{
+    var authGroup = app.MapGroup("/auth");
+    authGroup.MapIdentityApi<IdentityUser>();
+    authGroup.MapGet("/me", (HttpContext context) =>
+    {
+        var user = context.User;
+        if (user?.Identity?.IsAuthenticated != true)
+            return Results.Unauthorized();
+        return Results.Ok(new
+        {
+            id = user.FindFirstValue(ClaimTypes.NameIdentifier),
+            email = user.FindFirstValue(ClaimTypes.Email),
+        });
+    }).RequireAuthorization();
+
+    // Ensure Identity database schema exists.
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
+        db.Database.EnsureCreated();
+    }
 }
 
 app.MapWeatherEndpoints();

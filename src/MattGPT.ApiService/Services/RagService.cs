@@ -47,6 +47,7 @@ public class RagService(
     IOptions<RagOptions> options,
     IOptions<ChatSessionOptions> chatOptions,
     ILogger<RagService> logger,
+    ICurrentUserService currentUser,
     SearchMemoriesTool? searchMemoriesTool = null,
     IUserProfileRepository? userProfileRepository = null,
     ISystemConfigRepository? systemConfigRepository = null)
@@ -322,7 +323,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         logger.LogDebug("Generated query embedding with {Dimensions} dimensions.", queryVector.Length);
 
         // 2. Retrieve top-K candidates from Qdrant.
-        var searchResults = await vectorStore.SearchAsync(queryVector, topK, ct);
+        var searchResults = await vectorStore.SearchAsync(queryVector, topK, currentUser.UserId, ct);
 
         if (searchResults.Count == 0)
         {

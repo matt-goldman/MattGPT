@@ -1,6 +1,6 @@
 # 040 — Optional Authentication with User-Scoped Data
 
-**Status:** TODO
+**Status:** Done
 **Depends on:** 39 (Add Postgres as Document DB and Vector Store Provider)
 
 ---
@@ -101,18 +101,18 @@ Existing data (imported without auth) will have `UserId = null`. This is by desi
 
 ## Acceptance Criteria
 
-- [ ] `Auth:Enabled` configuration option controls whether authentication is active.
-- [ ] When `Auth:Enabled = false`, the app works without any login requirement and only surfaces untagged data.
-- [ ] When `Auth:Enabled = true`, all API endpoints and UI pages require authentication.
-- [ ] ASP.NET Core Identity is configured with the existing document DB (Postgres or MongoDB).
-- [ ] `StoredConversation` and `ChatSession` have a `UserId` property.
-- [ ] All `IConversationRepository` query methods filter by userId.
-- [ ] All `IChatSessionRepository` query methods filter by userId.
-- [ ] All `IVectorStore` implementations store and filter on userId.
-- [ ] Import pipeline threads userId from upload through to storage and embedding.
-- [ ] `RagService` and `SearchMemoriesTool` pass userId for user-scoped retrieval.
-- [ ] Basic register/login/logout UI is functional.
-- [ ] All existing tests pass (with auth disabled by default).
+- [x] `Auth:Enabled` configuration option controls whether authentication is active.
+- [x] When `Auth:Enabled = false`, the app works without any login requirement and only surfaces untagged data.
+- [x] When `Auth:Enabled = true`, all API endpoints and UI pages require authentication.
+- [x] ASP.NET Core Identity is configured with the existing document DB (Postgres or MongoDB).
+- [x] `StoredConversation` and `ChatSession` have a `UserId` property.
+- [x] All `IConversationRepository` query methods filter by userId.
+- [x] All `IChatSessionRepository` query methods filter by userId.
+- [x] All `IVectorStore` implementations store and filter on userId.
+- [x] Import pipeline threads userId from upload through to storage and embedding.
+- [x] `RagService` and `SearchMemoriesTool` pass userId for user-scoped retrieval.
+- [x] Basic register/login/logout UI is functional.
+- [x] All existing tests pass (with auth disabled by default).
 - [ ] New tests cover the user-scoping filter logic.
 
 ## Related

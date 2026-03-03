@@ -16,6 +16,7 @@ public class SearchMemoriesTool(
     IVectorStore vectorStore,
     IConversationRepository repository,
     IOptions<RagOptions> options,
+    ICurrentUserService currentUser,
     ILogger<SearchMemoriesTool> logger)
 {
     private readonly RagOptions _options = options.Value;
@@ -82,7 +83,7 @@ public class SearchMemoriesTool(
             var queryVector = embeddings[0].Vector.ToArray();
 
             // 2. Search vector store.
-            var searchResults = await vectorStore.SearchAsync(queryVector, limit);
+            var searchResults = await vectorStore.SearchAsync(queryVector, limit, currentUser.UserId);
 
             // 3. Apply minimum score threshold using MinScore (same threshold as WithPrompt mode).
             var relevant = searchResults

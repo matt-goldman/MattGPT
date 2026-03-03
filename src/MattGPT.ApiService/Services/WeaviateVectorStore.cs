@@ -49,6 +49,7 @@ public class WeaviateVectorStore(
                 ["default_model_slug"] = conversation.DefaultModelSlug ?? string.Empty,
                 ["gizmo_id"] = conversation.GizmoId ?? string.Empty,
                 ["is_archived"] = conversation.IsArchived ?? false,
+                ["user_id"] = conversation.UserId ?? string.Empty,
             },
             vector
         };
@@ -72,9 +73,10 @@ public class WeaviateVectorStore(
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
-        float[] queryVector, int limit = 5, CancellationToken ct = default)
+        float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
     {
         var vectorStr = string.Join(", ", queryVector.Select(v => v.ToString("G", CultureInfo.InvariantCulture)));
+        var filterValue = userId ?? string.Empty;
         var graphql = new
         {
             query = $$"""
@@ -83,6 +85,7 @@ public class WeaviateVectorStore(
                 {{ClassName}}(
                   limit: {{limit}}
                   nearVector: { vector: [{{vectorStr}}] }
+                  where: { path: ["user_id"], operator: Equal, valueText: "{{filterValue}}" }
                 ) {
                   conversation_id
                   title
@@ -206,6 +209,7 @@ public class WeaviateVectorStore(
                     new { name = "default_model_slug", dataType = new[] { "text" } },
                     new { name = "gizmo_id", dataType = new[] { "text" } },
                     new { name = "is_archived", dataType = new[] { "boolean" } },
+                    new { name = "user_id", dataType = new[] { "text" } },
                 }
             };
 

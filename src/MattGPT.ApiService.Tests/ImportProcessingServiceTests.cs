@@ -7,6 +7,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MattGPT.ApiService.Tests;
 
+/// <summary>Stub ICurrentUserService that returns no user (anonymous/unauthenticated).</summary>
+internal sealed class NullCurrentUserService : ICurrentUserService
+{
+    public string? UserId => null;
+}
+
 /// <summary>No-op repository used in unit tests that do not require MongoDB.</summary>
 internal sealed class FakeConversationRepository : IConversationRepository{
     public List<StoredConversation> Upserted { get; } = new();
@@ -24,7 +30,7 @@ internal sealed class FakeConversationRepository : IConversationRepository{
         return Task.CompletedTask;
     }
 
-    public Task<(List<StoredConversation> Items, long Total)> GetPageAsync(int page, int pageSize, CancellationToken ct = default)
+    public Task<(List<StoredConversation> Items, long Total)> GetPageAsync(int page, int pageSize, string? userId = null, CancellationToken ct = default)
         => Task.FromResult((new List<StoredConversation>(), 0L));
 
     public Task<List<StoredConversation>> GetByStatusAsync(ConversationProcessingStatus status, int maxCount, CancellationToken ct = default)
@@ -83,7 +89,7 @@ internal sealed class FakeConversationRepository : IConversationRepository{
         return Task.FromResult(item);
     }
 
-    public Task<Dictionary<ConversationProcessingStatus, long>> GetStatusCountsAsync(CancellationToken ct = default)
+    public Task<Dictionary<ConversationProcessingStatus, long>> GetStatusCountsAsync(string? userId = null, CancellationToken ct = default)
     {
         var counts = _conversations
             .GroupBy(c => c.ProcessingStatus)
@@ -91,15 +97,15 @@ internal sealed class FakeConversationRepository : IConversationRepository{
         return Task.FromResult(counts);
     }
 
-    public Task<List<ConversationProject>> GetProjectsAsync(CancellationToken ct = default)
+    public Task<List<ConversationProject>> GetProjectsAsync(string? userId = null, CancellationToken ct = default)
         => Task.FromResult(new List<ConversationProject>());
 
     public Task<(List<StoredConversation> Items, long Total)> GetProjectConversationsAsync(
-        string templateId, int page, int pageSize, CancellationToken ct = default)
+        string templateId, int page, int pageSize, string? userId = null, CancellationToken ct = default)
         => Task.FromResult((new List<StoredConversation>(), 0L));
 
     public Task<(List<StoredConversation> Items, long Total)> GetNonProjectConversationsAsync(
-        int page, int pageSize, CancellationToken ct = default)
+        int page, int pageSize, string? userId = null, CancellationToken ct = default)
         => Task.FromResult((_conversations.ToList(), (long)_conversations.Count));
 }
 

@@ -27,14 +27,15 @@ public class PostgresVectorStore(NpgsqlDataSource dataSource, ILogger<PostgresVe
         await using var cmd = dataSource.CreateCommand(
             $$"""
             INSERT INTO {{TableName}}
-                (conversation_id, title, summary, create_time, update_time, embedding)
+                (conversation_id, title, summary, create_time, update_time, user_id, embedding)
             VALUES
-                ($1, $2, $3, $4, $5, $6::vector)
+                ($1, $2, $3, $4, $5, $6, $7::vector)
             ON CONFLICT (conversation_id) DO UPDATE SET
                 title       = EXCLUDED.title,
                 summary     = EXCLUDED.summary,
                 create_time = EXCLUDED.create_time,
                 update_time = EXCLUDED.update_time,
+                user_id     = EXCLUDED.user_id,
                 embedding   = EXCLUDED.embedding
             """);
 
@@ -43,6 +44,7 @@ public class PostgresVectorStore(NpgsqlDataSource dataSource, ILogger<PostgresVe
         cmd.Parameters.AddWithValue((object?)conversation.Summary ?? DBNull.Value);
         cmd.Parameters.AddWithValue((object?)conversation.CreateTime ?? DBNull.Value);
         cmd.Parameters.AddWithValue((object?)conversation.UpdateTime ?? DBNull.Value);
+        cmd.Parameters.AddWithValue((object?)conversation.UserId ?? DBNull.Value);
         cmd.Parameters.AddWithValue(embeddingText);
 
         await cmd.ExecuteNonQueryAsync(ct);
@@ -54,7 +56,7 @@ public class PostgresVectorStore(NpgsqlDataSource dataSource, ILogger<PostgresVe
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
-        float[] queryVector, int limit = 5, CancellationToken ct = default)
+        float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
     {
         if (!await TableExistsAsync(ct))
             return [];
@@ -66,11 +68,13 @@ public class PostgresVectorStore(NpgsqlDataSource dataSource, ILogger<PostgresVe
             SELECT conversation_id, title, summary,
                    1 - (embedding <=> $1::vector) AS score
             FROM {{TableName}}
+            WHERE user_id IS NOT DISTINCT FROM $2
             ORDER BY embedding <=> $1::vector
-            LIMIT $2
+            LIMIT $3
             """);
 
         cmd.Parameters.AddWithValue(queryText);
+        cmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
         cmd.Parameters.AddWithValue(limit);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -158,11 +162,15 @@ public class PostgresVectorStore(NpgsqlDataSource dataSource, ILogger<PostgresVe
                     summary         TEXT,
                     create_time     DOUBLE PRECISION,
                     update_time     DOUBLE PRECISION,
+                    user_id         TEXT,
                     embedding       vector({{dimensions}})
                 );
 
                 CREATE INDEX IF NOT EXISTS {{TableName}}_embedding_idx
                     ON {{TableName}} USING hnsw (embedding vector_cosine_ops);
+
+                CREATE INDEX IF NOT EXISTS conversation_vectors_user_id_idx
+                    ON {{TableName}} (user_id);
                 """);
 
             await cmd.ExecuteNonQueryAsync(ct);
