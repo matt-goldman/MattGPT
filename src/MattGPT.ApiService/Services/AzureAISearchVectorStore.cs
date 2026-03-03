@@ -52,7 +52,7 @@ public class AzureAISearchVectorStore(
     public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
     {
-        var filterValue = userId ?? string.Empty;
+        await EnsureIndexAsync((int)queryVector.Length, ct);
 
         var searchOptions = new SearchOptions
         {
@@ -68,9 +68,15 @@ public class AzureAISearchVectorStore(
                 }
             },
             Size = limit,
-            Filter = $"user_id eq '{filterValue}'",
             Select = { "conversation_id", "title", "summary" }
         };
+
+        if (userId is not null)
+        {
+            // Escape single quotes to prevent OData filter injection.
+            var escaped = userId.Replace("'", "''");
+            searchOptions.Filter = $"user_id eq '{escaped}'";
+        }
 
         var response = await searchClient.SearchAsync<SearchDocument>("*", searchOptions, ct);
         var results = new List<VectorSearchResult>();

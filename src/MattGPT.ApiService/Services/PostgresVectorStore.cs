@@ -166,6 +166,8 @@ public class PostgresVectorStore(NpgsqlDataSource dataSource, ILogger<PostgresVe
                     embedding       vector({{dimensions}})
                 );
 
+                ALTER TABLE {{TableName}} ADD COLUMN IF NOT EXISTS user_id TEXT;
+
                 CREATE INDEX IF NOT EXISTS {{TableName}}_embedding_idx
                     ON {{TableName}} USING hnsw (embedding vector_cosine_ops);
 

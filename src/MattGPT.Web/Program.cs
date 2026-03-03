@@ -14,6 +14,7 @@ var authOptions = builder.Configuration.GetSection(AuthOptions.SectionName).Get<
 
 if (authOptions.Enabled)
 {
+    builder.Services.AddHttpContextAccessor();
     builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
         .AddCookie(options =>
         {

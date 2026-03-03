@@ -379,6 +379,8 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
                     data                     JSONB NOT NULL
                 );
 
+                ALTER TABLE {TableName} ADD COLUMN IF NOT EXISTS user_id TEXT;
+
                 CREATE INDEX IF NOT EXISTS {TableName}_processing_status_idx
                     ON {TableName} (processing_status);
 

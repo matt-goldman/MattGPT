@@ -2,12 +2,19 @@
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authentication.Cookies
 @inject NavigationManager Navigation
+@inject Microsoft.Extensions.Options.IOptions<MattGPT.Web.AuthOptions> AuthConfig
 
 @code {
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        if (!AuthConfig.Value.Enabled)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
         if (HttpContext is not null)
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
