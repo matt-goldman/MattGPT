@@ -13,8 +13,8 @@ public interface IVectorStore
     /// <summary>Upsert a conversation embedding with its metadata payload.</summary>
     Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default);
 
-    /// <summary>Search for the most similar conversations to the given query vector.</summary>
-    Task<IReadOnlyList<VectorSearchResult>> SearchAsync(float[] queryVector, int limit = 5, CancellationToken ct = default);
+    /// <summary>Search for the most similar conversations to the given query vector, optionally scoped to a user.</summary>
+    Task<IReadOnlyList<VectorSearchResult>> SearchAsync(float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default);
 
     /// <summary>Return the number of points in the conversations collection, or null if the collection doesn't exist.</summary>
     Task<ulong?> GetPointCountAsync(CancellationToken ct = default);
@@ -50,6 +50,7 @@ public class QdrantVectorStore(QdrantClient client, ILogger<QdrantVectorStore> l
                 ["default_model_slug"] = conversation.DefaultModelSlug ?? string.Empty,
                 ["gizmo_id"] = conversation.GizmoId ?? string.Empty,
                 ["is_archived"] = conversation.IsArchived ?? false,
+                ["user_id"] = conversation.UserId ?? string.Empty,
             }
         };
 
@@ -62,14 +63,29 @@ public class QdrantVectorStore(QdrantClient client, ILogger<QdrantVectorStore> l
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
-        float[] queryVector, int limit = 5, CancellationToken ct = default)
+        float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
     {
         if (!await client.CollectionExistsAsync(CollectionName, ct))
             return [];
 
+        Filter? filter = userId is not null
+            ? new Filter
+            {
+                Must =
+                {
+                    new Condition { Field = new FieldCondition
+                    {
+                        Key = "user_id",
+                        Match = new Match { Text = userId }
+                    }}
+                }
+            }
+            : null;
+
         var results = await client.SearchAsync(
             CollectionName,
             queryVector,
+            filter: filter,
             limit: (ulong)limit,
             cancellationToken: ct);
 

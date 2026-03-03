@@ -325,7 +325,13 @@ public class StoredConversation
     /// <summary>Embedding vector generated from the summary. Populated after embedding generation.</summary>
     public float[]? Embedding { get; set; }
 
-    internal static StoredConversation From(ParsedConversation conversation) => new()
+    /// <summary>
+    /// The Identity user ID of the owner, or <c>null</c> for data imported/created without authentication.
+    /// Used to scope data to individual users when auth is enabled.
+    /// </summary>
+    public string? UserId { get; set; }
+
+    internal static StoredConversation From(ParsedConversation conversation, string? userId = null) => new()
     {
         ConversationId = conversation.Id,
         Title = conversation.Title,
@@ -341,5 +347,6 @@ public class StoredConversation
         LinearisedMessages = [.. conversation.Messages.Select(StoredMessage.From)],
         ImportTimestamp = DateTimeOffset.UtcNow,
         ProcessingStatus = ConversationProcessingStatus.Imported,
+        UserId = userId,
     };
 }

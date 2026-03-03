@@ -11,6 +11,7 @@ Significant architectural decisions made during development of MattGPT.
 | [ADR-005](005-tool-calling-rag-retrieval-evaluation.md) | Tool-calling RAG retrieval evaluation |
 | [ADR-006](006-defer-attachment-import-until-zip-support.md) | Defer attachment import until zip support |
 | [ADR-007](007-cloud-provider-selection.md) | Cloud provider selection |
+| [ADR-008](008-optional-authentication-strategy.md) | Optional authentication strategy |
 
 To add a new ADR, copy [000-template.md](000-template.md) and fill in all sections.
 

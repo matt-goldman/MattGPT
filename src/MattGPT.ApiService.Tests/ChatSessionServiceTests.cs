@@ -56,7 +56,7 @@ internal sealed class FakeChatSessionRepository : IChatSessionRepository
         return Task.CompletedTask;
     }
 
-    public Task<List<ChatSession>> ListRecentAsync(int limit = 50, CancellationToken ct = default)
+    public Task<List<ChatSession>> ListRecentAsync(int limit = 50, string? userId = null, CancellationToken ct = default)
     {
         var items = _sessions.Values
             .OrderByDescending(s => s.UpdatedAt)
@@ -87,6 +87,7 @@ public class ChatSessionServiceTests
             repo,
             new FakeChatClient(llmSummaryResponse),
             opts,
+            new NullCurrentUserService(),
             NullLogger<ChatSessionService>.Instance);
     }
 

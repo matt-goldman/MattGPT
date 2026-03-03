@@ -16,7 +16,7 @@ internal sealed class FakeSearchVectorStore(IReadOnlyList<VectorSearchResult> re
         => Task.CompletedTask;
 
     public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
-        float[] queryVector, int limit = 5, CancellationToken ct = default)
+        float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
         => Task.FromResult(results);
 
     public Task<ulong?> GetPointCountAsync(CancellationToken ct = default)
@@ -67,6 +67,7 @@ public class RagServiceTests
             options,
             chatOpts,
             NullLogger<RagService>.Instance,
+            new NullCurrentUserService(),
             searchMemoriesTool);
     }
 
@@ -562,6 +563,7 @@ public class RagServiceTests
             new FakeSearchVectorStore(results ?? []),
             repository ?? new FakeConversationRepository(),
             Options.Create(new RagOptions()),
+            new NullCurrentUserService(),
             NullLogger<SearchMemoriesTool>.Instance);
     }
 

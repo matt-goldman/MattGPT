@@ -12,6 +12,7 @@ public static class SearchEndpoints
             string q,
             IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
             IVectorStore vectorStore,
+            ICurrentUserService currentUser,
             CancellationToken ct,
             int limit = 5) =>
         {
@@ -23,7 +24,7 @@ public static class SearchEndpoints
             var embeddings = await embeddingGenerator.GenerateAsync([q], cancellationToken: ct);
             var queryVector = embeddings[0].Vector.ToArray();
 
-            var results = await vectorStore.SearchAsync(queryVector, limit, ct);
+            var results = await vectorStore.SearchAsync(queryVector, limit, currentUser.UserId, ct);
 
             return Results.Ok(results.Select(r => new
             {

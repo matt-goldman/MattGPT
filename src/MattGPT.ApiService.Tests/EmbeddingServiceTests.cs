@@ -54,7 +54,7 @@ internal sealed class FakeVectorStore : IVectorStore
     }
 
     public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
-        float[] queryVector, int limit = 5, CancellationToken ct = default)
+        float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<VectorSearchResult>>([]);
 
     public Task<ulong?> GetPointCountAsync(CancellationToken ct = default)
@@ -70,7 +70,7 @@ internal sealed class ThrowingVectorStore : IVectorStore
         => throw new InvalidOperationException("Vector store unavailable");
 
     public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
-        float[] queryVector, int limit = 5, CancellationToken ct = default)
+        float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<VectorSearchResult>>([]);
 
     public Task<ulong?> GetPointCountAsync(CancellationToken ct = default)

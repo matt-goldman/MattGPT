@@ -9,7 +9,7 @@ public static class ConversationsEndpoints
     public static IEndpointRouteBuilder MapConversationsEndpoints(this IEndpointRouteBuilder app)
     {
         // Conversation file upload endpoint — enqueues file for background processing.
-        app.MapPost("/conversations/upload", async (HttpRequest request, ImportJobStore jobStore, Channel<ImportJobRequest> channel) =>
+        app.MapPost("/conversations/upload", async (HttpRequest request, ImportJobStore jobStore, Channel<ImportJobRequest> channel, ICurrentUserService currentUser) =>
         {
             if (!request.HasFormContentType)
                 return Results.BadRequest("Expected multipart/form-data.");
@@ -39,7 +39,7 @@ public static class ConversationsEndpoints
 
             var job = jobStore.CreateJob();
             job.FileName = file.FileName;
-            await channel.Writer.WriteAsync(new ImportJobRequest(job.JobId, tempPath));
+            await channel.Writer.WriteAsync(new ImportJobRequest(job.JobId, tempPath, currentUser.UserId));
 
             return Results.Accepted($"/conversations/status/{job.JobId}", new
             {
@@ -79,12 +79,12 @@ public static class ConversationsEndpoints
         .WithName("GetConversationImportStatus");
 
         // Paginated list of stored conversations, ordered by most recently updated first.
-        app.MapGet("/conversations", async (IConversationRepository repository, int page = 1, int pageSize = 20) =>
+        app.MapGet("/conversations", async (IConversationRepository repository, ICurrentUserService currentUser, int page = 1, int pageSize = 20) =>
         {
             if (page < 1) page = 1;
             if (pageSize is < 1 or > 100) pageSize = 20;
 
-            var (items, total) = await repository.GetPageAsync(page, pageSize);
+            var (items, total) = await repository.GetPageAsync(page, pageSize, currentUser.UserId);
             return Results.Ok(new
             {
                 page,
@@ -166,9 +166,9 @@ public static class ConversationsEndpoints
 
         // Get all project groups (conversations grouped by ConversationTemplateId for snorlax gizmo type).
         // Merges user-assigned project names when available.
-        app.MapGet("/conversations/projects", async (IConversationRepository repository, IProjectNameRepository projectNames) =>
+        app.MapGet("/conversations/projects", async (IConversationRepository repository, IProjectNameRepository projectNames, ICurrentUserService currentUser) =>
         {
-            var projectsTask = repository.GetProjectsAsync();
+            var projectsTask = repository.GetProjectsAsync(currentUser.UserId);
             var namesTask = projectNames.GetAllNamesAsync();
             await Task.WhenAll(projectsTask, namesTask);
 
@@ -200,12 +200,12 @@ public static class ConversationsEndpoints
 
         // Get conversations within a specific project, paginated.
         app.MapGet("/conversations/projects/{templateId}", async (
-            string templateId, IConversationRepository repository, int page = 1, int pageSize = 50) =>
+            string templateId, IConversationRepository repository, ICurrentUserService currentUser, int page = 1, int pageSize = 50) =>
         {
             if (page < 1) page = 1;
             if (pageSize is < 1 or > 100) pageSize = 50;
 
-            var (items, total) = await repository.GetProjectConversationsAsync(templateId, page, pageSize);
+            var (items, total) = await repository.GetProjectConversationsAsync(templateId, page, pageSize, currentUser.UserId);
             return Results.Ok(new
             {
                 templateId,
@@ -226,12 +226,12 @@ public static class ConversationsEndpoints
 
         // Get non-project conversations (imported conversations not belonging to any project), paginated.
         app.MapGet("/conversations/standalone", async (
-            IConversationRepository repository, int page = 1, int pageSize = 50) =>
+            IConversationRepository repository, ICurrentUserService currentUser, int page = 1, int pageSize = 50) =>
         {
             if (page < 1) page = 1;
             if (pageSize is < 1 or > 100) pageSize = 50;
 
-            var (items, total) = await repository.GetNonProjectConversationsAsync(page, pageSize);
+            var (items, total) = await repository.GetNonProjectConversationsAsync(page, pageSize, currentUser.UserId);
             return Results.Ok(new
             {
                 page,

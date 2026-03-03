@@ -37,6 +37,7 @@ public class AzureAISearchVectorStore(
             ["default_model_slug"] = conversation.DefaultModelSlug ?? string.Empty,
             ["gizmo_id"] = conversation.GizmoId ?? string.Empty,
             ["is_archived"] = conversation.IsArchived ?? false,
+            ["user_id"] = conversation.UserId ?? string.Empty,
             ["vector"] = vector
         };
 
@@ -49,8 +50,10 @@ public class AzureAISearchVectorStore(
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
-        float[] queryVector, int limit = 5, CancellationToken ct = default)
+        float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
     {
+        await EnsureIndexAsync((int)queryVector.Length, ct);
+
         var searchOptions = new SearchOptions
         {
             VectorSearch = new()
@@ -67,6 +70,13 @@ public class AzureAISearchVectorStore(
             Size = limit,
             Select = { "conversation_id", "title", "summary" }
         };
+
+        if (userId is not null)
+        {
+            // Escape single quotes to prevent OData filter injection.
+            var escaped = userId.Replace("'", "''");
+            searchOptions.Filter = $"user_id eq '{escaped}'";
+        }
 
         var response = await searchClient.SearchAsync<SearchDocument>("*", searchOptions, ct);
         var results = new List<VectorSearchResult>();
@@ -127,6 +137,7 @@ public class AzureAISearchVectorStore(
                     new SimpleField("default_model_slug", SearchFieldDataType.String) { IsFilterable = true },
                     new SimpleField("gizmo_id", SearchFieldDataType.String) { IsFilterable = true },
                     new SimpleField("is_archived", SearchFieldDataType.Boolean) { IsFilterable = true },
+                    new SimpleField("user_id", SearchFieldDataType.String) { IsFilterable = true },
                     new SearchField("vector", SearchFieldDataType.Collection(SearchFieldDataType.Single))
                     {
                         IsSearchable = true,

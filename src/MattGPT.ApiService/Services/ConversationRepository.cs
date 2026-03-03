@@ -27,6 +27,7 @@ public class ConversationRepository : IConversationRepository
             new CreateIndexModel<StoredConversation>(keys.Ascending(x => x.ProcessingStatus)),
             new CreateIndexModel<StoredConversation>(keys.Ascending(x => x.ConversationTemplateId)),
             new CreateIndexModel<StoredConversation>(keys.Ascending(x => x.GizmoType)),
+            new CreateIndexModel<StoredConversation>(keys.Ascending(x => x.UserId)),
         ]);
     }
 
@@ -39,9 +40,9 @@ public class ConversationRepository : IConversationRepository
 
     /// <inheritdoc/>
     public async Task<(List<StoredConversation> Items, long Total)> GetPageAsync(
-        int page, int pageSize, CancellationToken ct = default)
+        int page, int pageSize, string? userId = null, CancellationToken ct = default)
     {
-        var filter = Builders<StoredConversation>.Filter.Empty;
+        var filter = Builders<StoredConversation>.Filter.Eq(x => x.UserId, userId);
         var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
         var items = await _collection
             .Find(filter)
@@ -114,25 +115,28 @@ public class ConversationRepository : IConversationRepository
     }
 
     /// <inheritdoc/>
-    public async Task<Dictionary<ConversationProcessingStatus, long>> GetStatusCountsAsync(CancellationToken ct = default)
+    public async Task<Dictionary<ConversationProcessingStatus, long>> GetStatusCountsAsync(string? userId = null, CancellationToken ct = default)
     {
         var counts = new Dictionary<ConversationProcessingStatus, long>();
         foreach (var status in Enum.GetValues<ConversationProcessingStatus>())
         {
-            var filter = Builders<StoredConversation>.Filter.Eq(x => x.ProcessingStatus, status);
+            var filter = Builders<StoredConversation>.Filter.And(
+                Builders<StoredConversation>.Filter.Eq(x => x.ProcessingStatus, status),
+                Builders<StoredConversation>.Filter.Eq(x => x.UserId, userId));
             counts[status] = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
         }
         return counts;
     }
 
     /// <inheritdoc/>
-    public async Task<List<ConversationProject>> GetProjectsAsync(CancellationToken ct = default)
+    public async Task<List<ConversationProject>> GetProjectsAsync(string? userId = null, CancellationToken ct = default)
     {
         // Aggregate conversations where GizmoType is "snorlax" and ConversationTemplateId is set,
         // grouping by template ID to produce project summaries.
         var filter = Builders<StoredConversation>.Filter.And(
             Builders<StoredConversation>.Filter.Eq(x => x.GizmoType, "snorlax"),
-            Builders<StoredConversation>.Filter.Ne(x => x.ConversationTemplateId, null));
+            Builders<StoredConversation>.Filter.Ne(x => x.ConversationTemplateId, null),
+            Builders<StoredConversation>.Filter.Eq(x => x.UserId, userId));
 
         var pipeline = _collection.Aggregate()
             .Match(filter)
@@ -153,11 +157,12 @@ public class ConversationRepository : IConversationRepository
 
     /// <inheritdoc/>
     public async Task<(List<StoredConversation> Items, long Total)> GetProjectConversationsAsync(
-        string templateId, int page, int pageSize, CancellationToken ct = default)
+        string templateId, int page, int pageSize, string? userId = null, CancellationToken ct = default)
     {
         var filter = Builders<StoredConversation>.Filter.And(
             Builders<StoredConversation>.Filter.Eq(x => x.GizmoType, "snorlax"),
-            Builders<StoredConversation>.Filter.Eq(x => x.ConversationTemplateId, templateId));
+            Builders<StoredConversation>.Filter.Eq(x => x.ConversationTemplateId, templateId),
+            Builders<StoredConversation>.Filter.Eq(x => x.UserId, userId));
         var projection = Builders<StoredConversation>.Projection.Exclude(x => x.Embedding);
         var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
         var items = await _collection
@@ -172,13 +177,15 @@ public class ConversationRepository : IConversationRepository
 
     /// <inheritdoc/>
     public async Task<(List<StoredConversation> Items, long Total)> GetNonProjectConversationsAsync(
-        int page, int pageSize, CancellationToken ct = default)
+        int page, int pageSize, string? userId = null, CancellationToken ct = default)
     {
         // Conversations that don't belong to a project:
         // either GizmoType is not "snorlax" or ConversationTemplateId is null.
-        var filter = Builders<StoredConversation>.Filter.Or(
-            Builders<StoredConversation>.Filter.Ne(x => x.GizmoType, "snorlax"),
-            Builders<StoredConversation>.Filter.Eq(x => x.ConversationTemplateId, null));
+        var filter = Builders<StoredConversation>.Filter.And(
+            Builders<StoredConversation>.Filter.Or(
+                Builders<StoredConversation>.Filter.Ne(x => x.GizmoType, "snorlax"),
+                Builders<StoredConversation>.Filter.Eq(x => x.ConversationTemplateId, null)),
+            Builders<StoredConversation>.Filter.Eq(x => x.UserId, userId));
         var projection = Builders<StoredConversation>.Projection.Exclude(x => x.Embedding);
         var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
         var items = await _collection
