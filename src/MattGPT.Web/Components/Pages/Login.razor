@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Authentication.Cookies
 @inject IHttpClientFactory HttpClientFactory
 @inject NavigationManager Navigation
+@inject Microsoft.Extensions.Options.IOptions<MattGPT.Web.AuthOptions> AuthConfig
 
 <PageTitle>Login — MattGPT</PageTitle>
 
@@ -53,6 +54,12 @@
 
     private string? _error;
     private bool _loading;
+
+    protected override void OnInitialized()
+    {
+        if (!AuthConfig.Value.Enabled)
+            Navigation.NavigateTo("/", forceLoad: true);
+    }
 
     private async Task HandleLogin()
     {

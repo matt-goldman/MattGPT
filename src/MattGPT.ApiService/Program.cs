@@ -411,7 +411,10 @@ if (authOptions.Enabled)
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
-        db.Database.EnsureCreated();
+        if (documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+            db.Database.Migrate();
+        else
+            db.Database.EnsureCreated();
     }
 }
 

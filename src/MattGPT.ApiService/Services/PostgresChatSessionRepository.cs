@@ -206,6 +206,8 @@ public class PostgresChatSessionRepository(NpgsqlDataSource dataSource, ILogger<
                     data        JSONB NOT NULL
                 );
 
+                ALTER TABLE {TableName} ADD COLUMN IF NOT EXISTS user_id TEXT;
+
                 CREATE INDEX IF NOT EXISTS {TableName}_updated_at_idx
                     ON {TableName} (updated_at DESC);
 

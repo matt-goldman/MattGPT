@@ -68,17 +68,19 @@ public class QdrantVectorStore(QdrantClient client, ILogger<QdrantVectorStore> l
         if (!await client.CollectionExistsAsync(CollectionName, ct))
             return [];
 
-        var filter = new Filter
-        {
-            Must =
+        Filter? filter = userId is not null
+            ? new Filter
             {
-                new Condition { Field = new FieldCondition
+                Must =
                 {
-                    Key = "user_id",
-                    Match = new Match { Text = userId ?? string.Empty }
-                }}
+                    new Condition { Field = new FieldCondition
+                    {
+                        Key = "user_id",
+                        Match = new Match { Text = userId }
+                    }}
+                }
             }
-        };
+            : null;
 
         var results = await client.SearchAsync(
             CollectionName,
