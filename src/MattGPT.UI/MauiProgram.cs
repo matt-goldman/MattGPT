@@ -1,8 +1,11 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using CommunityToolkit.Maui;
+using Microsoft.Extensions.Logging;
+using Plugin.Maui.SmartNavigation.Attributes;
 
 namespace MattGPT.UI;
 
-public static class MauiProgram
+[UseAutoDependencies]
+public static partial class MauiProgram
 {
 	public static MauiApp CreateMauiApp()
 	{
@@ -13,7 +16,9 @@ public static class MauiProgram
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
-			});
+			})
+			.UseAutodependencies()
+            .UseMauiCommunityToolkit();
 
 #if DEBUG
 		builder.Logging.AddDebug();
