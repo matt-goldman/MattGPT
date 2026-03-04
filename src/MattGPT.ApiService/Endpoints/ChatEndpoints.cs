@@ -21,14 +21,14 @@ public static class ChatEndpoints
 
             return Results.Ok(new
             {
-                sessionId = session.SessionId,
-                answer = result.Answer,
-                sources = result.Sources.Select(s => new
+                sessionId   = session.SessionId,
+                answer      = result.Answer,
+                sources     = result.Sources.Select(s => new
                 {
-                    conversationId = s.ConversationId,
-                    title = s.Title,
-                    summary = s.Summary,
-                    score = s.Score,
+                    conversationId  = s.ConversationId,
+                    title           = s.Title,
+                    summary         = s.Summary,
+                    score           = s.Score,
                 }),
             });
         })
@@ -87,10 +87,10 @@ public static class ChatEndpoints
                     // Final frame — send sources as a "sources" event.
                     var sourcesJson = System.Text.Json.JsonSerializer.Serialize(chunk.Sources.Select(s => new
                     {
-                        conversationId = s.ConversationId,
-                        title = s.Title,
-                        summary = s.Summary,
-                        score = s.Score,
+                        conversationId  = s.ConversationId,
+                        title           = s.Title,
+                        summary         = s.Summary,
+                        score           = s.Score,
                     }));
                     await httpContext.Response.WriteAsync($"event: sources\ndata: {sourcesJson}\n\n", ct);
                     await httpContext.Response.Body.FlushAsync(ct);
@@ -116,11 +116,11 @@ public static class ChatEndpoints
             var sessions = await sessionRepo.ListRecentAsync(limit, currentUser.UserId);
             return Results.Ok(sessions.Select(s => new
             {
-                sessionId = s.SessionId,
-                title = s.Title,
-                createdAt = s.CreatedAt,
-                updatedAt = s.UpdatedAt,
-                status = s.Status.ToString(),
+                sessionId   = s.SessionId,
+                title       = s.Title,
+                createdAt   = s.CreatedAt,
+                updatedAt   = s.UpdatedAt,
+                status      = s.Status.ToString(),
             }));
         })
         .WithName("ListChatSessions");
@@ -134,17 +134,17 @@ public static class ChatEndpoints
 
             return Results.Ok(new
             {
-                sessionId = session.SessionId,
-                title = session.Title,
-                createdAt = session.CreatedAt,
-                updatedAt = session.UpdatedAt,
-                status = session.Status.ToString(),
-                rollingSummary = session.RollingSummary,
-                messages = session.Messages.Select(m => new
+                sessionId       = session.SessionId,
+                title           = session.Title,
+                createdAt       = session.CreatedAt,
+                updatedAt       = session.UpdatedAt,
+                status          = session.Status.ToString(),
+                rollingSummary  = session.RollingSummary,
+                messages        = session.Messages.Select(m => new
                 {
-                    role = m.Role,
-                    content = m.Content,
-                    timestamp = m.Timestamp,
+                    role        = m.Role,
+                    content     = m.Content,
+                    timestamp   = m.Timestamp,
                 }),
             });
         })
