@@ -333,7 +333,13 @@
         {
             await using var stream = tracker.BrowserFile.OpenReadStream(MaxFileSize);
             var result = await ConversationService.UploadFileAsync(tracker.FileName, stream);
-            tracker.JobId = result?.JobId;
+            if (result?.JobId == null)
+            {
+                tracker.Status = FileStatus.UploadFailed;
+                tracker.ErrorMessage = "Upload failed: no job id returned from server.";
+                return;
+            }
+            tracker.JobId = result.JobId;
             tracker.Status = FileStatus.Processing;
         }
         catch (HttpRequestException ex)

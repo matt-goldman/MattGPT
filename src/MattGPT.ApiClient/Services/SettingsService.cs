@@ -31,7 +31,7 @@ public sealed class SettingsService(IHttpClientFactory factory) : ISettingsServi
     {
         var client = CreateClient();
         var response = await client.DeleteAsync("/system-prompt", cancellationToken);
-        if (!response.IsSuccessStatusCode) return null;
+        response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<SystemPromptResponse>(JsonOptions, cancellationToken);
     }
 

@@ -170,8 +170,12 @@
             {
                 _systemPrompt = result.SystemPrompt;
                 _isDefault = true;
+                _successMessage = "System prompt reset to default.";
             }
-            _successMessage = "System prompt reset to default.";
+            else
+            {
+                _errorMessage = "Error resetting system prompt: unexpected response from server.";
+            }
         }
         catch (Exception ex)
         {

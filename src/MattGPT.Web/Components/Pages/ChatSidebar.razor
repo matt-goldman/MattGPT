@@ -313,10 +313,10 @@
 
             await Task.WhenAll(sessionsTask, projectsTask, conversationsTask);
 
-            _chatSessions = (await sessionsTask).ToList();
-            _projects = (await projectsTask).ToList();
+            _chatSessions = sessionsTask.Result.ToList();
+            _projects = projectsTask.Result.ToList();
 
-            var convResult = await conversationsTask;
+            var convResult = conversationsTask.Result;
             if (convResult is not null)
             {
                 _importedConversations = convResult.Items?.ToList() ?? [];

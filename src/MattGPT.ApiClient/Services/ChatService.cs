@@ -24,7 +24,7 @@ public sealed class ChatService(IHttpClientFactory factory) : IChatService
             ? new { message, sessionId = sessionId.Value }
             : new { message };
 
-        var request = new HttpRequestMessage(HttpMethod.Post, "/chat/stream")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/chat/stream")
         {
             Content = JsonContent.Create(requestBody),
         };
