@@ -12,8 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="LumexUI" Version="2.2.1" />
-    <PackageReference Include="Markdig" Version="1.0.0" />
+    <PackageReference Include="LumexUI" Version="2.3.2" />
+    <PackageReference Include="Markdig" Version="1.1.0" />
   </ItemGroup>
 
   <Target Name="BuildTailwindCSS" BeforeTargets="Build" DependsOnTargets="CopyContents">
