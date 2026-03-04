@@ -1,10 +1,8 @@
 @page "/search"
 @rendermode InteractiveServer
 @implements IDisposable
-@inject IHttpClientFactory HttpClients
+@inject ISearchService SearchService
 @inject NavigationManager Navigation
-@using System.Net.Http.Json
-@using System.Text.Json
 
 <PageTitle>Search Conversations</PageTitle>
 
@@ -81,8 +79,6 @@
     private readonly List<SearchResult> _results = [];
     private System.Threading.Timer? _debounceTimer;
 
-    private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     private void OnQueryChanged()
     {
         // Debounce search-as-you-type
@@ -112,13 +108,8 @@
 
         try
         {
-            var client = HttpClients.CreateClient("apiservice");
-            var searchResults = await client.GetFromJsonAsync<List<SearchResult>>(
-                $"/search?q={Uri.EscapeDataString(q)}&limit=20", _jsonOptions);
-
-            if (searchResults is not null)
-                _results.AddRange(searchResults);
-
+            var searchResults = await SearchService.SearchAsync(q, limit: 20);
+            _results.AddRange(searchResults);
             _lastQuery = q;
             _hasSearched = true;
         }
@@ -142,6 +133,4 @@
     {
         _debounceTimer?.Dispose();
     }
-
-    private record SearchResult(string ConversationId, float Score, string? Title, string? Summary);
 }
