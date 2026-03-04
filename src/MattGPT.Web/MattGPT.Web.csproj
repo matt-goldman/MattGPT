@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MattGPT.ApiClient\MattGPT.ApiClient.csproj" />
     <ProjectReference Include="..\MattGPT.ServiceDefaults\MattGPT.ServiceDefaults.csproj" />
   </ItemGroup>
 
