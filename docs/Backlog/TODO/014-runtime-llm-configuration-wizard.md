@@ -1,8 +1,10 @@
 # 014 — Runtime LLM Configuration Wizard
 
-**Status:** TODO
+**Status:** Superseded by [043 — Application-Level First-Run Configuration Wizard](043-application-level-config-wizard.md)
 **Sequence:** 14
 **Dependencies:** 3 (config-driven LLM endpoint selection)
+
+> **Note:** This issue has been superseded by issue 043. The Aspire-level approaches explored here (CLI wizard, `IInteractionService`, Aspire parameters) are either blocked by the Aspire dashboard deadlock problem or insufficient for the Docker deployment scenario. The new approach moves configuration entirely into the running application. This file is retained for historical context.
 
 ## Summary
 

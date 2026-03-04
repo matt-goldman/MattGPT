@@ -59,7 +59,7 @@ This document is the **system of record** for project planning and issue trackin
 | 25 | 028-extract-user-profile.md | Extract user profile from custom instructions | Done | Done/ | Depends on 17, 20. Store custom instructions as reusable system context. |
 | 26 | 021-abstract-vector-store-interface.md | Abstract vector store behind provider-agnostic interface | Done | Done/ | Depends on 2, 10. Low urgency — code quality / extensibility. Existing TODO in QdrantService.cs. |
 | 27 | 024-capture-attachments-and-tool-metadata.md | Capture file attachments and author/tool metadata | Deferred | TODO/ | Depends on 4, 7, 17. Deferred per ADR-006 — marginal value without whole-zip import. |
-| 28 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | Deferred | TODO/ | Depends on 3; first step is choosing the approach. Very low priority and can come later as gold plating. |
+| 28 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | Superseded | TODO/ | Superseded by 043. Aspire-level approach blocked; replaced by in-app config wizard. |
 | 29 | 029-system-prompt-and-profile-ui.md | System prompt and user profile UI | Done | Done/ | Depends on 28, 12. Settings page with GET/PUT /user-profile and /system-prompt endpoints. |
 | 30 | 030-show-message-timestamps.md | Show message and conversation timestamps | Done | Done/ | Depends on 12, 22. Per-message timestamps and date separators. |
 | 31 | 031-conversation-search.md | Conversation history search | Done | Done/ | Depends on 7, 10, 22. /search page using existing semantic search endpoint. |
@@ -72,6 +72,10 @@ This document is the **system of record** for project planning and issue trackin
 | 38 | 038-add-cloud-provider-integrations.md | Add cloud LLM and vector store provider integrations | Done | Done/ | Depends on 3, 21. Anthropic, OpenAI direct, Gemini; Azure AI Search, Pinecone, Weaviate. See ADR-007. |
 | 39 | 039-add-postgres-provider.md | Add Postgres as document DB and vector store provider | Done | Done/ | Depends on 38. Postgres via pgvector for both document DB and vector store, with shared Aspire resource. |
 | 40 | 040-optional-authentication.md | Optional authentication with user-scoped data | Done | Done/ | Depends on 39. ASP.NET Core Identity; user-scoped conversations, chat sessions, and vector search. See ADR-008. |
+| 41 | 041-rename-project.md | Rename the project | TODO | TODO/ | No dependencies. Prerequisite for Docker publish (042). |
+| 42 | 042-publish-docker-image.md | Publish Docker image to public registry | TODO | TODO/ | Depends on 41. CI/CD to ghcr.io; Dockerfile; docker-compose variant templates. |
+| 43 | 043-application-level-config-wizard.md | Application-level first-run configuration wizard | TODO | TODO/ | Depends on 040, 029. Supersedes 014. Env-var → DB → wizard config chain; LLM, vector store, auth setup in Blazor UI. |
+| 44 | 044-plugin-extensibility-system.md | Plugin system for tool-calling extensibility | TODO | TODO/ | Depends on 020. Drop-in DLL plugins via Plugins/ directory; reflection-based loader; ToolPlugin contract in separate abstractions package. |
 
 ---
 
