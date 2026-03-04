@@ -85,7 +85,9 @@
     --breakpoint-lg: 64rem;
     --breakpoint-xl: 80rem;
     --breakpoint-2xl: 96rem;
+    --container-xs: 20rem;
     --container-sm: 24rem;
+    --container-md: 28rem;
     --container-lg: 32rem;
     --container-2xl: 42rem;
     --container-3xl: 48rem;
@@ -256,7 +258,7 @@
     --transition-property-colors-transform: var(--transition-colors), var(--transition-transforms);
     --transition-property-colors-transform-opacity: var(--transition-property-colors-transform), opacity;
     --transition-property-transform-opacity: var(--transition-transforms), opacity;
-    --animate-enter: enter 150ms ease-out normal both;
+    --animate-enter: old-enter 150ms ease-out normal both;
     --animate-shimmer: shimmer 2s infinite;
     --animate-sway: sway 0.75s infinite;
     --animate-blink: blink 1.5s infinite both;
@@ -453,6 +455,9 @@
   .inset-0 {
     inset: calc(var(--spacing) * 0);
   }
+  .inset-auto {
+    inset: auto;
+  }
   .inset-x-0 {
     inset-inline: calc(var(--spacing) * 0);
   }
@@ -492,6 +497,9 @@
   .end-1\.5 {
     inset-inline-end: calc(var(--spacing) * 1.5);
   }
+  .end-2 {
+    inset-inline-end: calc(var(--spacing) * 2);
+  }
   .end-3 {
     inset-inline-end: calc(var(--spacing) * 3);
   }
@@ -504,8 +512,14 @@
   .top-0 {
     top: calc(var(--spacing) * 0);
   }
+  .top-1 {
+    top: calc(var(--spacing) * 1);
+  }
   .top-1\/2 {
     top: calc(1 / 2 * 100%);
+  }
+  .top-2 {
+    top: calc(var(--spacing) * 2);
   }
   .top-50 {
     top: calc(var(--spacing) * 50);
@@ -530,6 +544,9 @@
   }
   .bottom-0 {
     bottom: calc(var(--spacing) * 0);
+  }
+  .bottom-1 {
+    bottom: calc(var(--spacing) * 1);
   }
   .bottom-4 {
     bottom: calc(var(--spacing) * 4);
@@ -1005,6 +1022,9 @@
   .h-\[8\%\] {
     height: 8%;
   }
+  .h-\[100dvh\] {
+    height: 100dvh;
+  }
   .h-\[calc\(100vh-64px\)\] {
     height: calc(100vh - 64px);
   }
@@ -1022,6 +1042,9 @@
   }
   .h-px {
     height: 1px;
+  }
+  .max-h-\[calc\(100\%_-_8rem\)\] {
+    max-height: calc(100% - 8rem);
   }
   .min-h-3 {
     min-height: calc(var(--spacing) * 3);
@@ -1055,6 +1078,9 @@
   }
   .min-h-\[60vh\] {
     min-height: 60vh;
+  }
+  .min-h-\[100dvh\] {
+    min-height: 100dvh;
   }
   .min-h-screen {
     min-height: 100vh;
@@ -1152,6 +1178,9 @@
   .max-w-\[70\%\] {
     max-width: 70%;
   }
+  .max-w-\[calc\(100\%-0\.5rem\)\] {
+    max-width: calc(100% - 0.5rem);
+  }
   .max-w-fit {
     max-width: fit-content;
   }
@@ -1230,6 +1259,9 @@
   .flex-1 {
     flex: 1;
   }
+  .flex-initial {
+    flex: 0 auto;
+  }
   .flex-shrink {
     flex-shrink: 1;
   }
@@ -1277,6 +1309,11 @@
   }
   .origin-top-left {
     transform-origin: 0 0;
+  }
+  .-translate-1\/2 {
+    --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);
+    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
   }
   .-translate-x-1\/2 {
     --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);
@@ -1355,7 +1392,7 @@
     animation: var(--animate-bounce);
   }
   .animate-enter {
-    animation: enter 150ms ease-out normal both;
+    animation: old-enter 150ms ease-out normal both;
   }
   .animate-fade-out {
     animation: fade-out 1.2s infinite;
@@ -2485,6 +2522,9 @@
   .text-success-foreground {
     color: var(--lumex-success-foreground);
   }
+  .text-surface1-foreground {
+    color: var(--lumex-surface1-foreground);
+  }
   .text-warning {
     color: var(--lumex-warning);
   }
@@ -2775,6 +2815,13 @@
     transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
     transition-duration: var(--tw-duration, 250ms);
   }
+  .transition-discrete {
+    transition-behavior: allow-discrete;
+  }
+  .duration-150 {
+    --tw-duration: 150ms;
+    transition-duration: 150ms;
+  }
   .duration-200 {
     --tw-duration: 200ms;
     transition-duration: 200ms;
@@ -2797,6 +2844,10 @@
   }
   .will-change-auto {
     will-change: auto;
+  }
+  .outline-none {
+    --tw-outline-style: none;
+    outline-style: none;
   }
   .outline-solid {
     --tw-outline-style: solid;
@@ -2958,6 +3009,30 @@
       transition-property: var(--transition-transforms), opacity;
       transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
       transition-duration: var(--tw-duration, 250ms);
+    }
+  }
+  .not-open\:animate-out {
+    &:not(*:is([open], :popover-open, :open)) {
+      animation: exit var(--tw-animation-duration, var(--tw-duration, 150ms)) var(--tw-ease, ease) var(--tw-animation-delay, 0s) var(--tw-animation-iteration-count, 1) var(--tw-animation-direction, normal) var(--tw-animation-fill-mode, none);
+    }
+  }
+  .not-open\:zoom-out-95 {
+    &:not(*:is([open], :popover-open, :open)) {
+      --tw-exit-scale: calc(95 * 1%);
+      --tw-exit-scale: 0.95;
+    }
+  }
+  .not-open\:fade-out {
+    &:not(*:is([open], :popover-open, :open)) {
+      --tw-exit-opacity: 0;
+    }
+  }
+  .not-open\:not-supports-\[overlay\:auto\]\:duration-0 {
+    &:not(*:is([open], :popover-open, :open)) {
+      @supports not (overlay:auto) {
+        --tw-duration: 0ms;
+        transition-duration: 0ms;
+      }
     }
   }
   .group-even\:bg-default-100 {
@@ -3838,6 +3913,60 @@
       color: var(--lumex-warning-700);
     }
   }
+  .backdrop\:bg-black\/50 {
+    &::backdrop {
+      background-color: color-mix(in srgb, #000 50%, transparent);
+      @supports (color: color-mix(in lab, red, red)) {
+        background-color: color-mix(in oklab, var(--color-black) 50%, transparent);
+      }
+    }
+  }
+  .backdrop\:opacity-0 {
+    &::backdrop {
+      opacity: 0%;
+    }
+  }
+  .backdrop\:backdrop-blur-md {
+    &::backdrop {
+      --tw-backdrop-blur: blur(var(--blur-md));
+      -webkit-backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+      backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+    }
+  }
+  .backdrop\:backdrop-opacity-disabled {
+    &::backdrop {
+      --tw-backdrop-opacity: opacity(var(--lumex-opacity-disabled));
+      -webkit-backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+      backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+    }
+  }
+  .backdrop\:backdrop-saturate-150 {
+    &::backdrop {
+      --tw-backdrop-saturate: saturate(150%);
+      -webkit-backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+      backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+    }
+  }
+  .backdrop\:transition-opacity {
+    &::backdrop {
+      transition-property: opacity;
+      transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+      transition-duration: var(--tw-duration, 250ms);
+    }
+  }
+  .backdrop\:duration-150 {
+    &::backdrop {
+      --tw-duration: 150ms;
+      transition-duration: 150ms;
+    }
+  }
+  .not-open\:backdrop\:opacity-0 {
+    &:not(*:is([open], :popover-open, :open)) {
+      &::backdrop {
+        opacity: 0%;
+      }
+    }
+  }
   .before\:absolute {
     &::before {
       content: var(--tw-content);
@@ -4447,6 +4576,26 @@
       &:last-child {
         border-bottom-right-radius: var(--radius-lg);
       }
+    }
+  }
+  .open\:flex {
+    &:is([open], :popover-open, :open) {
+      display: flex;
+    }
+  }
+  .open\:animate-in {
+    &:is([open], :popover-open, :open) {
+      animation: enter var(--tw-animation-duration, var(--tw-duration, 150ms)) var(--tw-ease, ease) var(--tw-animation-delay, 0s) var(--tw-animation-iteration-count, 1) var(--tw-animation-direction, normal) var(--tw-animation-fill-mode, none);
+    }
+  }
+  .open\:fade-in {
+    &:is([open], :popover-open, :open) {
+      --tw-enter-opacity: 0;
+    }
+  }
+  .open\:zoom-in-105 {
+    &:is([open], :popover-open, :open) {
+      --tw-enter-scale: calc(105 * 1%);
     }
   }
   .autofill\:bg-transparent {
@@ -5251,6 +5400,11 @@
       scale: 0.97;
     }
   }
+  .active\:bg-default-200 {
+    &:active {
+      background-color: var(--lumex-default-200);
+    }
+  }
   .active\:\!opacity-focus {
     &:active {
       opacity: var(--lumex-opacity-focus) !important;
@@ -5725,6 +5879,38 @@
       }
     }
   }
+  .sm\:top-1\/2 {
+    @media (width >= 40rem) {
+      top: calc(1 / 2 * 100%);
+    }
+  }
+  .sm\:max-w-lg {
+    @media (width >= 40rem) {
+      max-width: var(--container-lg);
+    }
+  }
+  .sm\:max-w-md {
+    @media (width >= 40rem) {
+      max-width: var(--container-md);
+    }
+  }
+  .sm\:max-w-sm {
+    @media (width >= 40rem) {
+      max-width: var(--container-sm);
+    }
+  }
+  .sm\:max-w-xs {
+    @media (width >= 40rem) {
+      max-width: var(--container-xs);
+    }
+  }
+  .sm\:-translate-1\/2 {
+    @media (width >= 40rem) {
+      --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);
+      --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);
+      translate: var(--tw-translate-x) var(--tw-translate-y);
+    }
+  }
   .rtl\:space-x-reverse {
     &:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
       :where(& > :not(:last-child)) {
@@ -6134,6 +6320,13 @@
       }
     }
   }
+  .starting\:backdrop\:opacity-0 {
+    @starting-style {
+      &::backdrop {
+        opacity: 0%;
+      }
+    }
+  }
   .\[\&\:not\(placeholder-shown\)\]\:text-default-foreground {
     &:not(placeholder-shown) {
       color: var(--lumex-default-foreground);
@@ -6166,244 +6359,90 @@
   }
 }
 :root {
-  --lumex-text-tiny: .75rem;
-  --lumex-text-small: .875rem;
-  --lumex-text-medium: 1rem;
-  --lumex-text-large: 1.125rem;
-  --lumex-text-tiny--line-height: 1rem;
-  --lumex-text-small--line-height: 1.25rem;
-  --lumex-text-medium--line-height: 1.5rem;
-  --lumex-text-large--line-height: 1.75rem;
-  --lumex-radius-small: .375rem;
-  --lumex-radius-medium: .625rem;
-  --lumex-radius-large: .875rem;
-  --lumex-shadow-small: ;
-  --lumex-shadow-medium: ;
-  --lumex-shadow-large: ;
-  --lumex-opacity-divider: 15%;
-  --lumex-opacity-disabled: 60%;
-  --lumex-opacity-focus: 70%;
-  --lumex-opacity-hover: 80%;
-}
-:root, .light {
-  color-scheme: light;
-  --lumex-background: var(--color-white);
-  --lumex-foreground-50: var(--color-zinc-50);
-  --lumex-foreground-100: var(--color-zinc-100);
-  --lumex-foreground-200: var(--color-zinc-200);
-  --lumex-foreground-300: var(--color-zinc-300);
-  --lumex-foreground-400: var(--color-zinc-400);
-  --lumex-foreground-500: var(--color-zinc-500);
-  --lumex-foreground-600: var(--color-zinc-600);
-  --lumex-foreground-700: var(--color-zinc-700);
-  --lumex-foreground-800: var(--color-zinc-800);
-  --lumex-foreground-900: var(--color-zinc-900);
-  --lumex-foreground: var(--lumex-foreground-700);
-  --lumex-focus: var(--color-blue-500);
-  --lumex-divider: var(--color-zinc-900);
-  --lumex-surface1: var(--color-white);
-  --lumex-surface1-foreground: var(--color-zinc-900);
-  --lumex-surface2: var(--color-zinc-100);
-  --lumex-surface2-foreground: var(--color-zinc-800);
-  --lumex-surface3: var(--color-zinc-200);
-  --lumex-surface3-foreground: var(--color-zinc-700);
-  --lumex-default-50: var(--color-zinc-50);
-  --lumex-default-100: var(--color-zinc-100);
-  --lumex-default-200: var(--color-zinc-200);
-  --lumex-default-300: var(--color-zinc-300);
-  --lumex-default-400: var(--color-zinc-400);
-  --lumex-default-500: var(--color-zinc-500);
-  --lumex-default-600: var(--color-zinc-600);
-  --lumex-default-700: var(--color-zinc-700);
-  --lumex-default-800: var(--color-zinc-800);
-  --lumex-default-900: var(--color-zinc-900);
-  --lumex-default: var(--lumex-default-300);
-  --lumex-default-foreground: var(--color-black);
-  --lumex-primary-50: var(--color-blue-50);
-  --lumex-primary-100: var(--color-blue-100);
-  --lumex-primary-200: var(--color-blue-200);
-  --lumex-primary-300: var(--color-blue-300);
-  --lumex-primary-400: var(--color-blue-400);
-  --lumex-primary-500: var(--color-blue-500);
-  --lumex-primary-600: var(--color-blue-600);
-  --lumex-primary-700: var(--color-blue-700);
-  --lumex-primary-800: var(--color-blue-800);
-  --lumex-primary-900: var(--color-blue-900);
-  --lumex-primary: var(--lumex-primary-500);
-  --lumex-primary-foreground: var(--color-white);
-  --lumex-secondary-50: var(--color-violet-50);
-  --lumex-secondary-100: var(--color-violet-100);
-  --lumex-secondary-200: var(--color-violet-200);
-  --lumex-secondary-300: var(--color-violet-300);
-  --lumex-secondary-400: var(--color-violet-400);
-  --lumex-secondary-500: var(--color-violet-500);
-  --lumex-secondary-600: var(--color-violet-600);
-  --lumex-secondary-700: var(--color-violet-700);
-  --lumex-secondary-800: var(--color-violet-800);
-  --lumex-secondary-900: var(--color-violet-900);
-  --lumex-secondary: var(--lumex-secondary-500);
-  --lumex-secondary-foreground: var(--color-white);
-  --lumex-success-50: var(--color-green-50);
-  --lumex-success-100: var(--color-green-100);
-  --lumex-success-200: var(--color-green-200);
-  --lumex-success-300: var(--color-green-300);
-  --lumex-success-400: var(--color-green-400);
-  --lumex-success-500: var(--color-green-500);
-  --lumex-success-600: var(--color-green-600);
-  --lumex-success-700: var(--color-green-700);
-  --lumex-success-800: var(--color-green-800);
-  --lumex-success-900: var(--color-green-900);
-  --lumex-success: var(--lumex-success-500);
-  --lumex-success-foreground: var(--color-black);
-  --lumex-warning-50: var(--color-amber-50);
-  --lumex-warning-100: var(--color-amber-100);
-  --lumex-warning-200: var(--color-amber-200);
-  --lumex-warning-300: var(--color-amber-300);
-  --lumex-warning-400: var(--color-amber-400);
-  --lumex-warning-500: var(--color-amber-500);
-  --lumex-warning-600: var(--color-amber-600);
-  --lumex-warning-700: var(--color-amber-700);
-  --lumex-warning-800: var(--color-amber-800);
-  --lumex-warning-900: var(--color-amber-900);
-  --lumex-warning: var(--lumex-warning-500);
-  --lumex-warning-foreground: var(--color-black);
-  --lumex-danger-50: var(--color-rose-50);
-  --lumex-danger-100: var(--color-rose-100);
-  --lumex-danger-200: var(--color-rose-200);
-  --lumex-danger-300: var(--color-rose-300);
-  --lumex-danger-400: var(--color-rose-400);
-  --lumex-danger-500: var(--color-rose-500);
-  --lumex-danger-600: var(--color-rose-600);
-  --lumex-danger-700: var(--color-rose-700);
-  --lumex-danger-800: var(--color-rose-800);
-  --lumex-danger-900: var(--color-rose-900);
-  --lumex-danger: var(--lumex-danger-500);
-  --lumex-danger-foreground: var(--color-white);
-  --lumex-info-50: var(--color-sky-50);
-  --lumex-info-100: var(--color-sky-100);
-  --lumex-info-200: var(--color-sky-200);
-  --lumex-info-300: var(--color-sky-300);
-  --lumex-info-400: var(--color-sky-400);
-  --lumex-info-500: var(--color-sky-500);
-  --lumex-info-600: var(--color-sky-600);
-  --lumex-info-700: var(--color-sky-700);
-  --lumex-info-800: var(--color-sky-800);
-  --lumex-info-900: var(--color-sky-900);
-  --lumex-info: var(--lumex-info-500);
-  --lumex-info-foreground: var(--color-black);
-  --lumex-shadow-small: 0px 0px 5px 0px rgb(0 0 0 / .02), 0px 2px 10px 0px rgb(0 0 0 / .06), 0px 0px 1px 0px rgb(0 0 0 / .15);
-  --lumex-shadow-medium: 0px 0px 15px 0px rgb(0 0 0 / .03), 0px 2px 30px 0px rgb(0 0 0 / .08), 0px 0px 1px 0px rgb(0 0 0 / .15);
-  --lumex-shadow-large: 0px 0px 20px 0px rgb(0 0 0 / .04), 0px 2px 50px 0px rgb(0 0 0 / .1), 0px 0px 1px 0px rgb(0 0 0 / .15);
-}
-.dark {
-  color-scheme: dark;
-  --lumex-background: var(--color-black);
-  --lumex-foreground-50: var(--color-zinc-900);
-  --lumex-foreground-100: var(--color-zinc-800);
-  --lumex-foreground-200: var(--color-zinc-700);
-  --lumex-foreground-300: var(--color-zinc-600);
-  --lumex-foreground-400: var(--color-zinc-500);
-  --lumex-foreground-500: var(--color-zinc-400);
-  --lumex-foreground-600: var(--color-zinc-300);
-  --lumex-foreground-700: var(--color-zinc-200);
-  --lumex-foreground-800: var(--color-zinc-100);
-  --lumex-foreground-900: var(--color-zinc-50);
-  --lumex-foreground: var(--lumex-foreground-600);
-  --lumex-focus: var(--color-blue-500);
-  --lumex-divider: var(--color-zinc-50);
-  --lumex-surface1: var(--color-zinc-900);
-  --lumex-surface1-foreground: var(--color-zinc-50);
-  --lumex-surface2: var(--color-zinc-800);
-  --lumex-surface2-foreground: var(--color-zinc-100);
-  --lumex-surface3: var(--color-zinc-700);
-  --lumex-surface3-foreground: var(--color-zinc-200);
-  --lumex-default-50: var(--color-zinc-900);
-  --lumex-default-100: var(--color-zinc-800);
-  --lumex-default-200: var(--color-zinc-700);
-  --lumex-default-300: var(--color-zinc-600);
-  --lumex-default-400: var(--color-zinc-500);
-  --lumex-default-500: var(--color-zinc-400);
-  --lumex-default-600: var(--color-zinc-300);
-  --lumex-default-700: var(--color-zinc-200);
-  --lumex-default-800: var(--color-zinc-100);
-  --lumex-default-900: var(--color-zinc-50);
-  --lumex-default: var(--lumex-default-200);
-  --lumex-default-foreground: var(--color-white);
-  --lumex-primary-50: var(--color-blue-900);
-  --lumex-primary-100: var(--color-blue-800);
-  --lumex-primary-200: var(--color-blue-700);
-  --lumex-primary-300: var(--color-blue-600);
-  --lumex-primary-400: var(--color-blue-500);
-  --lumex-primary-500: var(--color-blue-400);
-  --lumex-primary-600: var(--color-blue-300);
-  --lumex-primary-700: var(--color-blue-200);
-  --lumex-primary-800: var(--color-blue-100);
-  --lumex-primary-900: var(--color-blue-50);
-  --lumex-primary: var(--lumex-primary-400);
-  --lumex-primary-foreground: var(--color-white);
-  --lumex-secondary-50: var(--color-violet-900);
-  --lumex-secondary-100: var(--color-violet-800);
-  --lumex-secondary-200: var(--color-violet-700);
-  --lumex-secondary-300: var(--color-violet-600);
-  --lumex-secondary-400: var(--color-violet-500);
-  --lumex-secondary-500: var(--color-violet-400);
-  --lumex-secondary-600: var(--color-violet-300);
-  --lumex-secondary-700: var(--color-violet-200);
-  --lumex-secondary-800: var(--color-violet-100);
-  --lumex-secondary-900: var(--color-violet-50);
-  --lumex-secondary: var(--lumex-secondary-400);
-  --lumex-secondary-foreground: var(--color-white);
-  --lumex-success-50: var(--color-green-900);
-  --lumex-success-100: var(--color-green-800);
-  --lumex-success-200: var(--color-green-700);
-  --lumex-success-300: var(--color-green-600);
-  --lumex-success-400: var(--color-green-500);
-  --lumex-success-500: var(--color-green-400);
-  --lumex-success-600: var(--color-green-300);
-  --lumex-success-700: var(--color-green-200);
-  --lumex-success-800: var(--color-green-100);
-  --lumex-success-900: var(--color-green-50);
-  --lumex-success: var(--lumex-success-400);
-  --lumex-success-foreground: var(--color-black);
-  --lumex-warning-50: var(--color-amber-900);
-  --lumex-warning-100: var(--color-amber-800);
-  --lumex-warning-200: var(--color-amber-700);
-  --lumex-warning-300: var(--color-amber-600);
-  --lumex-warning-400: var(--color-amber-500);
-  --lumex-warning-500: var(--color-amber-400);
-  --lumex-warning-600: var(--color-amber-300);
-  --lumex-warning-700: var(--color-amber-200);
-  --lumex-warning-800: var(--color-amber-100);
-  --lumex-warning-900: var(--color-amber-50);
-  --lumex-warning: var(--lumex-warning-400);
-  --lumex-warning-foreground: var(--color-black);
-  --lumex-danger-50: var(--color-rose-900);
-  --lumex-danger-100: var(--color-rose-800);
-  --lumex-danger-200: var(--color-rose-700);
-  --lumex-danger-300: var(--color-rose-600);
-  --lumex-danger-400: var(--color-rose-500);
-  --lumex-danger-500: var(--color-rose-400);
-  --lumex-danger-600: var(--color-rose-300);
-  --lumex-danger-700: var(--color-rose-200);
-  --lumex-danger-800: var(--color-rose-100);
-  --lumex-danger-900: var(--color-rose-50);
-  --lumex-danger: var(--lumex-danger-400);
-  --lumex-danger-foreground: var(--color-white);
-  --lumex-info-50: var(--color-sky-900);
-  --lumex-info-100: var(--color-sky-800);
-  --lumex-info-200: var(--color-sky-700);
-  --lumex-info-300: var(--color-sky-600);
-  --lumex-info-400: var(--color-sky-500);
-  --lumex-info-500: var(--color-sky-400);
-  --lumex-info-600: var(--color-sky-300);
-  --lumex-info-700: var(--color-sky-200);
-  --lumex-info-800: var(--color-sky-100);
-  --lumex-info-900: var(--color-sky-50);
-  --lumex-info: var(--lumex-info-400);
-  --lumex-info-foreground: var(--color-black);
-  --lumex-shadow-small: 0px 0px 5px 0px rgb(0 0 0 / .03), 0px 2px 10px 0px rgb(0 0 0 / .2), inset 0px 0px 1px 0px rgb(255 255 255 / .15);
-  --lumex-shadow-medium: 0px 0px 15px 0px rgb(0 0 0 / .06), 0px 2px 30px 0px rgb(0 0 0 / .22), inset 0px 0px 1px 0px rgb(255 255 255 / .15);
-  --lumex-shadow-large: 0px 0px 20px 0px rgb(0 0 0 / .07), 0px 2px 50px 0px rgb(0 0 0 / .24), inset 0px 0px 1px 0px rgb(255 255 255 / .15);
+  @property --tw-animation-delay {
+    syntax: "*";
+    inherits: false;
+    initial-value: 0s;
+  }
+  @property --tw-animation-direction {
+    syntax: "*";
+    inherits: false;
+    initial-value: normal;
+  }
+  @property --tw-animation-duration {
+    syntax: "*";
+    inherits: false;
+  }
+  @property --tw-animation-fill-mode {
+    syntax: "*";
+    inherits: false;
+    initial-value: none;
+  }
+  @property --tw-animation-iteration-count {
+    syntax: "*";
+    inherits: false;
+    initial-value: 1;
+  }
+  @property --tw-enter-blur {
+    syntax: "*";
+    inherits: false;
+    initial-value: 0;
+  }
+  @property --tw-enter-opacity {
+    syntax: "*";
+    inherits: false;
+    initial-value: 1;
+  }
+  @property --tw-enter-rotate {
+    syntax: "*";
+    inherits: false;
+    initial-value: 0;
+  }
+  @property --tw-enter-scale {
+    syntax: "*";
+    inherits: false;
+    initial-value: 1;
+  }
+  @property --tw-enter-translate-x {
+    syntax: "*";
+    inherits: false;
+    initial-value: 0;
+  }
+  @property --tw-enter-translate-y {
+    syntax: "*";
+    inherits: false;
+    initial-value: 0;
+  }
+  @property --tw-exit-blur {
+    syntax: "*";
+    inherits: false;
+    initial-value: 0;
+  }
+  @property --tw-exit-opacity {
+    syntax: "*";
+    inherits: false;
+    initial-value: 1;
+  }
+  @property --tw-exit-rotate {
+    syntax: "*";
+    inherits: false;
+    initial-value: 0;
+  }
+  @property --tw-exit-scale {
+    syntax: "*";
+    inherits: false;
+    initial-value: 1;
+  }
+  @property --tw-exit-translate-x {
+    syntax: "*";
+    inherits: false;
+    initial-value: 0;
+  }
+  @property --tw-exit-translate-y {
+    syntax: "*";
+    inherits: false;
+    initial-value: 0;
+  }
 }
 html[dir='ltr'], [data-sonner-toaster][dir='ltr'] {
   --toast-icon-margin-start: -3px;
@@ -7009,7 +7048,255 @@ html[dir='rtl'], [data-sonner-toaster][dir='rtl'] {
   opacity: 0;
   transform: scale(0.8) translate(-50%, -50%);
 }
+:root {
+  --lumex-text-tiny: .75rem;
+  --lumex-text-small: .875rem;
+  --lumex-text-medium: 1rem;
+  --lumex-text-large: 1.125rem;
+  --lumex-text-tiny--line-height: 1rem;
+  --lumex-text-small--line-height: 1.25rem;
+  --lumex-text-medium--line-height: 1.5rem;
+  --lumex-text-large--line-height: 1.75rem;
+  --lumex-radius-small: .375rem;
+  --lumex-radius-medium: .625rem;
+  --lumex-radius-large: .875rem;
+  --lumex-shadow-small: ;
+  --lumex-shadow-medium: ;
+  --lumex-shadow-large: ;
+  --lumex-opacity-divider: 15%;
+  --lumex-opacity-disabled: 60%;
+  --lumex-opacity-focus: 70%;
+  --lumex-opacity-hover: 80%;
+}
+:root, .light {
+  color-scheme: light;
+  --lumex-background: var(--color-white);
+  --lumex-foreground-50: var(--color-zinc-50);
+  --lumex-foreground-100: var(--color-zinc-100);
+  --lumex-foreground-200: var(--color-zinc-200);
+  --lumex-foreground-300: var(--color-zinc-300);
+  --lumex-foreground-400: var(--color-zinc-400);
+  --lumex-foreground-500: var(--color-zinc-500);
+  --lumex-foreground-600: var(--color-zinc-600);
+  --lumex-foreground-700: var(--color-zinc-700);
+  --lumex-foreground-800: var(--color-zinc-800);
+  --lumex-foreground-900: var(--color-zinc-900);
+  --lumex-foreground: var(--lumex-foreground-700);
+  --lumex-focus: var(--color-blue-500);
+  --lumex-divider: var(--color-zinc-900);
+  --lumex-surface1: var(--color-white);
+  --lumex-surface1-foreground: var(--color-zinc-900);
+  --lumex-surface2: var(--color-zinc-100);
+  --lumex-surface2-foreground: var(--color-zinc-800);
+  --lumex-surface3: var(--color-zinc-200);
+  --lumex-surface3-foreground: var(--color-zinc-700);
+  --lumex-default-50: var(--color-zinc-50);
+  --lumex-default-100: var(--color-zinc-100);
+  --lumex-default-200: var(--color-zinc-200);
+  --lumex-default-300: var(--color-zinc-300);
+  --lumex-default-400: var(--color-zinc-400);
+  --lumex-default-500: var(--color-zinc-500);
+  --lumex-default-600: var(--color-zinc-600);
+  --lumex-default-700: var(--color-zinc-700);
+  --lumex-default-800: var(--color-zinc-800);
+  --lumex-default-900: var(--color-zinc-900);
+  --lumex-default: var(--lumex-default-300);
+  --lumex-default-foreground: var(--color-black);
+  --lumex-primary-50: var(--color-blue-50);
+  --lumex-primary-100: var(--color-blue-100);
+  --lumex-primary-200: var(--color-blue-200);
+  --lumex-primary-300: var(--color-blue-300);
+  --lumex-primary-400: var(--color-blue-400);
+  --lumex-primary-500: var(--color-blue-500);
+  --lumex-primary-600: var(--color-blue-600);
+  --lumex-primary-700: var(--color-blue-700);
+  --lumex-primary-800: var(--color-blue-800);
+  --lumex-primary-900: var(--color-blue-900);
+  --lumex-primary: var(--lumex-primary-500);
+  --lumex-primary-foreground: var(--color-white);
+  --lumex-secondary-50: var(--color-violet-50);
+  --lumex-secondary-100: var(--color-violet-100);
+  --lumex-secondary-200: var(--color-violet-200);
+  --lumex-secondary-300: var(--color-violet-300);
+  --lumex-secondary-400: var(--color-violet-400);
+  --lumex-secondary-500: var(--color-violet-500);
+  --lumex-secondary-600: var(--color-violet-600);
+  --lumex-secondary-700: var(--color-violet-700);
+  --lumex-secondary-800: var(--color-violet-800);
+  --lumex-secondary-900: var(--color-violet-900);
+  --lumex-secondary: var(--lumex-secondary-500);
+  --lumex-secondary-foreground: var(--color-white);
+  --lumex-success-50: var(--color-green-50);
+  --lumex-success-100: var(--color-green-100);
+  --lumex-success-200: var(--color-green-200);
+  --lumex-success-300: var(--color-green-300);
+  --lumex-success-400: var(--color-green-400);
+  --lumex-success-500: var(--color-green-500);
+  --lumex-success-600: var(--color-green-600);
+  --lumex-success-700: var(--color-green-700);
+  --lumex-success-800: var(--color-green-800);
+  --lumex-success-900: var(--color-green-900);
+  --lumex-success: var(--lumex-success-500);
+  --lumex-success-foreground: var(--color-black);
+  --lumex-warning-50: var(--color-amber-50);
+  --lumex-warning-100: var(--color-amber-100);
+  --lumex-warning-200: var(--color-amber-200);
+  --lumex-warning-300: var(--color-amber-300);
+  --lumex-warning-400: var(--color-amber-400);
+  --lumex-warning-500: var(--color-amber-500);
+  --lumex-warning-600: var(--color-amber-600);
+  --lumex-warning-700: var(--color-amber-700);
+  --lumex-warning-800: var(--color-amber-800);
+  --lumex-warning-900: var(--color-amber-900);
+  --lumex-warning: var(--lumex-warning-500);
+  --lumex-warning-foreground: var(--color-black);
+  --lumex-danger-50: var(--color-rose-50);
+  --lumex-danger-100: var(--color-rose-100);
+  --lumex-danger-200: var(--color-rose-200);
+  --lumex-danger-300: var(--color-rose-300);
+  --lumex-danger-400: var(--color-rose-400);
+  --lumex-danger-500: var(--color-rose-500);
+  --lumex-danger-600: var(--color-rose-600);
+  --lumex-danger-700: var(--color-rose-700);
+  --lumex-danger-800: var(--color-rose-800);
+  --lumex-danger-900: var(--color-rose-900);
+  --lumex-danger: var(--lumex-danger-500);
+  --lumex-danger-foreground: var(--color-white);
+  --lumex-info-50: var(--color-sky-50);
+  --lumex-info-100: var(--color-sky-100);
+  --lumex-info-200: var(--color-sky-200);
+  --lumex-info-300: var(--color-sky-300);
+  --lumex-info-400: var(--color-sky-400);
+  --lumex-info-500: var(--color-sky-500);
+  --lumex-info-600: var(--color-sky-600);
+  --lumex-info-700: var(--color-sky-700);
+  --lumex-info-800: var(--color-sky-800);
+  --lumex-info-900: var(--color-sky-900);
+  --lumex-info: var(--lumex-info-500);
+  --lumex-info-foreground: var(--color-black);
+  --lumex-shadow-small: 0px 0px 5px 0px rgb(0 0 0 / .02), 0px 2px 10px 0px rgb(0 0 0 / .06), 0px 0px 1px 0px rgb(0 0 0 / .15);
+  --lumex-shadow-medium: 0px 0px 15px 0px rgb(0 0 0 / .03), 0px 2px 30px 0px rgb(0 0 0 / .08), 0px 0px 1px 0px rgb(0 0 0 / .15);
+  --lumex-shadow-large: 0px 0px 20px 0px rgb(0 0 0 / .04), 0px 2px 50px 0px rgb(0 0 0 / .1), 0px 0px 1px 0px rgb(0 0 0 / .15);
+}
+.dark {
+  color-scheme: dark;
+  --lumex-background: var(--color-black);
+  --lumex-foreground-50: var(--color-zinc-900);
+  --lumex-foreground-100: var(--color-zinc-800);
+  --lumex-foreground-200: var(--color-zinc-700);
+  --lumex-foreground-300: var(--color-zinc-600);
+  --lumex-foreground-400: var(--color-zinc-500);
+  --lumex-foreground-500: var(--color-zinc-400);
+  --lumex-foreground-600: var(--color-zinc-300);
+  --lumex-foreground-700: var(--color-zinc-200);
+  --lumex-foreground-800: var(--color-zinc-100);
+  --lumex-foreground-900: var(--color-zinc-50);
+  --lumex-foreground: var(--lumex-foreground-600);
+  --lumex-focus: var(--color-blue-500);
+  --lumex-divider: var(--color-zinc-50);
+  --lumex-surface1: var(--color-zinc-900);
+  --lumex-surface1-foreground: var(--color-zinc-50);
+  --lumex-surface2: var(--color-zinc-800);
+  --lumex-surface2-foreground: var(--color-zinc-100);
+  --lumex-surface3: var(--color-zinc-700);
+  --lumex-surface3-foreground: var(--color-zinc-200);
+  --lumex-default-50: var(--color-zinc-900);
+  --lumex-default-100: var(--color-zinc-800);
+  --lumex-default-200: var(--color-zinc-700);
+  --lumex-default-300: var(--color-zinc-600);
+  --lumex-default-400: var(--color-zinc-500);
+  --lumex-default-500: var(--color-zinc-400);
+  --lumex-default-600: var(--color-zinc-300);
+  --lumex-default-700: var(--color-zinc-200);
+  --lumex-default-800: var(--color-zinc-100);
+  --lumex-default-900: var(--color-zinc-50);
+  --lumex-default: var(--lumex-default-200);
+  --lumex-default-foreground: var(--color-white);
+  --lumex-primary-50: var(--color-blue-900);
+  --lumex-primary-100: var(--color-blue-800);
+  --lumex-primary-200: var(--color-blue-700);
+  --lumex-primary-300: var(--color-blue-600);
+  --lumex-primary-400: var(--color-blue-500);
+  --lumex-primary-500: var(--color-blue-400);
+  --lumex-primary-600: var(--color-blue-300);
+  --lumex-primary-700: var(--color-blue-200);
+  --lumex-primary-800: var(--color-blue-100);
+  --lumex-primary-900: var(--color-blue-50);
+  --lumex-primary: var(--lumex-primary-400);
+  --lumex-primary-foreground: var(--color-white);
+  --lumex-secondary-50: var(--color-violet-900);
+  --lumex-secondary-100: var(--color-violet-800);
+  --lumex-secondary-200: var(--color-violet-700);
+  --lumex-secondary-300: var(--color-violet-600);
+  --lumex-secondary-400: var(--color-violet-500);
+  --lumex-secondary-500: var(--color-violet-400);
+  --lumex-secondary-600: var(--color-violet-300);
+  --lumex-secondary-700: var(--color-violet-200);
+  --lumex-secondary-800: var(--color-violet-100);
+  --lumex-secondary-900: var(--color-violet-50);
+  --lumex-secondary: var(--lumex-secondary-400);
+  --lumex-secondary-foreground: var(--color-white);
+  --lumex-success-50: var(--color-green-900);
+  --lumex-success-100: var(--color-green-800);
+  --lumex-success-200: var(--color-green-700);
+  --lumex-success-300: var(--color-green-600);
+  --lumex-success-400: var(--color-green-500);
+  --lumex-success-500: var(--color-green-400);
+  --lumex-success-600: var(--color-green-300);
+  --lumex-success-700: var(--color-green-200);
+  --lumex-success-800: var(--color-green-100);
+  --lumex-success-900: var(--color-green-50);
+  --lumex-success: var(--lumex-success-400);
+  --lumex-success-foreground: var(--color-black);
+  --lumex-warning-50: var(--color-amber-900);
+  --lumex-warning-100: var(--color-amber-800);
+  --lumex-warning-200: var(--color-amber-700);
+  --lumex-warning-300: var(--color-amber-600);
+  --lumex-warning-400: var(--color-amber-500);
+  --lumex-warning-500: var(--color-amber-400);
+  --lumex-warning-600: var(--color-amber-300);
+  --lumex-warning-700: var(--color-amber-200);
+  --lumex-warning-800: var(--color-amber-100);
+  --lumex-warning-900: var(--color-amber-50);
+  --lumex-warning: var(--lumex-warning-400);
+  --lumex-warning-foreground: var(--color-black);
+  --lumex-danger-50: var(--color-rose-900);
+  --lumex-danger-100: var(--color-rose-800);
+  --lumex-danger-200: var(--color-rose-700);
+  --lumex-danger-300: var(--color-rose-600);
+  --lumex-danger-400: var(--color-rose-500);
+  --lumex-danger-500: var(--color-rose-400);
+  --lumex-danger-600: var(--color-rose-300);
+  --lumex-danger-700: var(--color-rose-200);
+  --lumex-danger-800: var(--color-rose-100);
+  --lumex-danger-900: var(--color-rose-50);
+  --lumex-danger: var(--lumex-danger-400);
+  --lumex-danger-foreground: var(--color-white);
+  --lumex-info-50: var(--color-sky-900);
+  --lumex-info-100: var(--color-sky-800);
+  --lumex-info-200: var(--color-sky-700);
+  --lumex-info-300: var(--color-sky-600);
+  --lumex-info-400: var(--color-sky-500);
+  --lumex-info-500: var(--color-sky-400);
+  --lumex-info-600: var(--color-sky-300);
+  --lumex-info-700: var(--color-sky-200);
+  --lumex-info-800: var(--color-sky-100);
+  --lumex-info-900: var(--color-sky-50);
+  --lumex-info: var(--lumex-info-400);
+  --lumex-info-foreground: var(--color-black);
+  --lumex-shadow-small: 0px 0px 5px 0px rgb(0 0 0 / .03), 0px 2px 10px 0px rgb(0 0 0 / .2), inset 0px 0px 1px 0px rgb(255 255 255 / .15);
+  --lumex-shadow-medium: 0px 0px 15px 0px rgb(0 0 0 / .06), 0px 2px 30px 0px rgb(0 0 0 / .22), inset 0px 0px 1px 0px rgb(255 255 255 / .15);
+  --lumex-shadow-large: 0px 0px 20px 0px rgb(0 0 0 / .07), 0px 2px 50px 0px rgb(0 0 0 / .24), inset 0px 0px 1px 0px rgb(255 255 255 / .15);
+}
 @layer base {
+  html {
+    &:has(*:is([open], :popover-open, :open)) {
+      overflow: hidden;
+    }
+    &:has(*:is([open], :popover-open, :open)) {
+      scrollbar-gutter: stable;
+    }
+  }
   body {
     background-color: var(--lumex-background);
     color: var(--lumex-foreground);
@@ -7411,6 +7698,20 @@ html[dir='rtl'], [data-sonner-toaster][dir='rtl'] {
   }
 }
 @keyframes enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0) scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1)) rotate(var(--tw-enter-rotate, 0));
+    filter: blur(var(--tw-enter-blur, 0));
+  }
+}
+@keyframes exit {
+  to {
+    opacity: var(--tw-exit-opacity, 1);
+    transform: translate3d(var(--tw-exit-translate-x, 0), var(--tw-exit-translate-y, 0), 0) scale3d(var(--tw-exit-scale, 1), var(--tw-exit-scale, 1), var(--tw-exit-scale, 1)) rotate(var(--tw-exit-rotate, 0));
+    filter: blur(var(--tw-exit-blur, 0));
+  }
+}
+@keyframes old-enter {
   0% {
     opacity: 0;
     transform: translateZ(0) scale(0.85);
