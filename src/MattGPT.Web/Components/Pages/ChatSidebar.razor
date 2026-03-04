@@ -1,6 +1,6 @@
 @rendermode InteractiveServer
-@inject MattGPT.ApiClient.Services.IChatService ChatService
-@inject MattGPT.ApiClient.Services.IConversationService ConversationService
+@inject IChatService ChatService
+@inject IConversationService ConversationService
 
 <div class="flex flex-col h-full bg-default-50 border-r border-default-200">
     @* New chat button *@
@@ -266,12 +266,12 @@
     [Parameter] public EventCallback<Guid> OnSessionSelected { get; set; }
     [Parameter] public EventCallback<string> OnConversationSelected { get; set; }
 
-    private List<MattGPT.ApiClient.Models.ChatSessionItem> _chatSessions = [];
-    private List<MattGPT.ApiClient.Models.ProjectItem> _projects = [];
-    private Dictionary<string, List<MattGPT.ApiClient.Models.ImportedConversationItem>> _projectConversations = new();
+    private List<ChatSessionItem> _chatSessions = [];
+    private List<ProjectItem> _projects = [];
+    private Dictionary<string, List<ImportedConversationItem>> _projectConversations = new();
     private HashSet<string> _expandedProjects = new();
-    private List<MattGPT.ApiClient.Models.ImportedConversationItem> _importedConversations = [];
-    private List<MattGPT.ApiClient.Models.ImportedConversationItem> _filteredImported = [];
+    private List<ImportedConversationItem> _importedConversations = [];
+    private List<ImportedConversationItem> _filteredImported = [];
     private long _importedTotal;
     private int _importedPage = 1;
     private bool _isLoading = true;
@@ -442,7 +442,7 @@
 
     // ── Inline editing ──
 
-    private void StartEditing(MattGPT.ApiClient.Models.ProjectItem project)
+    private void StartEditing(ProjectItem project)
     {
         _editingProjectId = project.TemplateId;
         _editingName = ProjectDisplayName(project);
@@ -496,7 +496,7 @@
         }
     }
 
-    private static string ProjectDisplayName(MattGPT.ApiClient.Models.ProjectItem project)
+    private static string ProjectDisplayName(ProjectItem project)
     {
         // Prefer user-assigned name, fall back to inferred name from most recent conversation.
         if (!string.IsNullOrWhiteSpace(project.UserName))

@@ -1,7 +1,7 @@
 @page "/search"
 @rendermode InteractiveServer
 @implements IDisposable
-@inject MattGPT.ApiClient.Services.ISearchService SearchService
+@inject ISearchService SearchService
 @inject NavigationManager Navigation
 
 <PageTitle>Search Conversations</PageTitle>
@@ -76,7 +76,7 @@
     private bool _isSearching;
     private bool _hasSearched;
     private string _errorMessage = string.Empty;
-    private readonly List<MattGPT.ApiClient.Models.SearchResult> _results = [];
+    private readonly List<SearchResult> _results = [];
     private System.Threading.Timer? _debounceTimer;
 
     private void OnQueryChanged()

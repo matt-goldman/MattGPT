@@ -3,7 +3,7 @@
 @layout MattGPT.Web.Components.Layout.ChatLayout
 @rendermode InteractiveServer
 @implements IAsyncDisposable
-@inject MattGPT.ApiClient.Services.IChatService ChatService
+@inject IChatService ChatService
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
@@ -477,14 +477,14 @@
 
         try
         {
-            List<MattGPT.ApiClient.Models.ChatSource>? sources = null;
+            List<ChatSource>? sources = null;
             var responseTimestamp = DateTimeOffset.UtcNow;
 
             await foreach (var evt in ChatService.StreamChatAsync(text, _sessionId, ct))
             {
                 switch (evt)
                 {
-                    case MattGPT.ApiClient.Models.SessionChatEvent session:
+                    case SessionChatEvent session:
                         _sessionId = session.SessionId;
                         // Update session title from input on first message.
                         if (_sessionTitle is null)
@@ -494,7 +494,7 @@
                             await _jsModule.InvokeVoidAsync("pushState", "/chat");
                         break;
 
-                    case MattGPT.ApiClient.Models.TokenChatEvent token:
+                    case TokenChatEvent token:
                         _toolStatus = string.Empty; // clear tool status when tokens arrive
                         _streamingContent.Append(token.Token);
                         responseTimestamp = DateTimeOffset.UtcNow;
@@ -504,23 +504,23 @@
                         StateHasChanged();
                         break;
 
-                    case MattGPT.ApiClient.Models.ToolStartChatEvent toolStart:
+                    case ToolStartChatEvent toolStart:
                         // Tool invocation started — show status indicator (issue 032)
                         _toolStatus = GetToolStatusMessage(toolStart.Tool);
                         StateHasChanged();
                         break;
 
-                    case MattGPT.ApiClient.Models.ToolEndChatEvent:
+                    case ToolEndChatEvent:
                         // Tool invocation finished — revert to generic thinking state
                         _toolStatus = string.Empty;
                         StateHasChanged();
                         break;
 
-                    case MattGPT.ApiClient.Models.SourcesChatEvent sourcesEvt:
+                    case SourcesChatEvent sourcesEvt:
                         sources = sourcesEvt.Sources.ToList();
                         break;
 
-                    case MattGPT.ApiClient.Models.DoneChatEvent:
+                    case DoneChatEvent:
                         break;
                 }
             }
@@ -574,5 +574,5 @@
         return local.ToString("MMMM d, yyyy");
     }
 
-    private record ChatMessage(string Role, string Content, List<MattGPT.ApiClient.Models.ChatSource>? Sources, DateTimeOffset? Timestamp = null);
+    private record ChatMessage(string Role, string Content, List<ChatSource>? Sources, DateTimeOffset? Timestamp = null);
 }
