@@ -1,4 +1,5 @@
 using LumexUI.Extensions;
+using MattGPT.ApiClient;
 using MattGPT.Web;
 using MattGPT.Web.Components;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -46,15 +47,11 @@ builder.Services.AddHttpClient<WeatherApiClient>(client =>
         client.BaseAddress = new("https+http://apiservice");
     });
 
-// Named HTTP client for direct API calls (e.g., file upload).
-var apiClientBuilder = builder.Services.AddHttpClient("apiservice", client =>
-{
-    client.BaseAddress = new("https+http://apiservice");
-    client.Timeout = TimeSpan.FromMinutes(10); // large file uploads
-});
+// Register MattGPT API client services (chat, conversations, search, settings).
+var mattGptClientBuilder = builder.Services.AddMattGptApiClient(new Uri("https+http://apiservice"));
 if (authOptions.Enabled)
 {
-    apiClientBuilder.AddHttpMessageHandler<UserIdDelegatingHandler>();
+    mattGptClientBuilder.AddHttpMessageHandler<UserIdDelegatingHandler>();
 }
 
 // Configure Kestrel for large file uploads (up to 250 MB).

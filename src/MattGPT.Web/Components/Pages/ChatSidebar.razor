@@ -1,7 +1,6 @@
 @rendermode InteractiveServer
-@inject IHttpClientFactory HttpClients
-@using System.Text.Json
-@using System.Net.Http.Json
+@inject MattGPT.ApiClient.Services.IChatService ChatService
+@inject MattGPT.ApiClient.Services.IConversationService ConversationService
 
 <div class="flex flex-col h-full bg-default-50 border-r border-default-200">
     @* New chat button *@
@@ -267,12 +266,12 @@
     [Parameter] public EventCallback<Guid> OnSessionSelected { get; set; }
     [Parameter] public EventCallback<string> OnConversationSelected { get; set; }
 
-    private List<ChatSessionItem> _chatSessions = [];
-    private List<ProjectItem> _projects = [];
-    private Dictionary<string, List<ImportedConversationItem>> _projectConversations = new();
+    private List<MattGPT.ApiClient.Models.ChatSessionItem> _chatSessions = [];
+    private List<MattGPT.ApiClient.Models.ProjectItem> _projects = [];
+    private Dictionary<string, List<MattGPT.ApiClient.Models.ImportedConversationItem>> _projectConversations = new();
     private HashSet<string> _expandedProjects = new();
-    private List<ImportedConversationItem> _importedConversations = [];
-    private List<ImportedConversationItem> _filteredImported = [];
+    private List<MattGPT.ApiClient.Models.ImportedConversationItem> _importedConversations = [];
+    private List<MattGPT.ApiClient.Models.ImportedConversationItem> _filteredImported = [];
     private long _importedTotal;
     private int _importedPage = 1;
     private bool _isLoading = true;
@@ -287,11 +286,6 @@
     // Inline editing state
     private string? _editingProjectId;
     private string _editingName = string.Empty;
-
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -312,20 +306,17 @@
 
         try
         {
-            var client = HttpClients.CreateClient("apiservice");
-
             // Load chat sessions, projects, and standalone imported conversations in parallel.
-            var sessionsTask = client.GetFromJsonAsync<List<ChatSessionItem>>("/chat/sessions?limit=50", _jsonOptions);
-            var projectsTask = client.GetFromJsonAsync<List<ProjectItem>>("/conversations/projects", _jsonOptions);
-            var conversationsTask = client.GetFromJsonAsync<StandaloneConversationsResponse>(
-                "/conversations/standalone?page=1&pageSize=50", _jsonOptions);
+            var sessionsTask = ChatService.GetSessionsAsync(limit: 50);
+            var projectsTask = ConversationService.GetProjectsAsync();
+            var conversationsTask = ConversationService.GetStandaloneConversationsAsync(page: 1, pageSize: 50);
 
             await Task.WhenAll(sessionsTask, projectsTask, conversationsTask);
 
-            _chatSessions = sessionsTask.Result ?? [];
-            _projects = projectsTask.Result ?? [];
+            _chatSessions = (await sessionsTask).ToList();
+            _projects = (await projectsTask).ToList();
 
-            var convResult = conversationsTask.Result;
+            var convResult = await conversationsTask;
             if (convResult is not null)
             {
                 _importedConversations = convResult.Items?.ToList() ?? [];
@@ -377,15 +368,13 @@
     {
         try
         {
-            var client = HttpClients.CreateClient("apiservice");
             var page = 1;
             const int pageSize = 100;
             _projectConversations[templateId] = [];
 
             while (true)
             {
-                var result = await client.GetFromJsonAsync<ProjectConversationsResponse>(
-                    $"/conversations/projects/{templateId}?page={page}&pageSize={pageSize}", _jsonOptions);
+                var result = await ConversationService.GetProjectConversationsAsync(templateId, page, pageSize);
 
                 if (result?.Items is null || result.Items.Count == 0)
                     break;
@@ -419,9 +408,7 @@
         var nextPage = _importedPage + 1;
         try
         {
-            var client = HttpClients.CreateClient("apiservice");
-            var result = await client.GetFromJsonAsync<StandaloneConversationsResponse>(
-                $"/conversations/standalone?page={nextPage}&pageSize=50", _jsonOptions);
+            var result = await ConversationService.GetStandaloneConversationsAsync(nextPage, pageSize: 50);
             if (result?.Items is not null)
             {
                 _importedPage = nextPage;
@@ -455,7 +442,7 @@
 
     // ── Inline editing ──
 
-    private void StartEditing(ProjectItem project)
+    private void StartEditing(MattGPT.ApiClient.Models.ProjectItem project)
     {
         _editingProjectId = project.TemplateId;
         _editingName = ProjectDisplayName(project);
@@ -477,20 +464,14 @@
 
         try
         {
-            var client = HttpClients.CreateClient("apiservice");
-            using var response = await client.PatchAsJsonAsync(
-                $"/conversations/projects/{_editingProjectId}/name",
-                new { name = _editingName.Trim() });
+            await ConversationService.RenameProjectAsync(_editingProjectId, _editingName.Trim());
 
-            if (response.IsSuccessStatusCode)
+            // Update the local project item with the new name.
+            var project = _projects.FirstOrDefault(p => p.TemplateId == _editingProjectId);
+            if (project is not null)
             {
-                // Update the local project item with the new name.
-                var project = _projects.FirstOrDefault(p => p.TemplateId == _editingProjectId);
-                if (project is not null)
-                {
-                    var idx = _projects.IndexOf(project);
-                    _projects[idx] = project with { UserName = _editingName.Trim() };
-                }
+                var idx = _projects.IndexOf(project);
+                _projects[idx] = project with { UserName = _editingName.Trim() };
             }
         }
         catch
@@ -515,7 +496,7 @@
         }
     }
 
-    private static string ProjectDisplayName(ProjectItem project)
+    private static string ProjectDisplayName(MattGPT.ApiClient.Models.ProjectItem project)
     {
         // Prefer user-assigned name, fall back to inferred name from most recent conversation.
         if (!string.IsNullOrWhiteSpace(project.UserName))
@@ -542,11 +523,4 @@
         var date = DateTimeOffset.FromUnixTimeSeconds((long)unixTimestamp.Value);
         return date.ToString("MMM d, yyyy");
     }
-
-    // DTOs for deserialisation
-    private record ChatSessionItem(Guid SessionId, string? Title, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string Status);
-    private record ProjectItem(string TemplateId, int ConversationCount, string? MostRecentTitle, double? LatestUpdateTime, double? EarliestCreateTime, string? UserName = null);
-    private record ImportedConversationItem(string ConversationId, string? Title, double? CreateTime, double? UpdateTime, int MessageCount);
-    private record StandaloneConversationsResponse(int Page, int PageSize, long Total, List<ImportedConversationItem> Items);
-    private record ProjectConversationsResponse(string TemplateId, int Page, int PageSize, long Total, List<ImportedConversationItem> Items);
 }
