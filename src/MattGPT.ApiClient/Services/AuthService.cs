@@ -65,4 +65,27 @@ public sealed class AuthService(IHttpClientFactory factory) : IAuthService
 
         return await response.Content.ReadFromJsonAsync<UserInfo>(JsonOptions, cancellationToken);
     }
+
+    /// <inheritdoc/>
+    public async Task<LoginResult> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
+    {
+        var client = CreateClient();
+
+        var response = await client.PostAsJsonAsync("/auth/refresh", new { refreshToken }, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var message = response.StatusCode == HttpStatusCode.Unauthorized
+                ? "Invalid refresh token."
+                : "Token refresh failed. Please try again.";
+            return new LoginResult(false, ErrorMessage: message);
+        }
+
+        var token = await response.Content.ReadFromJsonAsync<TokenResponse>(JsonOptions, cancellationToken);
+
+        if (token?.AccessToken is null)
+            return new LoginResult(false, ErrorMessage: "Unexpected response from server.");
+
+        return new LoginResult(true, Token: token);
+    }
 }
