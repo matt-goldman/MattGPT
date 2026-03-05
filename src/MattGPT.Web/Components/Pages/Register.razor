@@ -1,8 +1,9 @@
 @page "/register"
 @using System.Security.Claims
+@using MattGPT.ApiClient.Services
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authentication.Cookies
-@inject IHttpClientFactory HttpClientFactory
+@inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject Microsoft.Extensions.Options.IOptions<MattGPT.Web.AuthOptions> AuthConfig
 
@@ -85,56 +86,25 @@
                 return;
             }
 
-            var client = HttpClientFactory.CreateClient("apiservice");
-
-            // 1. Register via the Identity API endpoint.
-            var registerResponse = await client.PostAsJsonAsync("/auth/register", new
+            // 1. Register via the shared API client.
+            var registerResult = await AuthService.RegisterAsync(_model.Email, _model.Password);
+            if (!registerResult.Success)
             {
-                email = _model.Email,
-                password = _model.Password,
-            });
-
-            if (!registerResponse.IsSuccessStatusCode)
-            {
-                var body = await registerResponse.Content.ReadAsStringAsync();
-                _error = $"Registration failed: {body}";
+                _error = registerResult.ErrorMessage;
                 return;
             }
 
             // 2. Auto-login: get a bearer token.
-            var loginResponse = await client.PostAsJsonAsync("/auth/login", new
-            {
-                email = _model.Email,
-                password = _model.Password,
-            });
-
-            if (!loginResponse.IsSuccessStatusCode)
+            var loginResult = await AuthService.LoginAsync(_model.Email, _model.Password);
+            if (!loginResult.Success)
             {
                 // Account created but auto-login failed; redirect to login page.
                 Navigation.NavigateTo("/login", forceLoad: true);
                 return;
             }
 
-            var tokenResult = await loginResponse.Content.ReadFromJsonAsync<TokenResponse>();
-            if (tokenResult?.AccessToken is null)
-            {
-                Navigation.NavigateTo("/login", forceLoad: true);
-                return;
-            }
-
             // 3. Retrieve user info using the bearer token.
-            var meRequest = new HttpRequestMessage(HttpMethod.Get, "/auth/me");
-            meRequest.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokenResult.AccessToken);
-            var meResponse = await client.SendAsync(meRequest);
-
-            if (!meResponse.IsSuccessStatusCode)
-            {
-                Navigation.NavigateTo("/login", forceLoad: true);
-                return;
-            }
-
-            var userInfo = await meResponse.Content.ReadFromJsonAsync<UserInfo>();
+            var userInfo = await AuthService.GetUserInfoAsync(loginResult.Token!.AccessToken!);
             if (userInfo?.Id is null)
             {
                 Navigation.NavigateTo("/login", forceLoad: true);
@@ -175,14 +145,4 @@
         public string Password { get; set; } = string.Empty;
         public string ConfirmPassword { get; set; } = string.Empty;
     }
-
-    private sealed record TokenResponse(
-        [property: System.Text.Json.Serialization.JsonPropertyName("tokenType")] string? TokenType,
-        [property: System.Text.Json.Serialization.JsonPropertyName("accessToken")] string? AccessToken,
-        [property: System.Text.Json.Serialization.JsonPropertyName("expiresIn")] int ExpiresIn,
-        [property: System.Text.Json.Serialization.JsonPropertyName("refreshToken")] string? RefreshToken);
-
-    private sealed record UserInfo(
-        [property: System.Text.Json.Serialization.JsonPropertyName("id")] string? Id,
-        [property: System.Text.Json.Serialization.JsonPropertyName("email")] string? Email);
 }
