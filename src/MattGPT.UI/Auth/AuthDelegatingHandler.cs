@@ -1,21 +1,19 @@
 ﻿using MattGPT.ApiClient.Services;
+using MattGPT.UI.Services;
 
 namespace MattGPT.UI.Auth;
 
-internal partial class AuthDelegatingHandler : DelegatingHandler
+internal partial class AuthDelegatingHandler(MobileAuthService authService) : DelegatingHandler
 {
-    private readonly IAuthService _authService;
-    public AuthDelegatingHandler(IAuthService authService)
-    {
-        _authService = authService;
-    }
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var token = await _authService.GetAccessTokenAsync();
+        var token = await authService.GetAccessTokenAsync();
+
         if (!string.IsNullOrEmpty(token))
         {
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         }
+
         return await base.SendAsync(request, cancellationToken);
     }
 }
