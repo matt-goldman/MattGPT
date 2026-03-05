@@ -1,12 +1,86 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              x:Class="MattGPT.UI.Pages.SettingsPage"
-             Title="SettingsPage">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
-    </VerticalStackLayout>
+             Title="Settings">
+
+    <ContentPage.Resources>
+        <toolkit:InvertedBoolConverter x:Key="InverseBoolConverter" />
+        <toolkit:IsStringNotNullOrEmptyConverter x:Key="StringToBoolConverter" />
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="12">
+
+            <!-- Loading indicator -->
+            <ActivityIndicator IsRunning="{Binding IsLoading}"
+                               IsVisible="{Binding IsLoading}"
+                               HorizontalOptions="Center"
+                               Margin="0,16,0,0" />
+
+            <!-- Settings form -->
+            <VerticalStackLayout IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}"
+                                 Spacing="12">
+
+                <!-- System Prompt section -->
+                <Label Text="System Prompt" FontAttributes="Bold" FontSize="16" />
+                <Label Text="The system prompt is sent to the LLM on every chat request."
+                       FontSize="12" TextColor="Gray" />
+                <Editor Text="{Binding SystemPrompt}"
+                        Placeholder="Enter system prompt…"
+                        AutoSize="TextChanges"
+                        MinimumHeightRequest="120"
+                        FontFamily="Courier New" />
+                <Label Text="Using the default system prompt."
+                       FontSize="11"
+                       TextColor="Gray"
+                       IsVisible="{Binding IsDefault}" />
+                <Button Text="Reset to Default"
+                        Command="{Binding ResetSystemPromptCommand}"
+                        BackgroundColor="Transparent"
+                        TextColor="{StaticResource Primary}"
+                        HorizontalOptions="Start"
+                        Padding="0" />
+
+                <BoxView HeightRequest="1" Color="{StaticResource Gray200}" Margin="0,8" />
+
+                <!-- User Profile section -->
+                <Label Text="User Profile" FontAttributes="Bold" FontSize="16" />
+                <Label Text="User profile information is injected into every chat request as context."
+                       FontSize="12" TextColor="Gray" />
+
+                <Label Text="About me" FontSize="13" FontAttributes="Bold" />
+                <Editor Text="{Binding UserProfileText}"
+                        Placeholder="e.g. I'm a software developer working with .NET and Azure…"
+                        AutoSize="TextChanges"
+                        MinimumHeightRequest="80" />
+
+                <Label Text="How should the assistant respond?" FontSize="13" FontAttributes="Bold" />
+                <Editor Text="{Binding UserInstructions}"
+                        Placeholder="e.g. Be concise and technical. Prefer code examples over prose."
+                        AutoSize="TextChanges"
+                        MinimumHeightRequest="80" />
+
+                <!-- Save button -->
+                <Button Command="{Binding SaveCommand}">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsSaving}" Value="False">
+                            <Setter Property="Text" Value="Save Changes" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsSaving}" Value="True">
+                            <Setter Property="Text" Value="Saving…" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+
+                <Label Text="{Binding StatusMessage}"
+                       IsVisible="{Binding StatusMessage, Converter={StaticResource StringToBoolConverter}}"
+                       FontSize="12"
+                       HorizontalOptions="Center" />
+
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+
 </ContentPage>
