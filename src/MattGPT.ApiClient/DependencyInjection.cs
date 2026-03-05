@@ -27,6 +27,7 @@ public static class MattGptApiClientExtensions
     /// </returns>
     public static IHttpClientBuilder AddMattGptApiClient(this IServiceCollection services, Uri baseAddress)
     {
+        services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IChatService, ChatService>();
         services.AddScoped<IConversationService, ConversationService>();
         services.AddScoped<ISearchService, SearchService>();
