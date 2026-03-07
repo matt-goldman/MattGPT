@@ -32,6 +32,13 @@ public class EmbeddingService(
     /// <summary>Maximum characters of conversation content to include for embedding.</summary>
     internal const int MaxEmbeddingTextChars = 8_000;
 
+    /// <summary>
+    /// Fallback chunk size (in characters) used when the embedding model rejects the full
+    /// text because it exceeds the model's context window. Conservative enough (~500 tokens)
+    /// to fit most embedding models.
+    /// </summary>
+    internal const int FallbackChunkChars = 2_000;
+
     /// <summary>Statuses eligible for embedding — both freshly imported and summarised conversations.</summary>
     private static readonly ConversationProcessingStatus[] EmbeddableStatuses =
         [ConversationProcessingStatus.Imported, ConversationProcessingStatus.Summarised];
@@ -106,10 +113,7 @@ public class EmbeddingService(
 
         try
         {
-            var result = await embeddingGenerator.GenerateAsync(
-                [embeddingText], cancellationToken: ct);
-
-            var vector = result[0].Vector.ToArray();
+            var vector = await GenerateChunkedEmbeddingAsync(embeddingText, ct);
 
             await repository.UpdateEmbeddingAsync(
                 conversation.ConversationId,
@@ -195,6 +199,128 @@ public class EmbeddingService(
         }
 
         return sb.ToString().Trim();
+    }
+
+    /// <summary>
+    /// Generates an embedding for <paramref name="text"/>. Tries to embed the full text
+    /// first; if the model reports a context-length error, falls back to chunking the text
+    /// into <see cref="FallbackChunkChars"/>-sized pieces and averaging the resulting vectors.
+    /// This keeps quality high for models with large context windows while still working
+    /// with smaller models.
+    /// </summary>
+    private async Task<float[]> GenerateChunkedEmbeddingAsync(string text, CancellationToken ct)
+    {
+        // Fast path — try the full text first.
+        try
+        {
+            var result = await embeddingGenerator.GenerateAsync([text], cancellationToken: ct);
+            return result[0].Vector.ToArray();
+        }
+        catch (Exception ex) when (IsContextLengthError(ex))
+        {
+            logger.LogDebug(
+                "Embedding model rejected full text ({Len} chars); falling back to chunked embedding.",
+                text.Length);
+        }
+
+        // Slow path — chunk, embed each piece, and average.
+        var chunks = ChunkText(text, FallbackChunkChars);
+        logger.LogDebug(
+            "Splitting text ({Len} chars) into {Chunks} chunks of ~{ChunkSize} chars.",
+            text.Length, chunks.Count, FallbackChunkChars);
+
+        float[]? averaged = null;
+
+        foreach (var chunk in chunks)
+        {
+            var result = await embeddingGenerator.GenerateAsync([chunk], cancellationToken: ct);
+            var vec = result[0].Vector.ToArray();
+
+            if (averaged is null)
+            {
+                averaged = new float[vec.Length];
+            }
+
+            for (int i = 0; i < vec.Length; i++)
+                averaged[i] += vec[i];
+        }
+
+        // Average and L2-normalise so similarity searches behave consistently.
+        if (averaged is not null)
+        {
+            float norm = 0f;
+            for (int i = 0; i < averaged.Length; i++)
+            {
+                averaged[i] /= chunks.Count;
+                norm += averaged[i] * averaged[i];
+            }
+
+            norm = MathF.Sqrt(norm);
+            if (norm > 0f)
+            {
+                for (int i = 0; i < averaged.Length; i++)
+                    averaged[i] /= norm;
+            }
+        }
+
+        return averaged ?? [];
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when the exception (or an inner exception) indicates the
+    /// embedding model rejected the input because it exceeded the context length.
+    /// Checks both the Ollama-specific exception type and common error message patterns
+    /// so this works across providers.
+    /// </summary>
+    private static bool IsContextLengthError(Exception ex)
+    {
+        // Walk the exception chain — some providers wrap the real error.
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            var msg = current.Message;
+            if (string.IsNullOrEmpty(msg))
+                continue;
+
+            // Ollama: "the input length exceeds the context length"
+            // OpenAI / Azure OpenAI: "maximum context length", "too many tokens"
+            if (msg.Contains("context length", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("too many tokens", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("token limit", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("input is too long", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Splits <paramref name="text"/> into chunks of at most <paramref name="maxChars"/>,
+    /// breaking on the last newline within each window when possible.
+    /// </summary>
+    internal static List<string> ChunkText(string text, int maxChars)
+    {
+        var chunks = new List<string>();
+        int start = 0;
+
+        while (start < text.Length)
+        {
+            int end = Math.Min(start + maxChars, text.Length);
+
+            // Try to break on a newline boundary to avoid splitting mid-sentence.
+            if (end < text.Length)
+            {
+                int newline = text.LastIndexOf('\n', end - 1, end - start);
+                if (newline > start)
+                    end = newline + 1; // include the newline in this chunk
+            }
+
+            chunks.Add(text[start..end]);
+            start = end;
+        }
+
+        return chunks;
     }
 
     private async Task TryUpsertVectorStoreAsync(StoredConversation conversation, float[] vector, CancellationToken ct)

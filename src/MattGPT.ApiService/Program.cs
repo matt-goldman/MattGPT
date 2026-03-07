@@ -394,7 +394,7 @@ if (app.Environment.IsDevelopment())
 if (authOptions.Enabled)
 {
     var authGroup = app.MapGroup("/auth");
-    authGroup.MapIdentityApi<IdentityUser>();
+    authGroup.MapIdentityApi<IdentityUser>().AllowAnonymous();
     authGroup.MapGet("/me", (HttpContext context) =>
     {
         var user = context.User;

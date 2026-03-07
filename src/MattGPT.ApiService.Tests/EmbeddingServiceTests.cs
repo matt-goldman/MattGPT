@@ -497,4 +497,106 @@ public class EmbeddingServiceTests
         Assert.Contains("[Cited: Wikipedia: AI]", text);
         Assert.Contains("[Cited: https://example.com/article]", text);
     }
+
+    [Fact]
+    public void ChunkText_ShortText_ReturnsSingleChunk()
+    {
+        var chunks = EmbeddingService.ChunkText("Hello world", 100);
+
+        Assert.Single(chunks);
+        Assert.Equal("Hello world", chunks[0]);
+    }
+
+    [Fact]
+    public void ChunkText_LongText_SplitsOnNewlines()
+    {
+        var text = "Line one\nLine two\nLine three\nLine four\n";
+
+        var chunks = EmbeddingService.ChunkText(text, 20);
+
+        Assert.True(chunks.Count >= 2);
+        // Each chunk should be within the limit.
+        Assert.All(chunks, c => Assert.True(c.Length <= 20));
+        // Reassembled chunks equal the original text.
+        Assert.Equal(text, string.Concat(chunks));
+    }
+
+    [Fact]
+    public void ChunkText_NoNewlines_SplitsAtMaxChars()
+    {
+        var text = new string('x', 50);
+
+        var chunks = EmbeddingService.ChunkText(text, 20);
+
+        Assert.Equal(3, chunks.Count);
+        Assert.Equal(20, chunks[0].Length);
+        Assert.Equal(20, chunks[1].Length);
+        Assert.Equal(10, chunks[2].Length);
+        Assert.Equal(text, string.Concat(chunks));
+    }
+
+    [Fact]
+    public async Task EmbedAsync_ContextLengthError_FallsBackToChunking()
+    {
+        // Build a conversation with enough content to exceed FallbackChunkChars.
+        var longMessages = Enumerable.Range(0, 100)
+            .Select(i => new StoredMessage
+            {
+                Id = $"m{i}",
+                Role = "user",
+                ContentType = "text",
+                Parts = [$"This is message number {i} with enough text to contribute to a long conversation."],
+            })
+            .ToList();
+
+        var conv = new StoredConversation
+        {
+            ConversationId = "long1",
+            Title = "Long Conversation",
+            ProcessingStatus = ConversationProcessingStatus.Imported,
+            LinearisedMessages = longMessages,
+        };
+
+        var repository = new FakeConversationRepository();
+        repository.Seed([conv]);
+
+        int callCount = 0;
+        var generator = new FakeEmbeddingGenerator(values =>
+        {
+            callCount++;
+            var input = values.First();
+            // Reject the first (full-text) attempt, accept chunked attempts.
+            if (input.Length > EmbeddingService.FallbackChunkChars)
+                throw new InvalidOperationException("the input length exceeds the context length");
+            return [new Embedding<float>(TestVector)];
+        });
+
+        var qdrant = new FakeVectorStore();
+        var service = new EmbeddingService(repository, generator, qdrant, NullLogger<EmbeddingService>.Instance);
+
+        var result = await service.EmbedAsync();
+
+        Assert.Equal(1, result.Embedded);
+        Assert.Equal(0, result.Errors);
+        // The first call failed, then multiple chunk calls succeeded.
+        Assert.True(callCount > 1, "Expected multiple generator calls due to chunking fallback.");
+        Assert.Single(qdrant.Upserted);
+    }
+
+    [Fact]
+    public async Task EmbedAsync_NonContextError_StillMarksAsError()
+    {
+        // Errors that are NOT context-length related should NOT trigger chunking.
+        var repository = new FakeConversationRepository();
+        repository.Seed([MakeConversation("c1")]);
+
+        var generator = new ThrowingEmbeddingGenerator(new InvalidOperationException("Some other model error"));
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
+
+        var result = await service.EmbedAsync();
+
+        Assert.Equal(0, result.Embedded);
+        Assert.Equal(1, result.Errors);
+        Assert.Equal(ConversationProcessingStatus.EmbeddingError, repository.EmbeddingUpdates[0].Status);
+    }
 }

@@ -3,6 +3,7 @@
 @using MattGPT.ApiClient.Services
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authentication.Cookies
+@using Microsoft.AspNetCore.Components
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject Microsoft.Extensions.Options.IOptions<MattGPT.Web.AuthOptions> AuthConfig
@@ -59,7 +60,7 @@
     protected override void OnInitialized()
     {
         if (!AuthConfig.Value.Enabled)
-            Navigation.NavigateTo("/", forceLoad: true);
+            Navigation.NavigateTo("/");
     }
 
     private async Task HandleLogin()
@@ -101,11 +102,15 @@
                 await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
             }
 
-            Navigation.NavigateTo("/", forceLoad: true);
+            Navigation.NavigateTo("/");
         }
-        catch
+        catch (NavigationException)
         {
-            _error = "Could not reach the server. Please try again.";
+            throw;
+        }
+        catch(Exception ex)
+        {
+            _error = ex.Message;
         }
         finally
         {

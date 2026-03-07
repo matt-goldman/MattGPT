@@ -117,6 +117,7 @@ if (!string.IsNullOrEmpty(embeddingEndpoint))
 if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
 {
     var ollama = builder.AddOllama("ollama")
+        .WithImageTag("latest")
         .WithDataVolume()
         .WithLifetime(ContainerLifetime.Persistent)
         .WithGPUSupport();

@@ -11,7 +11,7 @@
     {
         if (!AuthConfig.Value.Enabled)
         {
-            Navigation.NavigateTo("/", forceLoad: true);
+            Navigation.NavigateTo("/");
             return;
         }
 
@@ -20,6 +20,6 @@
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         }
 
-        Navigation.NavigateTo("/login", forceLoad: true);
+        Navigation.NavigateTo("/login");
     }
 }
