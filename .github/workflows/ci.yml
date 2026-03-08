@@ -23,7 +23,7 @@ jobs:
 
       - name: Install npm dependencies (Tailwind CSS)
         run: npm install
-        working-directory: src/MattGPT.Web
+        working-directory: src/UI/MattGPT.Web
 
       - name: Restore dependencies
         run: dotnet restore MattGPT.slnx
