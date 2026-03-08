@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace MattGPT.UI.ViewModels;
+namespace MattGPT.Mobile.ViewModels;
 
 /// <summary>
 /// Represents a single chat message in the UI, with a mutable Content property

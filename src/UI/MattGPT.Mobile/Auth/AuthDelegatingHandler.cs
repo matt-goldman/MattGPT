@@ -1,7 +1,7 @@
 ﻿using MattGPT.ApiClient.Services;
-using MattGPT.UI.Services;
+using MattGPT.Mobile.Services;
 
-namespace MattGPT.UI.Auth;
+namespace MattGPT.Mobile.Auth;
 
 internal partial class AuthDelegatingHandler(MobileAuthService authService) : DelegatingHandler
 {

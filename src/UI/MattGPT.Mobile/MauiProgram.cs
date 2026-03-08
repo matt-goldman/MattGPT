@@ -1,11 +1,11 @@
 ﻿using CommunityToolkit.Maui;
 using MattGPT.ApiClient;
-using MattGPT.UI.Auth;
-using MattGPT.UI.Services;
+using MattGPT.Mobile.Auth;
+using MattGPT.Mobile.Services;
 using Microsoft.Extensions.Logging;
 using Plugin.Maui.SmartNavigation.Attributes;
 
-namespace MattGPT.UI;
+namespace MattGPT.Mobile;
 
 [UseAutoDependencies]
 public static partial class MauiProgram

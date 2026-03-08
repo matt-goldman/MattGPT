@@ -1,7 +1,7 @@
 ﻿using Android.App;
 using Android.Runtime;
 
-namespace MattGPT.UI;
+namespace MattGPT.Mobile;
 
 [Application]
 public class MainApplication : MauiApplication

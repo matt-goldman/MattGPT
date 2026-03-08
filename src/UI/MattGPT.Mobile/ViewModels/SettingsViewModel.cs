@@ -2,7 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MattGPT.ApiClient.Services;
 
-namespace MattGPT.UI.ViewModels;
+namespace MattGPT.Mobile.ViewModels;
 
 public partial class SettingsViewModel(ISettingsService settingsService) : ObservableObject
 {

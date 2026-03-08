@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
-namespace MattGPT.UI;
+namespace MattGPT.Mobile;
 
 public partial class App : Application
 {

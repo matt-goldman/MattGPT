@@ -4,7 +4,7 @@ using MattGPT.ApiClient.Models;
 using MattGPT.ApiClient.Services;
 using System.Collections.ObjectModel;
 
-namespace MattGPT.UI.ViewModels;
+namespace MattGPT.Mobile.ViewModels;
 
 public partial class ChatViewModel(IChatService chatService) : ObservableObject
 {

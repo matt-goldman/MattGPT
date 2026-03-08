@@ -1,7 +1,7 @@
 ﻿using ObjCRuntime;
 using UIKit;
 
-namespace MattGPT.UI;
+namespace MattGPT.Mobile;
 
 public class Program
 {

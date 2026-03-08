@@ -1,9 +1,9 @@
 ﻿using MattGPT.ApiClient.Models;
 using MattGPT.ApiClient.Services;
-using MattGPT.UI.Auth;
+using MattGPT.Mobile.Auth;
 using Microsoft.Maui.Storage;
 
-namespace MattGPT.UI.Services;
+namespace MattGPT.Mobile.Services;
 
 internal class MobileAuthService (IAuthService authService)
 {

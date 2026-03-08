@@ -1,6 +1,6 @@
-using MattGPT.UI.ViewModels;
+using MattGPT.Mobile.ViewModels;
 
-namespace MattGPT.UI.Pages;
+namespace MattGPT.Mobile.Pages;
 
 public partial class SettingsPage : ContentPage
 {

@@ -1,6 +1,6 @@
 ﻿using Foundation;
 
-namespace MattGPT.UI;
+namespace MattGPT.Mobile;
 
 [Register("AppDelegate")]
 public class AppDelegate : MauiUIApplicationDelegate
