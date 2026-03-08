@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authentication.Cookies
 @using Microsoft.AspNetCore.Components
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject Microsoft.Extensions.Options.IOptions<MattGPT.Web.AuthOptions> AuthConfig
@@ -102,10 +103,15 @@
                 await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
             }
 
+            // This form is SSR-rendered (EditForm with FormName), so NavigateTo during
+            // the POST handler issues an HTTP redirect — the browser makes a fresh request
+            // that picks up the auth cookie written above. forceLoad: true is not needed.
             Navigation.NavigateTo("/");
         }
         catch (NavigationException)
         {
+            // Blazor Server throws NavigationException as part of its expected navigation
+            // process during SSR; it must be re-thrown so the framework can issue the redirect.
             throw;
         }
         catch(Exception ex)

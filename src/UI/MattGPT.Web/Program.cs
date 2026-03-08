@@ -26,7 +26,10 @@ if (authOptions.Enabled)
             options.ExpireTimeSpan = TimeSpan.FromDays(7);
             options.SlidingExpiration = true;
         });
-    builder.Services.AddAuthorization();
+    builder.Services.AddAuthorizationBuilder()
+        .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .Build());
     builder.Services.AddCascadingAuthenticationState();
     builder.Services.AddTransient<UserIdDelegatingHandler>();
 }
