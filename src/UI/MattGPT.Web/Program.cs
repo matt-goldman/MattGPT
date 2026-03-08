@@ -26,7 +26,10 @@ if (authOptions.Enabled)
             options.ExpireTimeSpan = TimeSpan.FromDays(7);
             options.SlidingExpiration = true;
         });
-    builder.Services.AddAuthorization();
+    builder.Services.AddAuthorizationBuilder()
+        .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .Build());
     builder.Services.AddCascadingAuthenticationState();
     builder.Services.AddTransient<UserIdDelegatingHandler>();
 }
@@ -39,13 +42,6 @@ builder.Services.AddRazorComponents()
 builder.Services.AddLumexServices();
 
 builder.Services.AddOutputCache();
-
-builder.Services.AddHttpClient<WeatherApiClient>(client =>
-    {
-        // This URL uses "https+http://" to indicate HTTPS is preferred over HTTP.
-        // Learn more about service discovery scheme resolution at https://aka.ms/dotnet/sdschemes.
-        client.BaseAddress = new("https+http://apiservice");
-    });
 
 // Register MattGPT API client services (chat, conversations, search, settings).
 var mattGptClientBuilder = builder.Services.AddMattGptApiClient(new Uri("https+http://apiservice"));

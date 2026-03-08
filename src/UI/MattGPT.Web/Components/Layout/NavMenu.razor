@@ -9,26 +9,56 @@
         </a>
     </LumexNavbarBrand>
     <LumexNavbarContent>
-        <LumexNavbarItem>
-            <NavLink href="" Match="NavLinkMatch.All" class="text-sm font-medium hover:opacity-75">
-                Upload
-            </NavLink>
-        </LumexNavbarItem>
-        <LumexNavbarItem>
-            <NavLink href="chat" class="text-sm font-medium hover:opacity-75">
-                Chat
-            </NavLink>
-        </LumexNavbarItem>
-        <LumexNavbarItem>
-            <NavLink href="search" class="text-sm font-medium hover:opacity-75">
-                Search
-            </NavLink>
-        </LumexNavbarItem>
-        <LumexNavbarItem>
-            <NavLink href="settings" class="text-sm font-medium hover:opacity-75">
-                Settings
-            </NavLink>
-        </LumexNavbarItem>
+        @if (AuthConfig.Value.Enabled)
+        {
+            <AuthorizeView>
+                <Authorized>
+                    <LumexNavbarItem>
+                        <NavLink href="" Match="NavLinkMatch.All" class="text-sm font-medium hover:opacity-75">
+                            Upload
+                        </NavLink>
+                    </LumexNavbarItem>
+                    <LumexNavbarItem>
+                        <NavLink href="chat" class="text-sm font-medium hover:opacity-75">
+                            Chat
+                        </NavLink>
+                    </LumexNavbarItem>
+                    <LumexNavbarItem>
+                        <NavLink href="search" class="text-sm font-medium hover:opacity-75">
+                            Search
+                        </NavLink>
+                    </LumexNavbarItem>
+                    <LumexNavbarItem>
+                        <NavLink href="settings" class="text-sm font-medium hover:opacity-75">
+                            Settings
+                        </NavLink>
+                    </LumexNavbarItem>
+                </Authorized>
+            </AuthorizeView>
+        }
+        else
+        {
+            <LumexNavbarItem>
+                <NavLink href="" Match="NavLinkMatch.All" class="text-sm font-medium hover:opacity-75">
+                    Upload
+                </NavLink>
+            </LumexNavbarItem>
+            <LumexNavbarItem>
+                <NavLink href="chat" class="text-sm font-medium hover:opacity-75">
+                    Chat
+                </NavLink>
+            </LumexNavbarItem>
+            <LumexNavbarItem>
+                <NavLink href="search" class="text-sm font-medium hover:opacity-75">
+                    Search
+                </NavLink>
+            </LumexNavbarItem>
+            <LumexNavbarItem>
+                <NavLink href="settings" class="text-sm font-medium hover:opacity-75">
+                    Settings
+                </NavLink>
+            </LumexNavbarItem>
+        }
 
         @if (AuthConfig.Value.Enabled)
         {

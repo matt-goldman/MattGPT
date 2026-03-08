@@ -15,6 +15,9 @@ var embeddingProvider = builder.Configuration["LLM:EmbeddingProvider"];
 var embeddingApiKey = builder.Configuration["LLM:EmbeddingApiKey"];
 var embeddingEndpoint = builder.Configuration["LLM:EmbeddingEndpoint"];
 
+// --- Optional authentication ---
+var authEnabled = builder.Configuration["Auth:Enabled"] ?? "false";
+
 // --- Document DB and vector store configuration ---
 var documentDbProvider = builder.Configuration["DocumentDb:Provider"] ?? "MongoDB";
 var vectorStoreProvider = builder.Configuration["VectorStore:Provider"] ?? "Qdrant";
@@ -52,6 +55,7 @@ if (!isPostgresDocumentDb)
 // --- API service ---
 var apiService = builder.AddProject<Projects.MattGPT_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
+    .WithEnvironment("Auth__Enabled", authEnabled)
     .WithEnvironment("LLM__Provider", provider)
     .WithEnvironment("LLM__ModelId", modelId)
     .WithEnvironment("LLM__EmbeddingModelId", embeddingModelId)
@@ -147,6 +151,7 @@ if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
 builder.AddProject<Projects.MattGPT_Web>("webfrontend")
     .WithExternalHttpEndpoints()
     .WithHttpHealthCheck("/health")
+    .WithEnvironment("Auth__Enabled", authEnabled)
     .WithReference(apiService)
     .WaitFor(apiService);
 

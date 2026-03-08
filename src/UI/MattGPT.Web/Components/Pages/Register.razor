@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authentication.Cookies
 @using Microsoft.AspNetCore.Components
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject Microsoft.Extensions.Options.IOptions<MattGPT.Web.AuthOptions> AuthConfig
@@ -128,10 +129,12 @@
                 await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
             }
 
+            // SSR form POST — NavigateTo issues an HTTP redirect; forceLoad not needed.
             Navigation.NavigateTo("/");
         }
         catch (NavigationException)
         {
+            // Expected during SSR navigation — re-throw so Blazor can issue the redirect.
             throw;
         }
         catch (Exception ex)
