@@ -1,7 +1,7 @@
 <Solution>
   <Folder Name="/src/" />
   <Folder Name="/src/API/">
-    <Project Path="src/MattGPT.ApiService/MattGPT.ApiService.csproj" />
+    <Project Path="src/API/MattGPT.ApiService/MattGPT.ApiService.csproj" />
   </Folder>
   <Folder Name="/src/Common/">
     <Project Path="src/Common/Contracts/MattGPT.Contracts.csproj" Id="403f500b-2b35-444b-9d81-cebba88d6649" />
@@ -19,15 +19,15 @@
     <Project Path="src/Infrastructure/WeaviateModule/MattGPT.WeaviateModule.csproj" Id="89e1a7a6-ff84-4dcf-b827-7d863491b314" />
   </Folder>
   <Folder Name="/src/Orchestration/">
-    <Project Path="src/MattGPT.AppHost/MattGPT.AppHost.csproj" />
-    <Project Path="src/MattGPT.ServiceDefaults/MattGPT.ServiceDefaults.csproj" />
+    <Project Path="src/Orchestration/MattGPT.AppHost/MattGPT.AppHost.csproj" />
+    <Project Path="src/Orchestration/MattGPT.ServiceDefaults/MattGPT.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/src/UI/">
-    <Project Path="src/MattGPT.ApiClient/MattGPT.ApiClient.csproj" />
-    <Project Path="src/MattGPT.UI/MattGPT.Mobile.csproj" />
-    <Project Path="src/MattGPT.Web/MattGPT.Web.csproj" />
+    <Project Path="src/UI/MattGPT.ApiClient/MattGPT.ApiClient.csproj" />
+    <Project Path="src/UI/MattGPT.Mobile/MattGPT.Mobile.csproj" />
+    <Project Path="src/UI/MattGPT.Web/MattGPT.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="src/MattGPT.ApiService.Tests/MattGPT.ApiService.Tests.csproj" />
+    <Project Path="tests/MattGPT.ApiService.Tests/MattGPT.ApiService.Tests.csproj" />
   </Folder>
 </Solution>
