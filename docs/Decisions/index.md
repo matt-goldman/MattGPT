@@ -12,6 +12,7 @@ Significant architectural decisions made during development of MattGPT.
 | [ADR-006](006-defer-attachment-import-until-zip-support.md) | Defer attachment import until zip support |
 | [ADR-007](007-cloud-provider-selection.md) | Cloud provider selection |
 | [ADR-008](008-optional-authentication-strategy.md) | Optional authentication strategy |
+| [ADR-009](009-conversation-search-approach.md) | Conversation search approach — semantic vector search |
 
 To add a new ADR, copy [000-template.md](000-template.md) and fill in all sections.
 

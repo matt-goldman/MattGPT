@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MattGPT.ApiService.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Common\Contracts\MattGPT.Contracts.csproj" />
+    <ProjectReference Include="..\..\Orchestration\MattGPT.ServiceDefaults\MattGPT.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\AnthropicModule\MattGPT.AnthropicModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\AzureModule\MattGPT.AzureModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\GeminiModule\MattGPT.GeminiModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\MongoDBModule\MattGPT.MongoDBModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\OllamaModule\MattGPT.OllamaModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\OpenAIModule\MattGPT.OpenAIModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\PineconeModule\MattGPT.PineconeModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\PostgresModule\MattGPT.PostgresModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\QdrantModule\MattGPT.QdrantModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\WeaviateModule\MattGPT.WeaviateModule.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.1.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.3.0" />
+  </ItemGroup>
+
+</Project>

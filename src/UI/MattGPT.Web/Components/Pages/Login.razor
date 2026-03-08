@@ -1,0 +1,126 @@
+@page "/login"
+@using System.Security.Claims
+@using MattGPT.ApiClient.Services
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using Microsoft.AspNetCore.Components
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject Microsoft.Extensions.Options.IOptions<MattGPT.Web.AuthOptions> AuthConfig
+
+<PageTitle>Login — MattGPT</PageTitle>
+
+<div class="flex items-center justify-center min-h-[60vh]">
+    <div class="w-full max-w-sm space-y-6">
+        <h1 class="text-2xl font-bold text-center">Sign In</h1>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="bg-danger-50 border border-danger-200 text-danger-700 p-3 rounded-lg text-sm">
+                @_error
+            </div>
+        }
+
+        <EditForm Model="_model" OnValidSubmit="HandleLogin" FormName="login">
+            <div class="space-y-4">
+                <div>
+                    <label for="email" class="block text-sm font-medium mb-1">Email</label>
+                    <InputText id="email" @bind-Value="_model.Email"
+                               class="w-full px-3 py-2 border border-default-300 rounded-lg bg-default-100 focus:outline-none focus:ring-2 focus:ring-primary" />
+                </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium mb-1">Password</label>
+                    <InputText id="password" @bind-Value="_model.Password" type="password"
+                               class="w-full px-3 py-2 border border-default-300 rounded-lg bg-default-100 focus:outline-none focus:ring-2 focus:ring-primary" />
+                </div>
+                <button type="submit" disabled="@_loading"
+                        class="w-full py-2 px-4 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 disabled:opacity-50">
+                    @(_loading ? "Signing in…" : "Sign in")
+                </button>
+            </div>
+        </EditForm>
+
+        <p class="text-center text-sm text-default-500">
+            Don't have an account?
+            <a href="/register" class="text-primary hover:underline">Register</a>
+        </p>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+#pragma warning disable BL0008
+    [SupplyParameterFromForm] private LoginModel _model { get; set; } = new();
+#pragma warning restore BL0008
+
+    private string? _error;
+    private bool _loading;
+
+    protected override void OnInitialized()
+    {
+        if (!AuthConfig.Value.Enabled)
+            Navigation.NavigateTo("/");
+    }
+
+    private async Task HandleLogin()
+    {
+        _error = null;
+        _loading = true;
+
+        try
+        {
+            // 1. Validate credentials via the shared API client.
+            var loginResult = await AuthService.LoginAsync(_model.Email, _model.Password);
+            if (!loginResult.Success)
+            {
+                _error = loginResult.ErrorMessage;
+                return;
+            }
+
+            // 2. Retrieve user info using the bearer token.
+            var userInfo = await AuthService.GetUserInfoAsync(loginResult.Token!.AccessToken!);
+            if (userInfo?.Id is null)
+            {
+                _error = "Could not retrieve user information.";
+                return;
+            }
+
+            // 3. Create a local Blazor cookie with the user's claims.
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, userInfo.Id),
+            };
+            if (userInfo.Email is not null)
+                claims.Add(new Claim(ClaimTypes.Email, userInfo.Email));
+
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+
+            if (HttpContext is not null)
+            {
+                await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+            }
+
+            Navigation.NavigateTo("/");
+        }
+        catch (NavigationException)
+        {
+            throw;
+        }
+        catch(Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private sealed class LoginModel
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}

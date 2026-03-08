@@ -1,9 +1,33 @@
 <Solution>
-  <Folder Name="/src/">
-    <Project Path="src/MattGPT.ApiService.Tests/MattGPT.ApiService.Tests.csproj" />
+  <Folder Name="/src/" />
+  <Folder Name="/src/API/">
+    <Project Path="src/API/MattGPT.ApiService/MattGPT.ApiService.csproj" />
   </Folder>
-  <Project Path="src/MattGPT.ApiService/MattGPT.ApiService.csproj" />
-  <Project Path="src/MattGPT.AppHost/MattGPT.AppHost.csproj" />
-  <Project Path="src/MattGPT.ServiceDefaults/MattGPT.ServiceDefaults.csproj" />
-  <Project Path="src/MattGPT.Web/MattGPT.Web.csproj" />
+  <Folder Name="/src/Common/">
+    <Project Path="src/Common/Contracts/MattGPT.Contracts.csproj" Id="403f500b-2b35-444b-9d81-cebba88d6649" />
+  </Folder>
+  <Folder Name="/src/Infrastructure/">
+    <Project Path="src/Infrastructure/AnthropicModule/MattGPT.AnthropicModule.csproj" />
+    <Project Path="src/Infrastructure/AzureModule/MattGPT.AzureModule.csproj" />
+    <Project Path="src/Infrastructure/GeminiModule/MattGPT.GeminiModule.csproj" />
+    <Project Path="src/Infrastructure/MongoDBModule/MattGPT.MongoDBModule.csproj" />
+    <Project Path="src/Infrastructure/OllamaModule/MattGPT.OllamaModule.csproj" />
+    <Project Path="src/Infrastructure/OpenAIModule/MattGPT.OpenAIModule.csproj" Id="16e2810d-7568-4b0f-94cd-4287da712392" />
+    <Project Path="src/Infrastructure/PineconeModule/MattGPT.PineconeModule.csproj" Id="01a8d0a2-821b-40fb-8b3b-768c24f8a8fc" />
+    <Project Path="src/Infrastructure/PostgresModule/MattGPT.PostgresModule.csproj" />
+    <Project Path="src/Infrastructure/QdrantModule/MattGPT.QdrantModule.csproj" Id="621eebd2-bb73-494b-ad50-d17ec1acc406" />
+    <Project Path="src/Infrastructure/WeaviateModule/MattGPT.WeaviateModule.csproj" Id="89e1a7a6-ff84-4dcf-b827-7d863491b314" />
+  </Folder>
+  <Folder Name="/src/Orchestration/">
+    <Project Path="src/Orchestration/MattGPT.AppHost/MattGPT.AppHost.csproj" />
+    <Project Path="src/Orchestration/MattGPT.ServiceDefaults/MattGPT.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/src/UI/">
+    <Project Path="src/UI/MattGPT.ApiClient/MattGPT.ApiClient.csproj" />
+    <Project Path="src/UI/MattGPT.Mobile/MattGPT.Mobile.csproj" />
+    <Project Path="src/UI/MattGPT.Web/MattGPT.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MattGPT.ApiService.Tests/MattGPT.ApiService.Tests.csproj" />
+  </Folder>
 </Solution>

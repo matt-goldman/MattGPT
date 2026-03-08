@@ -1,0 +1,526 @@
+@rendermode InteractiveServer
+@inject IChatService ChatService
+@inject IConversationService ConversationService
+
+<div class="flex flex-col h-full bg-default-50 border-r border-default-200">
+    @* New chat button *@
+    <div class="p-3 border-b border-default-200">
+        <LumexButton Color="@ThemeColor.Primary"
+                     Variant="@Variant.Flat"
+                     Class="w-full justify-start gap-2"
+                     OnClick="@(() => OnNewChat.InvokeAsync())">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            New Chat
+        </LumexButton>
+    </div>
+
+    @* Scrollable session list *@
+    <div class="flex-1 overflow-y-auto">
+        @if (_isLoading)
+        {
+            <div class="flex justify-center p-4">
+                <LumexSpinner Color="@ThemeColor.Primary" Size="@Size.Small" />
+            </div>
+        }
+        else
+        {
+            @* ── Your Chats (collapsible) ── *@
+            @if (_chatSessions.Count > 0)
+            {
+                <button class="w-full px-3 pt-3 pb-1 flex items-center justify-between hover:bg-default-100 transition-colors cursor-pointer"
+                        @onclick="@(() => _chatsCollapsed = !_chatsCollapsed)">
+                    <span class="text-xs font-semibold text-default-400 uppercase tracking-wider">Your Chats</span>
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         class="h-3 w-3 text-default-400 transition-transform @(_chatsCollapsed ? "" : "rotate-180")"
+                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+
+                @if (!_chatsCollapsed)
+                {
+                    @foreach (var session in _chatSessions)
+                    {
+                        var isActive = ActiveSessionId == session.SessionId;
+                        <button class="@SidebarItemClass(isActive)"
+                                @onclick="@(() => OnSessionSelected.InvokeAsync(session.SessionId))">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                                </svg>
+                                <div class="min-w-0 flex-1 text-left">
+                                    <div class="text-sm truncate">@(session.Title ?? "Untitled")</div>
+                                    <div class="text-xs text-default-400">@FormatRelativeDate(session.UpdatedAt)</div>
+                                </div>
+                            </div>
+                        </button>
+                    }
+                }
+            }
+
+            @* ── Projects (collapsible section with collapsible folders) ── *@
+            @if (_projects.Count > 0)
+            {
+                <button class="w-full px-3 pt-4 pb-1 flex items-center justify-between hover:bg-default-100 transition-colors cursor-pointer"
+                        @onclick="@(() => _projectsCollapsed = !_projectsCollapsed)">
+                    <span class="text-xs font-semibold text-default-400 uppercase tracking-wider">Projects</span>
+                    <div class="flex items-center gap-1">
+                        <span class="text-xs text-default-400">@_projects.Count</span>
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                             class="h-3 w-3 text-default-400 transition-transform @(_projectsCollapsed ? "" : "rotate-180")"
+                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                </button>
+
+                @if (!_projectsCollapsed)
+                {
+                    @foreach (var project in _projects)
+                    {
+                        var isExpanded = _expandedProjects.Contains(project.TemplateId);
+                        var isEditing = _editingProjectId == project.TemplateId;
+                        <div>
+                            <div class="flex items-center w-full group">
+                                <button class="flex-1 px-3 py-2 hover:bg-default-100 transition-colors cursor-pointer text-left min-w-0"
+                                        @onclick="@(async () => { if (!isEditing) await ToggleProject(project.TemplateId); })">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        @* Folder icon *@
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-warning-500"
+                                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                                        </svg>
+                                        <div class="min-w-0 flex-1 text-left">
+                                            @if (isEditing)
+                                            {
+                                                @* Prevent click-through to toggle *@
+                                            }
+                                            else
+                                            {
+                                                <div class="text-sm truncate font-medium">@ProjectDisplayName(project)</div>
+                                                <div class="text-xs text-default-400">@project.ConversationCount conversations</div>
+                                            }
+                                        </div>
+                                        <svg xmlns="http://www.w3.org/2000/svg"
+                                             class="h-3 w-3 shrink-0 text-default-400 transition-transform @(isExpanded ? "rotate-180" : "")"
+                                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </div>
+                                </button>
+
+                                @if (!isEditing)
+                                {
+                                    @* Pencil icon for editing — visible on hover *@
+                                    <button class="px-1.5 py-2 opacity-0 group-hover:opacity-100 transition-opacity text-default-400 hover:text-primary shrink-0"
+                                            title="Rename project"
+                                            @onclick="@(() => StartEditing(project))"
+                                            @onclick:stopPropagation="true">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                    </button>
+                                }
+                            </div>
+
+                            @if (isEditing)
+                            {
+                                <div class="px-3 pb-2 flex items-center gap-1" @onclick:stopPropagation="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-warning-500"
+                                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                              d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                                    </svg>
+                                    <input type="text"
+                                           @bind="_editingName"
+                                           @bind:event="oninput"
+                                           @onkeydown="HandleEditKeyDown"
+                                           class="flex-1 text-sm rounded border border-primary bg-default-100 px-2 py-1 focus:outline-none"
+                                           autofocus />
+                                    <button class="text-primary hover:text-primary-600 p-1" title="Save"
+                                            @onclick="SaveProjectName">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </button>
+                                    <button class="text-default-400 hover:text-danger p-1" title="Cancel"
+                                            @onclick="CancelEditing">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            }
+
+                            @if (isExpanded)
+                            {
+                                var convos = _projectConversations.GetValueOrDefault(project.TemplateId);
+                                @if (convos is null)
+                                {
+                                    <div class="flex justify-center py-2 pl-6">
+                                        <LumexSpinner Color="@ThemeColor.Primary" Size="@Size.Small" />
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var conv in convos)
+                                    {
+                                        var isActive = ActiveConversationId == conv.ConversationId;
+                                        <button class="@SidebarItemClass(isActive) pl-8"
+                                                @onclick="@(() => OnConversationSelected.InvokeAsync(conv.ConversationId))">
+                                            <div class="flex items-center gap-2 min-w-0">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-default-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                                                </svg>
+                                                <div class="min-w-0 flex-1 text-left">
+                                                    <div class="text-xs truncate">@(conv.Title ?? "Untitled")</div>
+                                                    <div class="text-xs text-default-400">@FormatImportedDate(conv.CreateTime)</div>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    }
+                                }
+                            }
+                        </div>
+                    }
+                }
+            }
+
+            @* ── Imported History (collapsible) ── *@
+            @if (_importedConversations.Count > 0 || _importedTotal > 0)
+            {
+                <button class="w-full px-3 pt-4 pb-1 flex items-center justify-between hover:bg-default-100 transition-colors cursor-pointer"
+                        @onclick="@(() => _importedCollapsed = !_importedCollapsed)">
+                    <span class="text-xs font-semibold text-default-400 uppercase tracking-wider">Imported History</span>
+                    <div class="flex items-center gap-1">
+                        <span class="text-xs text-default-400">@_importedTotal total</span>
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                             class="h-3 w-3 text-default-400 transition-transform @(_importedCollapsed ? "" : "rotate-180")"
+                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                </button>
+
+                @if (!_importedCollapsed)
+                {
+                    @* Search box for imported conversations *@
+                    <div class="px-3 pb-2">
+                        <input type="text"
+                               @bind="_searchQuery"
+                               @bind:event="oninput"
+                               @bind:after="FilterImported"
+                               placeholder="Filter imported..."
+                               aria-label="Filter imported conversations"
+                               class="w-full text-xs rounded-md border border-default-200 bg-default-100 px-2 py-1.5 focus:outline-none focus:border-primary" />
+                    </div>
+
+                    @foreach (var conv in _filteredImported)
+                    {
+                        var isActive = ActiveConversationId == conv.ConversationId;
+                        <button class="@SidebarItemClass(isActive)"
+                                @onclick="@(() => OnConversationSelected.InvokeAsync(conv.ConversationId))">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-default-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                </svg>
+                                <div class="min-w-0 flex-1 text-left">
+                                    <div class="text-sm truncate">@(conv.Title ?? "Untitled")</div>
+                                    <div class="text-xs text-default-400">@FormatImportedDate(conv.CreateTime)</div>
+                                </div>
+                            </div>
+                        </button>
+                    }
+
+                    @if (_importedTotal > _importedConversations.Count)
+                    {
+                        <div class="px-3 py-2 text-center">
+                            <button class="text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled="@_isLoadingMore"
+                                    @onclick="LoadMoreImported">
+                                @(_isLoadingMore ? "Loading..." : "Load more...")
+                            </button>
+                        </div>
+                    }
+                }
+            }
+
+            @if (_chatSessions.Count == 0 && _projects.Count == 0 && _importedConversations.Count == 0)
+            {
+                <div class="p-4 text-sm text-default-400 text-center">
+                    No conversation history yet.
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid? ActiveSessionId { get; set; }
+    [Parameter] public string? ActiveConversationId { get; set; }
+    [Parameter] public EventCallback OnNewChat { get; set; }
+    [Parameter] public EventCallback<Guid> OnSessionSelected { get; set; }
+    [Parameter] public EventCallback<string> OnConversationSelected { get; set; }
+
+    private List<ChatSessionItem> _chatSessions = [];
+    private List<ProjectItem> _projects = [];
+    private Dictionary<string, List<ImportedConversationItem>> _projectConversations = new();
+    private HashSet<string> _expandedProjects = new();
+    private List<ImportedConversationItem> _importedConversations = [];
+    private List<ImportedConversationItem> _filteredImported = [];
+    private long _importedTotal;
+    private int _importedPage = 1;
+    private bool _isLoading = true;
+    private bool _isLoadingMore;
+    private string _searchQuery = string.Empty;
+
+    // Section collapse state (all expanded by default)
+    private bool _chatsCollapsed;
+    private bool _projectsCollapsed;
+    private bool _importedCollapsed;
+
+    // Inline editing state
+    private string? _editingProjectId;
+    private string _editingName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    /// <summary>Refresh the sidebar data (called from parent after chat activity).</summary>
+    public async Task RefreshAsync()
+    {
+        await LoadDataAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Load chat sessions, projects, and standalone imported conversations in parallel.
+            var sessionsTask = ChatService.GetSessionsAsync(limit: 50);
+            var projectsTask = ConversationService.GetProjectsAsync();
+            var conversationsTask = ConversationService.GetStandaloneConversationsAsync(page: 1, pageSize: 50);
+
+            await Task.WhenAll(sessionsTask, projectsTask, conversationsTask);
+
+            _chatSessions = sessionsTask.Result.ToList();
+            _projects = projectsTask.Result.ToList();
+
+            var convResult = conversationsTask.Result;
+            if (convResult is not null)
+            {
+                _importedConversations = convResult.Items?.ToList() ?? [];
+                _importedTotal = convResult.Total;
+                _importedPage = 1;
+            }
+
+            // Reload any currently expanded projects.
+            foreach (var templateId in _expandedProjects.ToList())
+            {
+                await LoadProjectConversations(templateId);
+            }
+
+            FilterImported();
+        }
+        catch
+        {
+            // Sidebar loading failure is non-critical; show empty state.
+            _chatSessions = [];
+            _projects = [];
+            _importedConversations = [];
+            _filteredImported = [];
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ToggleProject(string templateId)
+    {
+        if (_expandedProjects.Contains(templateId))
+        {
+            _expandedProjects.Remove(templateId);
+        }
+        else
+        {
+            _expandedProjects.Add(templateId);
+            if (!_projectConversations.ContainsKey(templateId))
+            {
+                StateHasChanged(); // Re-render immediately to show the spinner
+                await LoadProjectConversations(templateId);
+            }
+        }
+        StateHasChanged();
+    }
+
+    private async Task LoadProjectConversations(string templateId)
+    {
+        try
+        {
+            var page = 1;
+            const int pageSize = 100;
+            _projectConversations[templateId] = [];
+
+            while (true)
+            {
+                var result = await ConversationService.GetProjectConversationsAsync(templateId, page, pageSize);
+
+                if (result?.Items is null || result.Items.Count == 0)
+                    break;
+
+                if (page == 1)
+                    _projectConversations[templateId] = result.Items;
+                else
+                    _projectConversations[templateId].AddRange(result.Items);
+
+                if (result.Items.Count < pageSize)
+                    break;
+
+                if (result.Total > 0 && _projectConversations[templateId].Count >= result.Total)
+                    break;
+
+                page++;
+            }
+        }
+        catch
+        {
+            _projectConversations[templateId] = [];
+        }
+    }
+
+    private async Task LoadMoreImported()
+    {
+        if (_isLoadingMore) return;
+        _isLoadingMore = true;
+        StateHasChanged();
+
+        var nextPage = _importedPage + 1;
+        try
+        {
+            var result = await ConversationService.GetStandaloneConversationsAsync(nextPage, pageSize: 50);
+            if (result?.Items is not null)
+            {
+                _importedPage = nextPage;
+                _importedConversations.AddRange(result.Items);
+                FilterImported();
+            }
+        }
+        catch
+        {
+            // Non-critical; ignore. Page counter unchanged so retry will fetch the same page.
+        }
+        finally
+        {
+            _isLoadingMore = false;
+        }
+    }
+
+    private void FilterImported()
+    {
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _filteredImported = _importedConversations;
+        }
+        else
+        {
+            _filteredImported = _importedConversations
+                .Where(c => c.Title?.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) == true)
+                .ToList();
+        }
+    }
+
+    // ── Inline editing ──
+
+    private void StartEditing(ProjectItem project)
+    {
+        _editingProjectId = project.TemplateId;
+        _editingName = ProjectDisplayName(project);
+    }
+
+    private void CancelEditing()
+    {
+        _editingProjectId = null;
+        _editingName = string.Empty;
+    }
+
+    private async Task SaveProjectName()
+    {
+        if (_editingProjectId is null || string.IsNullOrWhiteSpace(_editingName))
+        {
+            CancelEditing();
+            return;
+        }
+
+        try
+        {
+            await ConversationService.RenameProjectAsync(_editingProjectId, _editingName.Trim());
+
+            // Update the local project item with the new name.
+            var project = _projects.FirstOrDefault(p => p.TemplateId == _editingProjectId);
+            if (project is not null)
+            {
+                var idx = _projects.IndexOf(project);
+                _projects[idx] = project with { UserName = _editingName.Trim() };
+            }
+        }
+        catch
+        {
+            // Non-critical; name will revert to the inferred value on next reload.
+        }
+        finally
+        {
+            CancelEditing();
+        }
+    }
+
+    private async Task HandleEditKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SaveProjectName();
+        }
+        else if (e.Key == "Escape")
+        {
+            CancelEditing();
+        }
+    }
+
+    private static string ProjectDisplayName(ProjectItem project)
+    {
+        // Prefer user-assigned name, fall back to inferred name from most recent conversation.
+        if (!string.IsNullOrWhiteSpace(project.UserName))
+            return project.UserName;
+        return project.MostRecentTitle ?? "Untitled Project";
+    }
+
+    private static string SidebarItemClass(bool isActive) =>
+        $"w-full px-3 py-2 hover:bg-default-100 transition-colors cursor-pointer text-left {(isActive ? "bg-default-200" : "")}";
+
+    private static string FormatRelativeDate(DateTimeOffset date)
+    {
+        var diff = DateTimeOffset.UtcNow - date;
+        return diff.TotalMinutes < 1 ? "just now" :
+               diff.TotalMinutes < 60 ? $"{(int)diff.TotalMinutes}m ago" :
+               diff.TotalHours < 24 ? $"{(int)diff.TotalHours}h ago" :
+               diff.TotalDays < 7 ? $"{(int)diff.TotalDays}d ago" :
+               date.ToString("MMM d");
+    }
+
+    private static string FormatImportedDate(double? unixTimestamp)
+    {
+        if (unixTimestamp is null) return "";
+        var date = DateTimeOffset.FromUnixTimeSeconds((long)unixTimestamp.Value);
+        return date.ToString("MMM d, yyyy");
+    }
+}

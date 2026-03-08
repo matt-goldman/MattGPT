@@ -1,0 +1,23 @@
+{
+  "solution": {
+    "path": "MattGPT.slnx",
+    "projects": [
+      "src\\API\\MattGPT.ApiService\\MattGPT.ApiService.csproj",
+      "src\\Common\\Contracts\\MattGPT.Contracts.csproj",
+      "src\\Infrastructure\\AnthropicModule\\MattGPT.AnthropicModule.csproj",
+      "src\\Infrastructure\\AzureModule\\MattGPT.AzureModule.csproj",
+      "src\\Infrastructure\\GeminiModule\\MattGPT.GeminiModule.csproj",
+      "src\\Infrastructure\\MongoDBModule\\MattGPT.MongoDBModule.csproj",
+      "src\\Infrastructure\\OllamaModule\\MattGPT.OllamaModule.csproj",
+      "src\\Infrastructure\\OpenAIModule\\MattGPT.OpenAIModule.csproj",
+      "src\\Infrastructure\\PineconeModule\\MattGPT.PineconeModule.csproj",
+      "src\\Infrastructure\\PostgresModule\\MattGPT.PostgresModule.csproj",
+      "src\\Infrastructure\\QdrantModule\\MattGPT.QdrantModule.csproj",
+      "src\\Infrastructure\\WeaviateModule\\MattGPT.WeaviateModule.csproj",
+      "src\\Orchestration\\MattGPT.ServiceDefaults\\MattGPT.ServiceDefaults.csproj",
+      "src\\UI\\MattGPT.ApiClient\\MattGPT.ApiClient.csproj",
+      "src\\UI\\MattGPT.Web\\MattGPT.Web.csproj",
+      "tests\\MattGPT.ApiService.Tests\\MattGPT.ApiService.Tests.csproj"
+    ]
+  }
+}

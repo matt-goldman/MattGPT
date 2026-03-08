@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="MattGPT.Mobile.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:pages="clr-namespace:MattGPT.Mobile.Pages"
+    Title="MattGPT">
+
+    <TabBar>
+        <ShellContent Title="Chat"
+                      ContentTemplate="{DataTemplate pages:ChatPage}"
+                      Route="ChatPage" />
+        <ShellContent Title="Search"
+                      ContentTemplate="{DataTemplate pages:SearchPage}"
+                      Route="SearchPage" />
+        <ShellContent Title="Settings"
+                      ContentTemplate="{DataTemplate pages:SettingsPage}"
+                      Route="SettingsPage" />
+    </TabBar>
+
+</Shell>
