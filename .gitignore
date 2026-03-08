@@ -282,6 +282,12 @@ ServiceFabricBackup/
 *.ldf
 *.ndf
 
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
 # Business Intelligence projects
 *.rdl.data
 *.bim.layout
@@ -418,3 +424,7 @@ FodyWeavers.xsd
 *.msp
 
 **/conversations*.json
+.idea/*
+
+# local only temp files
+/scratch/*

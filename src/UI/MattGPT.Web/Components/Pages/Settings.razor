@@ -1,0 +1,185 @@
+@page "/settings"
+@rendermode InteractiveServer
+@inject ISettingsService SettingsService
+
+<PageTitle>Settings</PageTitle>
+
+<div class="max-w-3xl mx-auto px-4 py-8">
+    <h1 class="text-2xl font-bold mb-6">Settings</h1>
+
+    @if (_isLoading)
+    {
+        <div class="flex justify-center py-12">
+            <LumexSpinner Color="@ThemeColor.Primary" />
+        </div>
+    }
+    else
+    {
+        @* System Prompt *@
+        <section class="mb-8">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-lg font-semibold">System Prompt</h2>
+                <button class="text-xs text-default-400 hover:text-primary underline"
+                        @onclick="ResetSystemPrompt"
+                        title="Reset to default">
+                    Reset to default
+                </button>
+            </div>
+            <p class="text-sm text-default-400 mb-3">
+                The system prompt is sent to the LLM on every chat request. It sets the assistant's persona and instructions.
+            </p>
+            <textarea @bind="_systemPrompt"
+                      rows="8"
+                      class="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary font-mono"
+                      placeholder="Enter system prompt..."></textarea>
+            @if (_isDefault)
+            {
+                <p class="text-xs text-default-400 mt-1">Using the default system prompt.</p>
+            }
+        </section>
+
+        @* User Profile *@
+        <section class="mb-8">
+            <h2 class="text-lg font-semibold mb-2">User Profile</h2>
+            <p class="text-sm text-default-400 mb-3">
+                User profile information is imported from ChatGPT custom instructions and injected into every chat request as user context.
+                You can edit these fields to personalise how the assistant responds.
+            </p>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-default-700 mb-1">About me</label>
+                    <textarea @bind="_userProfileText"
+                              rows="4"
+                              class="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                              placeholder="e.g. I'm a software developer working with .NET and Azure..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-default-700 mb-1">How should the assistant respond?</label>
+                    <textarea @bind="_userInstructions"
+                              rows="4"
+                              class="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                              placeholder="e.g. Be concise and technical. Prefer code examples over prose explanations."></textarea>
+                </div>
+            </div>
+        </section>
+
+        @* Save button *@
+        <div class="flex items-center gap-3">
+            <LumexButton Color="@ThemeColor.Primary"
+                         IsDisabled="@_isSaving"
+                         OnClick="SaveAll">
+                @(_isSaving ? "Saving..." : "Save Changes")
+            </LumexButton>
+
+            @if (!string.IsNullOrEmpty(_successMessage))
+            {
+                <span class="text-sm text-success-600">@_successMessage</span>
+            }
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <span class="text-sm text-danger-600">@_errorMessage</span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private string? _systemPrompt;
+    private bool _isDefault;
+    private string? _userProfileText;
+    private string? _userInstructions;
+    private string _successMessage = string.Empty;
+    private string _errorMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+    }
+
+    private async Task LoadSettings()
+    {
+        _isLoading = true;
+        _errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var promptTask = SettingsService.GetSystemPromptAsync();
+            var profileTask = SettingsService.GetUserProfileAsync();
+            await Task.WhenAll(promptTask, profileTask);
+
+            var prompt = await promptTask;
+            if (prompt is not null)
+            {
+                _systemPrompt = prompt.SystemPrompt;
+                _isDefault = prompt.IsDefault;
+            }
+
+            var profile = await profileTask;
+            if (profile is not null)
+            {
+                _userProfileText = profile.UserProfileText;
+                _userInstructions = profile.UserInstructions;
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load settings: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SaveAll()
+    {
+        _isSaving = true;
+        _successMessage = string.Empty;
+        _errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var promptTask = SettingsService.SaveSystemPromptAsync(_systemPrompt);
+            var profileTask = SettingsService.SaveUserProfileAsync(_userProfileText, _userInstructions);
+            await Task.WhenAll(promptTask, profileTask);
+
+            _successMessage = "Settings saved successfully.";
+            _isDefault = string.IsNullOrWhiteSpace(_systemPrompt);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error saving settings: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task ResetSystemPrompt()
+    {
+        try
+        {
+            var result = await SettingsService.ResetSystemPromptAsync();
+            if (result is not null)
+            {
+                _systemPrompt = result.SystemPrompt;
+                _isDefault = true;
+                _successMessage = "System prompt reset to default.";
+            }
+            else
+            {
+                _errorMessage = "Error resetting system prompt: unexpected response from server.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error resetting system prompt: {ex.Message}";
+        }
+    }
+}

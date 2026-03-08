@@ -1,0 +1,578 @@
+@page "/chat"
+@page "/chat/conversation/{ConversationId}"
+@layout MattGPT.Web.Components.Layout.ChatLayout
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject IChatService ChatService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Chat</PageTitle>
+
+@* Sidebar backdrop — click to close (issue 037) *@
+@if (_sidebarOpen)
+{
+    <div class="fixed inset-0 bg-black/20 z-30" @onclick="ToggleSidebar"></div>
+}
+
+@* Collapsible sidebar — overlays chat area with fixed positioning (issue 037) *@
+<div class="fixed inset-y-0 left-0 z-40 w-72 transform transition-transform duration-200 @(_sidebarOpen ? "translate-x-0" : "-translate-x-full")"
+     style="top: 64px;">
+    <ChatSidebar @ref="_sidebar"
+                 ActiveSessionId="@_sessionId"
+                 ActiveConversationId="@_viewingConversationId"
+                 OnNewChat="StartNewChat"
+                 OnSessionSelected="LoadSession"
+                 OnConversationSelected="LoadImportedConversation" />
+</div>
+
+@* Main chat area — full width, never pushed by sidebar *@
+<div class="flex h-[calc(100vh-64px)] flex-col">
+    @* Header with sidebar toggle *@
+    <div class="flex items-center gap-3 px-4 py-3 border-b border-default-200">
+        <button class="p-1.5 rounded-md hover:bg-default-100 transition-colors" @onclick="ToggleSidebar"
+                title="@(_sidebarOpen ? "Hide sidebar" : "Show sidebar")"
+                aria-label="@(_sidebarOpen ? "Hide sidebar" : "Show sidebar")">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-default-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        </button>
+    </div>
+
+    @* Message history *@
+    <div class="flex-1 overflow-y-auto px-4 py-4" id="chat-messages">
+        <div class="max-w-4xl mx-auto space-y-4">
+            @if (_viewingConversationId is not null)
+            {
+                <div class="flex items-center gap-2">
+                    <span class="text-xs bg-default-200 text-default-600 rounded px-1.5 py-0.5">Imported</span>
+                    <h1 class="text-lg font-semibold truncate">@(_viewingTitle ?? "Imported Conversation")</h1>
+                </div>
+                <p class="text-default-400 text-xs">Read-only view of an imported conversation</p>
+            }
+            else
+            {
+                <h1 class="text-lg font-semibold truncate">@(_sessionTitle ?? "New Chat")</h1>
+                <p class="text-default-400 text-xs">Ask anything — responses are augmented with your imported conversation history.</p>
+            }
+            @if (_messages.Count == 0 && _viewingConversationId is null)
+            {
+                <div class="flex items-center justify-center h-full text-default-400 text-sm">
+                    <p>No messages yet. Type a message below to get started.</p>
+                </div>
+            }
+
+            @{
+                DateTimeOffset? prevDate = null;
+            }
+            @foreach (var msg in _messages)
+            {
+                @* Date separator when the day changes (issue 030) *@
+                @if (msg.Timestamp.HasValue)
+                {
+                    var msgDate = msg.Timestamp.Value.LocalDateTime.Date;
+                    if (prevDate is null || prevDate.Value.Date != msgDate)
+                    {
+                        <div class="flex items-center gap-2 my-2">
+                            <div class="flex-1 border-t border-default-200"></div>
+                            <span class="text-xs text-default-400 whitespace-nowrap">@FormatDateSeparator(msg.Timestamp.Value)</span>
+                            <div class="flex-1 border-t border-default-200"></div>
+                        </div>
+                    }
+                    prevDate = msg.Timestamp.Value;
+                }
+
+                @if (msg.Role == "user")
+                {
+                    <div class="flex justify-end">
+                        <div class="max-w-lg">
+                            <div class="bg-primary text-white rounded-2xl rounded-tr-sm px-4 py-2 text-sm">
+                                @msg.Content
+                            </div>
+                            @if (msg.Timestamp.HasValue)
+                            {
+                                <div class="text-xs text-default-400 text-right mt-0.5 pr-1">@FormatTimestamp(msg.Timestamp.Value)</div>
+                            }
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="space-y-1">
+                        <div class="flex justify-start">
+                            <div class="max-w-2xl bg-default-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm">
+                                <MarkdownContent Content="@msg.Content" />
+                            </div>
+                        </div>
+                        @if (msg.Timestamp.HasValue)
+                        {
+                            <div class="text-xs text-default-400 ml-1">@FormatTimestamp(msg.Timestamp.Value)</div>
+                        }
+
+                        @if (msg.Sources is { Count: > 0 })
+                        {
+                            <div class="ml-2">
+                                <details class="text-xs text-default-400">
+                                    <summary class="cursor-pointer hover:text-default-600 select-none">
+                                        @msg.Sources.Count source(s) used
+                                    </summary>
+                                    <div class="mt-2 space-y-1 pl-2 border-l-2 border-default-200">
+                                        @foreach (var src in msg.Sources)
+                                        {
+                                            <div class="text-xs">
+                                                <a href="/chat/conversation/@src.ConversationId"
+                                                   class="font-medium text-primary hover:underline cursor-pointer"
+                                                   @onclick="() => LoadImportedConversation(src.ConversationId)"
+                                                   @onclick:preventDefault>@(src.Title ?? "Untitled")</a>
+                                                <span class="text-default-400 ml-1">(score: @src.Score.ToString("F2"))</span>
+                                                @if (!string.IsNullOrWhiteSpace(src.Summary))
+                                                {
+                                                    <p class="text-default-400 mt-0.5 line-clamp-2">@src.Summary</p>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </details>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            @if (_isThinking)
+            {
+                <div class="flex justify-start">
+                    <div class="bg-default-100 rounded-2xl rounded-tl-sm px-4 py-3">
+                        @if (_streamingContent.Length == 0)
+                        {
+                            @if (!string.IsNullOrEmpty(_toolStatus))
+                            {
+                                @* Tool-calling status indicator (issue 032) *@
+                                <div class="flex items-center gap-2 text-sm text-default-500">
+                                    <span class="inline-flex gap-0.5">
+                                        <span class="animate-bounce" style="animation-delay:0ms">●</span>
+                                        <span class="animate-bounce" style="animation-delay:150ms">●</span>
+                                        <span class="animate-bounce" style="animation-delay:300ms">●</span>
+                                    </span>
+                                    <span>@_toolStatus</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <LumexSpinner Color="@ThemeColor.Primary" Size="@Size.Small" />
+                            }
+                        }
+                        else
+                        {
+                            <div class="max-w-2xl text-sm">
+                                <MarkdownContent Content="@_streamingContent.ToString()" />
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <LumexAlert Color="@ThemeColor.Danger" Title="Error">
+                    @_errorMessage
+                </LumexAlert>
+            }
+        </div>
+    </div>
+
+    @* Input area — hidden when viewing imported conversation *@
+    @if (_viewingConversationId is null)
+    {
+        <div class="px-4 pb-4 pt-2">
+            <div class="max-w-4xl mx-auto">
+            <LumexCard Class="p-3">
+                <div class="flex gap-2 items-end">
+                    <textarea @ref="_textareaRef"
+                              @bind="_inputText"
+                              @bind:event="oninput"
+                              @onkeydown="HandleKeyDown"
+                              rows="1"
+                              placeholder="Ask a question..."
+                              disabled="@_isThinking"
+                              class="flex-1 resize-none rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
+                              style="min-height: 40px; max-height: 120px;"></textarea>
+                    <LumexButton Color="@ThemeColor.Primary"
+                                 IsDisabled="@(string.IsNullOrWhiteSpace(_inputText) || _isThinking)"
+                                 OnClick="SendMessage">
+                        Send
+                    </LumexButton>
+                </div>
+            </LumexCard>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="px-4 pb-4 pt-2">
+            <div class="max-w-4xl mx-auto">
+            <LumexCard Class="p-3 text-center">
+                <p class="text-sm text-default-400 mb-2">This is a read-only view of an imported conversation.</p>
+                <div class="flex justify-center gap-2">
+                    <LumexButton Color="@ThemeColor.Primary" Variant="@Variant.Flat" OnClick="StartNewChat">
+                        Start a New Chat
+                    </LumexButton>
+                    <LumexButton Color="@ThemeColor.Primary" OnClick="ContinueConversation">
+                        Continue this conversation
+                    </LumexButton>
+                </div>
+            </LumexCard>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? ConversationId { get; set; }
+
+    private readonly List<ChatMessage> _messages = [];
+    private readonly System.Text.StringBuilder _streamingContent = new();
+    private string _inputText = string.Empty;
+    private bool _isThinking;
+    private string _toolStatus = string.Empty;
+    private string _errorMessage = string.Empty;
+    private ElementReference _textareaRef;
+    private IJSObjectReference? _jsModule;
+    private Guid? _sessionId;
+    private string? _sessionTitle;
+    private bool _sidebarOpen;
+    private ChatSidebar? _sidebar;
+    private CancellationTokenSource? _streamCts;
+
+    // When viewing an imported conversation read-only.
+    private string? _viewingConversationId;
+    private string? _viewingTitle;
+    private string? _viewingConversationSummary;
+
+    // Track the last loaded conversation to avoid redundant reloads on re-render.
+    private string? _lastLoadedConversationId;
+
+    // Auto-scroll: track whether the user is near the bottom.
+    private bool _autoScroll = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ConversationId is not null && ConversationId != _lastLoadedConversationId)
+        {
+            _lastLoadedConversationId = ConversationId;
+            await LoadImportedConversation(ConversationId);
+        }
+        else if (ConversationId is null && _lastLoadedConversationId is not null)
+        {
+            _lastLoadedConversationId = null;
+            await StartNewChat();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/chat.js");
+            await _jsModule.InvokeVoidAsync("preventEnterNewline", _textareaRef);
+        }
+
+        // Auto-scroll: scroll to bottom if user is near bottom (issue 035)
+        if (_jsModule is not null && _autoScroll)
+        {
+            await _jsModule.InvokeVoidAsync("scrollToBottom", "chat-messages");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _streamCts?.Cancel();
+        _streamCts?.Dispose();
+        if (_jsModule is not null)
+        {
+            await _jsModule.DisposeAsync();
+        }
+    }
+
+    private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+
+    private void CancelActiveStream()
+    {
+        _streamCts?.Cancel();
+        _streamCts?.Dispose();
+        _streamCts = null;
+        _isThinking = false;
+        _toolStatus = string.Empty;
+        _streamingContent.Clear();
+    }
+
+    private async Task StartNewChat()
+    {
+        CancelActiveStream();
+        _messages.Clear();
+        _sessionId = null;
+        _sessionTitle = null;
+        _viewingConversationId = null;
+        _viewingTitle = null;
+        _viewingConversationSummary = null;
+        _lastLoadedConversationId = null;
+        _errorMessage = string.Empty;
+        _streamingContent.Clear();
+        _autoScroll = true;
+        // Update URL without triggering Blazor navigation (issue 033)
+        if (_jsModule is not null)
+            await _jsModule.InvokeVoidAsync("pushState", "/chat");
+        StateHasChanged();
+    }
+
+    private async Task LoadSession(Guid sessionId)
+    {
+        CancelActiveStream();
+        _viewingConversationId = null;
+        _viewingTitle = null;
+        _viewingConversationSummary = null;
+        _messages.Clear();
+        _errorMessage = string.Empty;
+        _autoScroll = true;
+
+        try
+        {
+            var session = await ChatService.GetSessionAsync(sessionId);
+            if (session is null) return;
+
+            _sessionId = session.SessionId;
+            _sessionTitle = session.Title;
+
+            foreach (var msg in session.Messages)
+            {
+                _messages.Add(new ChatMessage(msg.Role, msg.Content, null, msg.Timestamp));
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load session: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task LoadImportedConversation(string conversationId)
+    {
+        CancelActiveStream();
+        _sessionId = null;
+        _sessionTitle = null;
+        _messages.Clear();
+        _errorMessage = string.Empty;
+        _autoScroll = true;
+
+        try
+        {
+            var conv = await ChatService.GetConversationAsync(conversationId);
+            if (conv is null)
+            {
+                _errorMessage = "Conversation not found.";
+                return;
+            }
+
+            _viewingConversationId = conv.ConversationId;
+            _viewingTitle = conv.Title;
+            _viewingConversationSummary = conv.Summary;
+            _lastLoadedConversationId = conversationId;
+
+            foreach (var msg in conv.Messages)
+            {
+                // Map imported roles to display format.
+                var role = msg.Role switch
+                {
+                    "user" => "user",
+                    "assistant" => "assistant",
+                    "system" => "assistant", // show system messages in the assistant style
+                    "tool" => "assistant",
+                    _ => msg.Role,
+                };
+                if (!string.IsNullOrWhiteSpace(msg.Content))
+                {
+                    DateTimeOffset? ts = msg.CreateTime.HasValue
+                        ? DateTimeOffset.FromUnixTimeSeconds((long)msg.CreateTime.Value)
+                        : null;
+                    _messages.Add(new ChatMessage(role, msg.Content, null, ts));
+                }
+            }
+
+            // Update the URL using JS history API to avoid full Blazor re-render (issue 033)
+            if (_jsModule is not null)
+                await _jsModule.InvokeVoidAsync("pushState", $"/chat/conversation/{conversationId}");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _errorMessage = "This conversation could not be found. It may have been deleted.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load conversation: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Start a new chat session pre-loaded with the currently viewed imported conversation as context (issue 034).
+    /// </summary>
+    private async Task ContinueConversation()
+    {
+        if (_viewingConversationId is null) return;
+
+        var title = _viewingTitle ?? "Untitled conversation";
+        var summary = _viewingConversationSummary;
+
+        // Build context message that references the imported conversation.
+        var contextMessage = string.IsNullOrWhiteSpace(summary)
+            ? $"[Context: I am continuing a conversation titled \"{title}\" from my imported ChatGPT history. " +
+              $"The conversation ID is {_viewingConversationId}. Please search your memories for this conversation if I ask about it.]"
+            : $"[Context: I am continuing a conversation titled \"{title}\" from my imported ChatGPT history. " +
+              $"Summary: {summary} — Please draw on this context in our discussion.]";
+
+        CancelActiveStream();
+        _viewingConversationId = null;
+        _viewingTitle = null;
+        _viewingConversationSummary = null;
+        _messages.Clear();
+        _sessionId = null;
+        var followUpTitle = $"Follow-up: {title}";
+        _sessionTitle = followUpTitle.Length > 60 ? followUpTitle[..60] + "…" : followUpTitle;
+        _errorMessage = string.Empty;
+        _autoScroll = true;
+
+        // Show the context as the first user message.
+        _inputText = contextMessage;
+        await SendMessage();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey && !string.IsNullOrWhiteSpace(_inputText) && !_isThinking)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        var text = _inputText.Trim();
+        if (string.IsNullOrEmpty(text) || _isThinking) return;
+
+        _inputText = string.Empty;
+        _errorMessage = string.Empty;
+        _streamingContent.Clear();
+        _toolStatus = string.Empty;
+        _messages.Add(new ChatMessage("user", text, null, DateTimeOffset.UtcNow));
+        _isThinking = true;
+        _autoScroll = true;
+        StateHasChanged();
+
+        _streamCts?.Cancel();
+        _streamCts?.Dispose();
+        _streamCts = new CancellationTokenSource();
+        var ct = _streamCts.Token;
+
+        try
+        {
+            List<ChatSource>? sources = null;
+            var responseTimestamp = DateTimeOffset.UtcNow;
+
+            await foreach (var evt in ChatService.StreamChatAsync(text, _sessionId, ct))
+            {
+                switch (evt)
+                {
+                    case SessionChatEvent session:
+                        _sessionId = session.SessionId;
+                        // Update session title from input on first message.
+                        if (_sessionTitle is null)
+                            _sessionTitle = text.Length > 60 ? text[..60] + "…" : text;
+                        // Update URL without triggering Blazor navigation (issue 033)
+                        if (_jsModule is not null)
+                            await _jsModule.InvokeVoidAsync("pushState", "/chat");
+                        break;
+
+                    case TokenChatEvent token:
+                        _toolStatus = string.Empty; // clear tool status when tokens arrive
+                        _streamingContent.Append(token.Token);
+                        responseTimestamp = DateTimeOffset.UtcNow;
+                        // Only scroll if user is near bottom (issue 035)
+                        if (_jsModule is not null)
+                            _autoScroll = await _jsModule.InvokeAsync<bool>("isNearBottom", "chat-messages", 150);
+                        StateHasChanged();
+                        break;
+
+                    case ToolStartChatEvent toolStart:
+                        // Tool invocation started — show status indicator (issue 032)
+                        _toolStatus = GetToolStatusMessage(toolStart.Tool);
+                        StateHasChanged();
+                        break;
+
+                    case ToolEndChatEvent:
+                        // Tool invocation finished — revert to generic thinking state
+                        _toolStatus = string.Empty;
+                        StateHasChanged();
+                        break;
+
+                    case SourcesChatEvent sourcesEvt:
+                        sources = sourcesEvt.Sources.ToList();
+                        break;
+
+                    case DoneChatEvent:
+                        break;
+                }
+            }
+
+            _messages.Add(new ChatMessage("assistant", _streamingContent.ToString(), sources, responseTimestamp));
+
+            // Refresh sidebar to show the new/updated session.
+            if (_sidebar is not null)
+                await _sidebar.RefreshAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // Stream was cancelled by navigation / new chat — not an error.
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            _streamingContent.Clear();
+            _toolStatus = string.Empty;
+            _isThinking = false;
+            _autoScroll = true;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Maps a tool name to a user-friendly status message (issue 032).</summary>
+    private static string GetToolStatusMessage(string? toolName) => toolName switch
+    {
+        "search_memories" => "🔍 Searching memories...",
+        _ => "⚙️ Using tool...",
+    };
+
+    private static string FormatTimestamp(DateTimeOffset ts)
+    {
+        var local = ts.ToLocalTime();
+        var now = DateTimeOffset.Now;
+        return local.Date == now.Date
+            ? local.ToString("h:mm tt")
+            : local.ToString("MMM d, h:mm tt");
+    }
+
+    private static string FormatDateSeparator(DateTimeOffset ts)
+    {
+        var local = ts.ToLocalTime();
+        var now = DateTimeOffset.Now;
+        if (local.Date == now.Date) return "Today";
+        if (local.Date == now.Date.AddDays(-1)) return "Yesterday";
+        return local.ToString("MMMM d, yyyy");
+    }
+
+    private record ChatMessage(string Role, string Content, List<ChatSource>? Sources, DateTimeOffset? Timestamp = null);
+}
