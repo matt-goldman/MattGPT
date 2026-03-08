@@ -11,18 +11,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Common\Contracts\MattGPT.Contracts.csproj" />
-    <ProjectReference Include="..\MattGPT.ServiceDefaults\MattGPT.ServiceDefaults.csproj" />
-    <ProjectReference Include="..\Infrastructure\AnthropicModule\MattGPT.AnthropicModule.csproj" />
-    <ProjectReference Include="..\Infrastructure\AzureModule\MattGPT.AzureModule.csproj" />
-    <ProjectReference Include="..\Infrastructure\GeminiModule\MattGPT.GeminiModule.csproj" />
-    <ProjectReference Include="..\Infrastructure\MongoDBModule\MattGPT.MongoDBModule.csproj" />
-    <ProjectReference Include="..\Infrastructure\OllamaModule\MattGPT.OllamaModule.csproj" />
-    <ProjectReference Include="..\Infrastructure\OpenAIModule\MattGPT.OpenAIModule.csproj" />
-    <ProjectReference Include="..\Infrastructure\PineconeModule\MattGPT.PineconeModule.csproj" />
-    <ProjectReference Include="..\Infrastructure\PostgresModule\MattGPT.PostgresModule.csproj" />
-    <ProjectReference Include="..\Infrastructure\QdrantModule\MattGPT.QdrantModule.csproj" />
-    <ProjectReference Include="..\Infrastructure\WeaviateModule\MattGPT.WeaviateModule.csproj" />
+    <ProjectReference Include="..\..\Common\Contracts\MattGPT.Contracts.csproj" />
+    <ProjectReference Include="..\..\Orchestration\MattGPT.ServiceDefaults\MattGPT.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\AnthropicModule\MattGPT.AnthropicModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\AzureModule\MattGPT.AzureModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\GeminiModule\MattGPT.GeminiModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\MongoDBModule\MattGPT.MongoDBModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\OllamaModule\MattGPT.OllamaModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\OpenAIModule\MattGPT.OpenAIModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\PineconeModule\MattGPT.PineconeModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\PostgresModule\MattGPT.PostgresModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\QdrantModule\MattGPT.QdrantModule.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\WeaviateModule\MattGPT.WeaviateModule.csproj" />
   </ItemGroup>
 
   <ItemGroup>
