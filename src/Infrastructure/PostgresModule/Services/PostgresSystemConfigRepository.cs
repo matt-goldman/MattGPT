@@ -1,19 +1,20 @@
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
 using Npgsql;
 
-namespace MattGPT.ApiService.Services;
+namespace MattGPT.PostgresModule.Services;
 
 /// <summary>
-/// PostgreSQL-backed implementation of <see cref="IUserProfileRepository"/>.
-/// Maintains a single row keyed by the fixed ID "user-profile" in a <c>key_value_docs</c> table.
+/// PostgreSQL-backed implementation of <see cref="ISystemConfigRepository"/>.
+/// Maintains a single row keyed by the fixed ID "system-config" in a <c>key_value_docs</c> table.
 /// </summary>
-public class PostgresUserProfileRepository(NpgsqlDataSource dataSource, ILogger<PostgresUserProfileRepository> logger)
-    : IUserProfileRepository
+public class PostgresSystemConfigRepository(NpgsqlDataSource dataSource, ILogger<PostgresSystemConfigRepository> logger)
+    : ISystemConfigRepository
 {
     private const string TableName = "key_value_docs";
-    private const string DocId = "user-profile";
+    private const string DocId = "system-config";
     private volatile bool _schemaEnsured;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
@@ -22,7 +23,7 @@ public class PostgresUserProfileRepository(NpgsqlDataSource dataSource, ILogger<
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
-    public async Task<UserProfile?> GetAsync(CancellationToken ct = default)
+    public async Task<SystemConfig?> GetAsync(CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
 
@@ -31,14 +32,14 @@ public class PostgresUserProfileRepository(NpgsqlDataSource dataSource, ILogger<
         cmd.Parameters.AddWithValue(DocId);
 
         var json = (string?)await cmd.ExecuteScalarAsync(ct);
-        return json is null ? null : JsonSerializer.Deserialize<UserProfile>(json, SerializerOptions);
+        return json is null ? null : JsonSerializer.Deserialize<SystemConfig>(json, SerializerOptions);
     }
 
-    public async Task UpsertAsync(UserProfile profile, CancellationToken ct = default)
+    public async Task UpsertAsync(SystemConfig config, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
 
-        var data = JsonSerializer.Serialize(profile, SerializerOptions);
+        var data = JsonSerializer.Serialize(config, SerializerOptions);
 
         await using var cmd = dataSource.CreateCommand(
             $"""
@@ -50,7 +51,7 @@ public class PostgresUserProfileRepository(NpgsqlDataSource dataSource, ILogger<
 
         await cmd.ExecuteNonQueryAsync(ct);
 
-        logger.LogDebug("Upserted user profile (source create_time: {CreateTime}).", profile.SourceCreateTime);
+        logger.LogDebug("Upserted system config.");
     }
 
     private async Task EnsureSchemaAsync(CancellationToken ct)

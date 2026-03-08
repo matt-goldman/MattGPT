@@ -5,8 +5,9 @@ using Azure.Search.Documents.Indexes.Models;
 using Azure.Search.Documents.Models;
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
+using Microsoft.Extensions.Logging;
 
-namespace MattGPT.ApiService.Services;
+namespace MattGPT.AzureModule.Services;
 
 /// <summary>
 /// Azure AI Search-backed implementation of <see cref="IVectorStore"/>.

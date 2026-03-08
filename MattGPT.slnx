@@ -7,9 +7,14 @@
     <Project Path="src/Common/Contracts/MattGPT.Contracts.csproj" Id="403f500b-2b35-444b-9d81-cebba88d6649" />
   </Folder>
   <Folder Name="/src/Infrastructure/">
+    <Project Path="src/Infrastructure/AnthropicModule/MattGPT.AnthropicModule.csproj" />
+    <Project Path="src/Infrastructure/AzureModule/MattGPT.AzureModule.csproj" />
+    <Project Path="src/Infrastructure/GeminiModule/MattGPT.GeminiModule.csproj" />
     <Project Path="src/Infrastructure/MongoDBModule/MattGPT.MongoDBModule.csproj" />
+    <Project Path="src/Infrastructure/OllamaModule/MattGPT.OllamaModule.csproj" />
     <Project Path="src/Infrastructure/OpenAIModule/MattGPT.OpenAIModule.csproj" Id="16e2810d-7568-4b0f-94cd-4287da712392" />
     <Project Path="src/Infrastructure/PineconeModule/MattGPT.PineconeModule.csproj" Id="01a8d0a2-821b-40fb-8b3b-768c24f8a8fc" />
+    <Project Path="src/Infrastructure/PostgresModule/MattGPT.PostgresModule.csproj" />
     <Project Path="src/Infrastructure/QdrantModule/MattGPT.QdrantModule.csproj" Id="621eebd2-bb73-494b-ad50-d17ec1acc406" />
     <Project Path="src/Infrastructure/WeaviateModule/MattGPT.WeaviateModule.csproj" Id="89e1a7a6-ff84-4dcf-b827-7d863491b314" />
   </Folder>

@@ -1,9 +1,10 @@
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
 using Npgsql;
 
-namespace MattGPT.ApiService.Services;
+namespace MattGPT.PostgresModule.Services;
 
 /// <summary>
 /// PostgreSQL-backed implementation of <see cref="IChatSessionRepository"/>.

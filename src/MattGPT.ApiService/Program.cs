@@ -1,14 +1,16 @@
-using Azure;
-using Azure.Search.Documents;
-using Azure.Search.Documents.Indexes;
+using MattGPT.AnthropicModule;
 using MattGPT.ApiService;
 using MattGPT.ApiService.Endpoints;
 using MattGPT.ApiService.Services;
+using MattGPT.AzureModule;
 using MattGPT.Contracts;
 using MattGPT.Contracts.Services;
+using MattGPT.GeminiModule;
 using MattGPT.MongoDBModule;
+using MattGPT.OllamaModule;
 using MattGPT.OpenAIModule;
 using MattGPT.PineconeModule;
+using MattGPT.PostgresModule;
 using MattGPT.QdrantModule;
 using MattGPT.WeaviateModule;
 using Microsoft.AspNetCore.Authentication;
@@ -83,19 +85,13 @@ var vectorStoreConfigured = false;
 // Register document DB services based on provider.
 if (documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
 {
-    // Postgres document DB — register Npgsql data source and Postgres repository implementations.
-    builder.AddNpgsqlDataSource("mattgptdb");
-    builder.Services.AddSingleton<IConversationRepository, PostgresConversationRepository>();
-    builder.Services.AddSingleton<IProjectNameRepository, PostgresProjectNameRepository>();
-    builder.Services.AddSingleton<IUserProfileRepository, PostgresUserProfileRepository>();
-    builder.Services.AddSingleton<ISystemConfigRepository, PostgresSystemConfigRepository>();
-    builder.Services.AddSingleton<IChatSessionRepository, PostgresChatSessionRepository>();
+    builder.AddPostgresDocumentModule();
 
     // If the vector store is also Postgres, configure it here and set the flag.
     var vsOptions = builder.Configuration.GetSection(VectorStoreOptions.SectionName).Get<VectorStoreOptions>() ?? new VectorStoreOptions();
     if (vsOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
     {
-        builder.Services.AddSingleton<IVectorStore, PostgresVectorStore>();
+        builder.AddPostgresVectorModule("mattgptdb");
         vectorStoreConfigured = true;
     }
 }
@@ -130,26 +126,16 @@ if (!vectorStoreConfigured)
             break;
 
         case "postgres":
-            // Postgres vector store without Postgres document DB — register Npgsql data source if not yet registered.
-            if (!documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
             {
-                builder.AddNpgsqlDataSource("mattgpt_vectorstore");
+                // Connection "mattgptdb" is already registered when Postgres is also the doc DB provider.
+                var pgConn = documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase)
+                    ? "mattgptdb" : "mattgpt_vectorstore";
+                builder.AddPostgresVectorModule(pgConn);
             }
-            builder.Services.AddSingleton<IVectorStore, PostgresVectorStore>();
             break;
 
         case "azureaisearch":
-            {
-                var searchEndpoint = new Uri(vectorStoreOptions.Endpoint
-                    ?? throw new InvalidOperationException("VectorStore:Endpoint is required for AzureAISearch provider."));
-                var searchCredential = new AzureKeyCredential(vectorStoreOptions.ApiKey
-                    ?? throw new InvalidOperationException("VectorStore:ApiKey is required for AzureAISearch provider."));
-                var searchClient = new SearchClient(searchEndpoint, vectorStoreOptions.IndexName, searchCredential);
-                var indexClient = new SearchIndexClient(searchEndpoint, searchCredential);
-                builder.Services.AddSingleton(searchClient);
-                builder.Services.AddSingleton(indexClient);
-                builder.Services.AddSingleton<IVectorStore, AzureAISearchVectorStore>();
-            }
+            builder.AddAzureAISearchModule();
             break;
 
         case "pinecone":
@@ -189,7 +175,62 @@ builder.Services.AddOpenApi();
 
 // Register LLM services based on configuration.
 builder.Services.Configure<LlmOptions>(builder.Configuration.GetSection(LlmOptions.SectionName));
-builder.AddOpenAIModule();
+var llmOptions = builder.Configuration.GetSection(LlmOptions.SectionName).Get<LlmOptions>() ?? new LlmOptions();
+
+switch (llmOptions.Provider.ToLowerInvariant())
+{
+    case "ollama":
+        builder.AddOllamaModule();
+        break;
+
+    case "foundrylocal":
+        builder.AddFoundryLocalModule();
+        break;
+
+    case "azureopenai":
+        builder.AddAzureOpenAIModule();
+        break;
+
+    case "openai":
+        builder.AddOpenAIModule();
+        break;
+
+    case "anthropic":
+        builder.AddAnthropicModule();
+        break;
+
+    case "gemini":
+        builder.AddGeminiModule();
+        break;
+
+    default:
+        throw new InvalidOperationException(
+            $"Unsupported LLM provider: '{llmOptions.Provider}'. " +
+            "Supported values: Ollama, FoundryLocal, AzureOpenAI, OpenAI, Anthropic, Gemini.");
+}
+
+// Embedding provider fallback — for providers without native embeddings (e.g. Anthropic, Gemini).
+if (!string.IsNullOrWhiteSpace(llmOptions.EmbeddingProvider))
+{
+    switch (llmOptions.EmbeddingProvider.ToLowerInvariant())
+    {
+        case "openai":
+            builder.AddOpenAIEmbeddingModule();
+            break;
+
+        case "azureopenai":
+            builder.AddAzureOpenAIEmbeddingModule();
+            break;
+
+        case "ollama":
+            builder.AddOllamaEmbeddingModule();
+            break;
+
+        default:
+            throw new InvalidOperationException(
+                $"Unsupported LLM:EmbeddingProvider: '{llmOptions.EmbeddingProvider}'. Supported values: OpenAI, AzureOpenAI, Ollama.");
+    }
+}
 
 var app = builder.Build();
 
@@ -224,17 +265,14 @@ if (authOptions.Enabled)
     }).RequireAuthorization();
 
     // Ensure Identity database schema exists.
-    using (var scope = app.Services.CreateScope())
-    {
-        var db = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
-        if (documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
-            db.Database.Migrate();
-        else
-            db.Database.EnsureCreated();
-    }
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
+    if (documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+        db.Database.Migrate();
+    else
+        db.Database.EnsureCreated();
 }
 
-app.MapWeatherEndpoints();
 app.MapConversationsEndpoints();
 app.MapSearchEndpoints();
 app.MapChatEndpoints();

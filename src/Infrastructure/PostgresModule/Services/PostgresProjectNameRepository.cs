@@ -1,7 +1,8 @@
+using Microsoft.Extensions.Logging;
 using MattGPT.Contracts.Services;
 using Npgsql;
 
-namespace MattGPT.ApiService.Services;
+namespace MattGPT.PostgresModule.Services;
 
 /// <summary>
 /// PostgreSQL-backed implementation of <see cref="IProjectNameRepository"/>.

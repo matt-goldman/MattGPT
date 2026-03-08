@@ -1,9 +1,10 @@
+using Microsoft.Extensions.Logging;
 using System.Globalization;
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
 using Npgsql;
 
-namespace MattGPT.ApiService.Services;
+namespace MattGPT.PostgresModule.Services;
 
 /// <summary>
 /// PostgreSQL/pgvector-backed implementation of <see cref="IVectorStore"/>.
