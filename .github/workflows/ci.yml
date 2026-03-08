@@ -25,14 +25,11 @@ jobs:
         run: npm install
         working-directory: src/UI/MattGPT.Web
 
-      - name: Restore workloads
-        run: dotnet workload restore
-        
       - name: Restore dependencies
-        run: dotnet restore MattGPT.slnx
+        run: dotnet restore MattGPT-NoMAUI.slnf
 
       - name: Build
-        run: dotnet build MattGPT.slnx --no-restore --configuration Release
+        run: dotnet build MattGPT-NoMAUI.slnf --no-restore --configuration Release
 
       - name: Test
-        run: dotnet test MattGPT.slnx --no-build --configuration Release --verbosity normal
+        run: dotnet test MattGPT-NoMAUI.slnf --no-build --configuration Release --verbosity normal
