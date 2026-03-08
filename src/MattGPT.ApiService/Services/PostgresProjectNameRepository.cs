@@ -1,3 +1,4 @@
+using MattGPT.Contracts.Services;
 using Npgsql;
 
 namespace MattGPT.ApiService.Services;

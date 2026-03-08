@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using MattGPT.ApiService.Models;
+using MattGPT.Contracts.Models;
 
 namespace MattGPT.ApiService.Services;
 

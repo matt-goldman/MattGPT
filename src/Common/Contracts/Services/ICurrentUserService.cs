@@ -1,4 +1,4 @@
-namespace MattGPT.ApiService.Services;
+namespace MattGPT.Contracts.Services;
 
 /// <summary>
 /// Provides the current user's identity for data-scoping.

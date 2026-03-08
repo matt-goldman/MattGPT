@@ -1,6 +1,6 @@
-using MattGPT.ApiService.Models;
+using MattGPT.Contracts.Models;
 
-namespace MattGPT.ApiService.Services;
+namespace MattGPT.Contracts.Services;
 
 /// <summary>
 /// Provides persistence operations for <see cref="ChatSession"/> documents.

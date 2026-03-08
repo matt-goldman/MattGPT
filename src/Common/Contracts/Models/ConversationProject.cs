@@ -1,4 +1,4 @@
-namespace MattGPT.ApiService.Models;
+namespace MattGPT.Contracts.Models;
 
 /// <summary>
 /// Represents a ChatGPT "Project" — a group of conversations sharing the same

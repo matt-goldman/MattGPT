@@ -1,4 +1,5 @@
 using MattGPT.ApiService.Services;
+using MattGPT.Contracts.Services;
 
 namespace MattGPT.ApiService.Endpoints;
 

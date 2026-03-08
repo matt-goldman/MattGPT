@@ -1,4 +1,4 @@
-namespace MattGPT.ApiService.Models;
+namespace MattGPT.Contracts.Models;
 
 /// <summary>
 /// The result of parsing and linearising a single ChatGPT conversation.

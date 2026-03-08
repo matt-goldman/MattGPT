@@ -62,7 +62,7 @@ This document is the **system of record** for project planning and issue trackin
 | 28 | 014-runtime-llm-configuration-wizard.md | Runtime LLM configuration wizard | Deferred | TODO/ | Depends on 3; first step is choosing the approach. Very low priority and can come later as gold plating. |
 | 29 | 029-system-prompt-and-profile-ui.md | System prompt and user profile UI | Done | Done/ | Depends on 28, 12. Settings page with GET/PUT /user-profile and /system-prompt endpoints. |
 | 30 | 030-show-message-timestamps.md | Show message and conversation timestamps | Done | Done/ | Depends on 12, 22. Per-message timestamps and date separators. |
-| 31 | 031-conversation-search.md | Conversation history search | Done | Done/ | Depends on 7, 10, 22. /search page using existing semantic search endpoint. |
+| 31 | 031-conversation-search.md | Conversation history search | Done | Done/ | Depends on 7, 10, 22. /search page using existing semantic search endpoint. See ADR-009. |
 | 32 | 032-tool-calling-status-indicators.md | Tool-calling status indicators in chat UI | Done | Done/ | Depends on 20, 12. SSE tool_start/tool_end events; "Searching memories..." indicator. |
 | 33 | 033-spa-chat-navigation.md | SPA-style chat navigation | Done | Done/ | Depends on 22, 12. JS history.replaceState for URL updates without Blazor navigation. |
 | 34 | 034-new-chat-with-conversation-context.md | Start new chat with conversation as context | Done | Done/ | Depends on 12, 22, 25. "Continue this conversation" button on imported read-only chats. |

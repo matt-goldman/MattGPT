@@ -1,5 +1,6 @@
 using System.Threading.Channels;
-using MattGPT.ApiService.Models;
+using MattGPT.Contracts.Models;
+using MattGPT.Contracts.Services;
 
 namespace MattGPT.ApiService.Services;
 

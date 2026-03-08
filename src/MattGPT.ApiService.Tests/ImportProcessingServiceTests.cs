@@ -2,6 +2,7 @@ using System.Text;
 using System.Threading.Channels;
 using MattGPT.ApiService.Models;
 using MattGPT.ApiService.Services;
+using MattGPT.Contracts.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 

@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using MattGPT.ApiService.Models;
+using MattGPT.Contracts.Models;
 using Microsoft.Extensions.Options;
 
 namespace MattGPT.ApiService.Services;

@@ -1,6 +1,6 @@
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace MattGPT.ApiService.Models;
+namespace MattGPT.Contracts.Models;
 
 /// <summary>
 /// Stores the user's custom instructions extracted from ChatGPT's user_editable_context messages.

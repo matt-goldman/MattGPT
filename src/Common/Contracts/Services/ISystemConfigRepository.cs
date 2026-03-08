@@ -1,6 +1,6 @@
-using MattGPT.ApiService.Models;
+using MattGPT.Contracts.Models;
 
-namespace MattGPT.ApiService.Services;
+namespace MattGPT.Contracts.Services;
 
 /// <summary>Stores and retrieves the system configuration document.</summary>
 public interface ISystemConfigRepository

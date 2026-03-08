@@ -1,6 +1,6 @@
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace MattGPT.ApiService.Models;
+namespace MattGPT.Contracts.Models;
 
 /// <summary>
 /// Stores the runtime-editable system configuration, including the LLM system prompt.

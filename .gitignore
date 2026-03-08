@@ -419,3 +419,6 @@ FodyWeavers.xsd
 
 **/conversations*.json
 .idea/*
+
+# local only temp files
+/scratch/*

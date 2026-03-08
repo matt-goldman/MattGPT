@@ -1,4 +1,4 @@
-namespace MattGPT.ApiService.Models;
+namespace MattGPT.Contracts.Models;
 
 public enum ImportJobStatus { Queued, Processing, Complete, Failed }
 

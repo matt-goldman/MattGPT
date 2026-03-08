@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace MattGPT.ApiService.Models;
+namespace MattGPT.Contracts.Models;
 
 /// <summary>
 /// A single conversation from the ChatGPT export.

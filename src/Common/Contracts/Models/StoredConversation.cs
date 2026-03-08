@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace MattGPT.ApiService.Models;
+namespace MattGPT.Contracts.Models;
 
 /// <summary>Processing status of a stored conversation.</summary>
 public enum ConversationProcessingStatus { Imported, Summarised, Embedded, SummaryError, EmbeddingError }

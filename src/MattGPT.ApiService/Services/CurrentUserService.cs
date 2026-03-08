@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using MattGPT.Contracts.Services;
 using Microsoft.Extensions.Options;
 
 namespace MattGPT.ApiService.Services;

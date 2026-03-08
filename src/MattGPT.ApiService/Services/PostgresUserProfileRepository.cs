@@ -1,5 +1,6 @@
 using System.Text.Json;
-using MattGPT.ApiService.Models;
+using MattGPT.Contracts.Models;
+using MattGPT.Contracts.Services;
 using Npgsql;
 
 namespace MattGPT.ApiService.Services;

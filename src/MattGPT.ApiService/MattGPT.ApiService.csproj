@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Common\Contracts\MattGPT.Contracts.csproj" />
     <ProjectReference Include="..\MattGPT.ServiceDefaults\MattGPT.ServiceDefaults.csproj" />
   </ItemGroup>
 

@@ -1,4 +1,4 @@
-using MattGPT.ApiService.Models;
+using MattGPT.Contracts.Models;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
 
