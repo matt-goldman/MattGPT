@@ -1,5 +1,3 @@
-using MongoDB.Bson.Serialization.Attributes;
-
 namespace MattGPT.Contracts.Models;
 
 /// <summary>
@@ -9,7 +7,6 @@ namespace MattGPT.Contracts.Models;
 public class ProjectName
 {
     /// <summary>The ConversationTemplateId that identifies the project group.</summary>
-    [BsonId]
     public string TemplateId { get; set; } = string.Empty;
 
     /// <summary>The user-assigned display name for this project.</summary>

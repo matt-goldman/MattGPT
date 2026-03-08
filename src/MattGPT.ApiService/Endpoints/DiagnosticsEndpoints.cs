@@ -1,8 +1,9 @@
+using MattGPT.Contracts;
+using MattGPT.Contracts.Models;
+using MattGPT.Contracts.Services;
+using MattGPT.ApiService.Services;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using MattGPT.Contracts.Models;
-using MattGPT.ApiService.Services;
-using MattGPT.Contracts.Services;
 
 namespace MattGPT.ApiService.Endpoints;
 

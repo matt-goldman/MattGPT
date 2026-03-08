@@ -1,5 +1,3 @@
-using MongoDB.Bson.Serialization.Attributes;
-
 namespace MattGPT.Contracts.Models;
 
 /// <summary>
@@ -9,7 +7,6 @@ namespace MattGPT.Contracts.Models;
 public class SystemConfig
 {
     /// <summary>Fixed document ID — only one config document is maintained.</summary>
-    [BsonId]
     public string Id { get; set; } = "system-config";
 
     /// <summary>The system prompt sent to the LLM on every chat request. Null means use the default.</summary>

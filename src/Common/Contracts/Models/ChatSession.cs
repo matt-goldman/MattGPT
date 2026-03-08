@@ -1,6 +1,3 @@
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization.Attributes;
-
 namespace MattGPT.Contracts.Models;
 
 /// <summary>Lifecycle status of a chat session.</summary>
@@ -24,8 +21,6 @@ public class ChatSessionMessage
 public class ChatSession
 {
     /// <summary>Unique session identifier, used as the MongoDB document _id.</summary>
-    [BsonId]
-    [BsonRepresentation(BsonType.String)]
     public Guid SessionId { get; set; } = Guid.NewGuid();
 
     /// <summary>Auto-generated title derived from the first user message.</summary>

@@ -2,7 +2,6 @@
 using MattGPT.ApiClient;
 using MattGPT.UI.Auth;
 using MattGPT.UI.Services;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Plugin.Maui.SmartNavigation.Attributes;
 
@@ -24,13 +23,7 @@ public static partial class MauiProgram
 			.UseAutodependencies()
             .UseMauiCommunityToolkit();
 
-		// Load configuration from the embedded appsettings.json.
-		var assembly = typeof(MauiProgram).Assembly;
-		using var configStream = assembly.GetManifestResourceStream("MattGPT.UI.appsettings.json");
-		if (configStream is not null)
-			builder.Configuration.AddJsonStream(configStream);
-
-		var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "http://localhost:5000";
+		var apiBaseUrl = "http://localhost:5000"; // TODO: replace with Aspire variable
 
 		// Register auth services
 		builder.Services.AddSingleton<MobileAuthService>();

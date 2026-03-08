@@ -1,5 +1,3 @@
-using MongoDB.Bson.Serialization.Attributes;
-
 namespace MattGPT.Contracts.Models;
 
 /// <summary>
@@ -9,7 +7,6 @@ namespace MattGPT.Contracts.Models;
 public class UserProfile
 {
     /// <summary>Fixed document ID — only one profile document is maintained.</summary>
-    [BsonId]
     public string Id { get; set; } = "user-profile";
 
     /// <summary>The "About me" section from ChatGPT custom instructions.</summary>

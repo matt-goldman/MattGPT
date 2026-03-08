@@ -1,5 +1,6 @@
 using System.Globalization;
 using MattGPT.Contracts.Models;
+using MattGPT.Contracts.Services;
 using Npgsql;
 
 namespace MattGPT.ApiService.Services;

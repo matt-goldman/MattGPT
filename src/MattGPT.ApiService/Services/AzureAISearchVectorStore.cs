@@ -4,6 +4,7 @@ using Azure.Search.Documents.Indexes;
 using Azure.Search.Documents.Indexes.Models;
 using Azure.Search.Documents.Models;
 using MattGPT.Contracts.Models;
+using MattGPT.Contracts.Services;
 
 namespace MattGPT.ApiService.Services;
 

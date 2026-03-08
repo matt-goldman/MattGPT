@@ -1,5 +1,5 @@
 using System.Threading.Channels;
-using MattGPT.ApiService.Models;
+using MattGPT.Contracts.Models;
 using MattGPT.ApiService.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;

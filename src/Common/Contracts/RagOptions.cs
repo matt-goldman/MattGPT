@@ -1,4 +1,4 @@
-namespace MattGPT.ApiService;
+namespace MattGPT.Contracts;
 
 /// <summary>
 /// Controls how RAG retrieval and tool calling interact.
@@ -36,7 +36,7 @@ public class RagOptions
     /// </summary>
     public RagMode Mode { get; set; } = RagMode.WithPrompt;
 
-    /// <summary>Number of similar conversations to retrieve from Qdrant (top-K) in <see cref="RagMode.WithPrompt"/> mode.</summary>
+    /// <summary>Number of similar conversations to retrieve from the vector store (top-K) in <see cref="RagMode.WithPrompt"/> mode.</summary>
     public int TopK { get; set; } = 5;
 
     /// <summary>

@@ -1,4 +1,4 @@
-namespace MattGPT.ApiService;
+namespace MattGPT.Contracts;
 
 public class LlmOptions
 {

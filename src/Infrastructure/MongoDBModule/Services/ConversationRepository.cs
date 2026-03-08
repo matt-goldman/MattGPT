@@ -2,7 +2,7 @@ using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
 using MongoDB.Driver;
 
-namespace MattGPT.ApiService.Services;
+namespace MattGPT.MongoDBModule.Services;
 
 /// <summary>
 /// MongoDB-backed implementation of <see cref="IConversationRepository"/>.

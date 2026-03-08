@@ -1,4 +1,4 @@
-using MattGPT.ApiService.Models;
+using MattGPT.Contracts.Models;
 using MattGPT.ApiService.Services;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;

@@ -2,10 +2,13 @@ using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MattGPT.Contracts;
 using MattGPT.Contracts.Models;
+using MattGPT.Contracts.Services;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace MattGPT.ApiService.Services;
+namespace MattGPT.WeaviateModule.Services;
 
 /// <summary>
 /// Weaviate-backed implementation of <see cref="IVectorStore"/>.

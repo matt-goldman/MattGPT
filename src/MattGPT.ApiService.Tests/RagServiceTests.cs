@@ -1,6 +1,8 @@
 using MattGPT.ApiService;
-using MattGPT.ApiService.Models;
 using MattGPT.ApiService.Services;
+using MattGPT.Contracts;
+using MattGPT.Contracts.Models;
+using MattGPT.Contracts.Services;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -12,7 +14,7 @@ namespace MattGPT.ApiService.Tests;
 /// </summary>
 internal sealed class FakeSearchVectorStore(IReadOnlyList<VectorSearchResult> results) : IVectorStore
 {
-    public Task UpsertAsync(MattGPT.ApiService.Models.StoredConversation conversation, float[] vector, CancellationToken ct = default)
+    public Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
         => Task.CompletedTask;
 
     public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(

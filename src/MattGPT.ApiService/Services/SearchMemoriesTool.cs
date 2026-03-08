@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text;
+using MattGPT.Contracts;
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
 using Microsoft.Extensions.AI;

@@ -1,4 +1,4 @@
-namespace MattGPT.ApiService;
+namespace MattGPT.Contracts;
 
 /// <summary>Configuration options for the document database provider.</summary>
 public class DocumentDbOptions

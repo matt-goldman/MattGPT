@@ -1,5 +1,5 @@
 using System.Text.Json;
-using MattGPT.ApiService.Models;
+using MattGPT.Contracts.Models;
 
 namespace MattGPT.ApiService.Tests;
 

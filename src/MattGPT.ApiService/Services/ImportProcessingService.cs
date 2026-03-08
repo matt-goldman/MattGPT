@@ -124,7 +124,7 @@ public class ImportProcessingService(
             logger.LogInformation("Auto-embedding: starting embedding generation for job {JobId}.", jobId);
 
             if (job is not null)
-                job.EmbeddingStatus = Models.EmbeddingJobStatus.InProgress;
+                job.EmbeddingStatus = EmbeddingJobStatus.InProgress;
 
             using var scope = serviceProvider.CreateScope();
             var embedder = scope.ServiceProvider.GetRequiredService<EmbeddingService>();
@@ -146,7 +146,7 @@ public class ImportProcessingService(
                 job.EmbeddedConversations = result.Embedded;
                 job.EmbeddingErrors = result.Errors;
                 job.EmbeddingSkipped = result.Skipped;
-                job.EmbeddingStatus = Models.EmbeddingJobStatus.Complete;
+                job.EmbeddingStatus = EmbeddingJobStatus.Complete;
             }
 
             logger.LogInformation(
@@ -157,7 +157,7 @@ public class ImportProcessingService(
         {
             if (job is not null)
             {
-                job.EmbeddingStatus = Models.EmbeddingJobStatus.Failed;
+                job.EmbeddingStatus = EmbeddingJobStatus.Failed;
                 job.EmbeddingErrorMessage = ex.Message;
             }
 
@@ -183,7 +183,7 @@ public class ImportProcessingService(
                 return;
             }
 
-            await userProfileRepository.UpsertAsync(new Models.UserProfile
+            await userProfileRepository.UpsertAsync(new UserProfile
             {
                 UserProfileText = profileText,
                 UserInstructions = instructions,

@@ -1,22 +1,24 @@
-using Azure.AI.OpenAI;
+using Azure;
+using Azure.Search.Documents;
+using Azure.Search.Documents.Indexes;
+using MattGPT.ApiService;
+using MattGPT.ApiService.Endpoints;
+using MattGPT.ApiService.Services;
+using MattGPT.Contracts;
+using MattGPT.Contracts.Services;
+using MattGPT.MongoDBModule;
+using MattGPT.OpenAIModule;
+using MattGPT.PineconeModule;
+using MattGPT.QdrantModule;
+using MattGPT.WeaviateModule;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
-using MattGPT.ApiService;
-using MattGPT.ApiService.Endpoints;
-using MattGPT.ApiService.Services;
-using OpenAI;
-using System.ClientModel;
 using System.Security.Claims;
 using System.Threading.Channels;
-using Azure;
-using Azure.Search.Documents;
-using Azure.Search.Documents.Indexes;
-using Pinecone;
-using MattGPT.Contracts.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -100,12 +102,7 @@ if (documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnore
 else
 {
     // MongoDB (default) — register MongoDB client and repository implementations.
-    builder.AddMongoDBClient("mattgptdb");
-    builder.Services.AddSingleton<IConversationRepository, ConversationRepository>();
-    builder.Services.AddSingleton<IProjectNameRepository, ProjectNameRepository>();
-    builder.Services.AddSingleton<IUserProfileRepository, UserProfileRepository>();
-    builder.Services.AddSingleton<ISystemConfigRepository, SystemConfigRepository>();
-    builder.Services.AddSingleton<IChatSessionRepository, ChatSessionRepository>();
+    builder.AddMongoDBModule();
 }
 
 // Add services to the container.
@@ -129,7 +126,7 @@ if (!vectorStoreConfigured)
     switch (vectorStoreOptions.Provider.ToLowerInvariant())
     {
         case "qdrant":
-            
+            builder.AddQdrantModule();
             break;
 
         case "postgres":
@@ -156,31 +153,11 @@ if (!vectorStoreConfigured)
             break;
 
         case "pinecone":
-            {
-                var pineconeClient = new PineconeClient(vectorStoreOptions.ApiKey
-                    ?? throw new InvalidOperationException("VectorStore:ApiKey is required for Pinecone provider."));
-                builder.Services.AddSingleton(pineconeClient);
-                builder.Services.AddSingleton<IVectorStore>(sp =>
-                    new PineconeVectorStore(
-                        pineconeClient,
-                        sp.GetRequiredService<ILogger<PineconeVectorStore>>(),
-                        vectorStoreOptions.IndexName));
-            }
+            builder.AddPineconeModule();
             break;
 
         case "weaviate":
-            {
-                var weaviateEndpoint = vectorStoreOptions.Endpoint
-                    ?? throw new InvalidOperationException("VectorStore:Endpoint is required for Weaviate provider.");
-                builder.Services.AddHttpClient<WeaviateVectorStore>(client =>
-                {
-                    client.BaseAddress = new Uri(weaviateEndpoint.TrimEnd('/') + "/");
-                    if (!string.IsNullOrEmpty(vectorStoreOptions.ApiKey))
-                        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {vectorStoreOptions.ApiKey}");
-                });
-                builder.Services.AddSingleton<IVectorStore>(sp =>
-                    sp.GetRequiredService<WeaviateVectorStore>());
-            }
+            builder.AddWeaviateModule();
             break;
 
         default:
@@ -211,167 +188,8 @@ builder.Services.Configure<FormOptions>(options =>
 builder.Services.AddOpenApi();
 
 // Register LLM services based on configuration.
-var llmOptions = builder.Configuration.GetSection(LlmOptions.SectionName).Get<LlmOptions>() ?? new LlmOptions();
 builder.Services.Configure<LlmOptions>(builder.Configuration.GetSection(LlmOptions.SectionName));
-
-var embeddingModelId = llmOptions.EmbeddingModelId ?? llmOptions.ModelId;
-
-switch (llmOptions.Provider.ToLowerInvariant())
-{
-    case "ollama":
-        // Ollama models running on CPU can take a long time to load and generate,
-        // especially with large RAG prompts. Override the default 100s HttpClient
-        // timeout for the Ollama-backed HttpClients.
-        builder.Services.ConfigureHttpClientDefaults(http =>
-        {
-            http.ConfigureHttpClient(client =>
-            {
-                client.Timeout = TimeSpan.FromMinutes(10);
-            });
-        });
-
-        // When launched via the AppHost, connection names are injected as environment
-        // variables. When running standalone (e.g. dotnet run), fall back to creating
-        // an OllamaApiClient directly from the configured endpoint.
-        if (llmOptions.ChatConnectionName is { } chatConnectionName)
-        {
-            var chatBuilder = builder.AddOllamaApiClient(chatConnectionName).AddChatClient();
-            if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
-                chatBuilder.UseFunctionInvocation();
-        }
-        else
-        {
-            var chatEndpoint = new Uri(llmOptions.Endpoint);
-            var chatBuilder = builder.Services.AddChatClient(new OllamaSharp.OllamaApiClient(chatEndpoint, llmOptions.ModelId));
-            if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
-                chatBuilder.UseFunctionInvocation();
-        }
-
-        if (llmOptions.EmbeddingConnectionName is { } embeddingConnectionName)
-        {
-            builder.AddOllamaApiClient(embeddingConnectionName).AddEmbeddingGenerator();
-        }
-        else
-        {
-            var embeddingEndpoint = new Uri(llmOptions.Endpoint);
-            builder.Services.AddEmbeddingGenerator(
-                new OllamaSharp.OllamaApiClient(embeddingEndpoint, embeddingModelId));
-        }
-        break;
-
-    case "foundrylocal":
-        // FoundryLocal uses an OpenAI-compatible API. Local servers do not validate
-        // the API key, but the SDK requires a non-null value. Use a placeholder if
-        // none is configured; production deployments should set LLM:ApiKey explicitly.
-        var foundryClient = new OpenAIClient(
-            new ApiKeyCredential(llmOptions.ApiKey ?? "local"),
-            new OpenAIClientOptions { Endpoint = new Uri(llmOptions.Endpoint) });
-        {
-            var chatBuilder = builder.Services.AddChatClient(foundryClient.GetChatClient(llmOptions.ModelId).AsIChatClient());
-            if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
-                chatBuilder.UseFunctionInvocation();
-        }
-        builder.Services.AddEmbeddingGenerator(foundryClient.GetEmbeddingClient(embeddingModelId).AsIEmbeddingGenerator());
-        break;
-
-    case "azureopenai":
-        var azureClient = new AzureOpenAIClient(
-            new Uri(llmOptions.Endpoint),
-            new ApiKeyCredential(llmOptions.ApiKey ?? throw new InvalidOperationException("LLM:ApiKey is required for AzureOpenAI provider.")));
-        {
-            var chatBuilder = builder.Services.AddChatClient(azureClient.GetChatClient(llmOptions.ModelId).AsIChatClient());
-            if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
-                chatBuilder.UseFunctionInvocation();
-        }
-        builder.Services.AddEmbeddingGenerator(azureClient.GetEmbeddingClient(embeddingModelId).AsIEmbeddingGenerator());
-        break;
-
-    case "openai":
-        // Direct OpenAI API (not via Azure). Uses the same OpenAI SDK but with the
-        // official endpoint and a real API key.
-        var openaiClient = new OpenAIClient(
-            new ApiKeyCredential(llmOptions.ApiKey ?? throw new InvalidOperationException("LLM:ApiKey is required for OpenAI provider.")));
-        {
-            var chatBuilder = builder.Services.AddChatClient(openaiClient.GetChatClient(llmOptions.ModelId).AsIChatClient());
-            if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
-                chatBuilder.UseFunctionInvocation();
-        }
-        builder.Services.AddEmbeddingGenerator(openaiClient.GetEmbeddingClient(embeddingModelId).AsIEmbeddingGenerator());
-        break;
-
-    case "anthropic":
-        // Anthropic Claude via the Anthropic.SDK package.
-        // Note: Anthropic does not provide an embedding API. Embeddings must be configured
-        // separately via LLM:EmbeddingProvider (e.g. "OpenAI") or the app will fail when
-        // generating embeddings.
-        var anthropicClient = new Anthropic.SDK.AnthropicClient(llmOptions.ApiKey
-            ?? throw new InvalidOperationException("LLM:ApiKey is required for Anthropic provider."));
-        {
-            var chatBuilder = builder.Services.AddChatClient(anthropicClient.Messages);
-            if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
-                chatBuilder.UseFunctionInvocation();
-        }
-        // Anthropic has no embedding API — embeddings are handled below by the EmbeddingProvider fallback.
-        break;
-
-    case "gemini":
-        // Google Gemini via GeminiDotnet.Extensions.AI.
-        var geminiOptions = new GeminiDotnet.GeminiClientOptions
-        {
-            ApiKey = llmOptions.ApiKey
-                ?? throw new InvalidOperationException("LLM:ApiKey is required for Gemini provider."),
-            ModelId = llmOptions.ModelId
-        };
-        {
-            var chatBuilder = builder.Services.AddChatClient(
-                new GeminiDotnet.Extensions.AI.GeminiChatClient(geminiOptions));
-            if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
-                chatBuilder.UseFunctionInvocation();
-        }
-        // Gemini embedding support through M.E.AI is limited; use EmbeddingProvider fallback if needed.
-        break;
-
-    default:
-        throw new InvalidOperationException(
-            $"Unsupported LLM provider: '{llmOptions.Provider}'. " +
-            "Supported values: Ollama, FoundryLocal, AzureOpenAI, OpenAI, Anthropic, Gemini.");
-}
-
-// --- Embedding provider fallback ---
-// For providers that don't support embeddings natively (Anthropic, Gemini), a separate
-// embedding provider can be configured via LLM:EmbeddingProvider. This registers the
-// IEmbeddingGenerator after the main LLM switch, overriding or filling the gap.
-if (llmOptions.EmbeddingProvider is { } embProvider && !string.IsNullOrWhiteSpace(embProvider))
-{
-    var embApiKey = llmOptions.EmbeddingApiKey ?? llmOptions.ApiKey;
-    var embEndpoint = llmOptions.EmbeddingEndpoint ?? llmOptions.Endpoint;
-
-    switch (embProvider.ToLowerInvariant())
-    {
-        case "openai":
-            var embOpenAI = new OpenAIClient(
-                new ApiKeyCredential(embApiKey ?? throw new InvalidOperationException("LLM:EmbeddingApiKey (or LLM:ApiKey) is required for OpenAI embedding provider.")));
-            builder.Services.AddEmbeddingGenerator(embOpenAI.GetEmbeddingClient(embeddingModelId).AsIEmbeddingGenerator());
-            break;
-
-        case "azureopenai":
-            var embAzure = new AzureOpenAIClient(
-                new Uri(embEndpoint),
-                new ApiKeyCredential(embApiKey ?? throw new InvalidOperationException("LLM:EmbeddingApiKey (or LLM:ApiKey) is required for AzureOpenAI embedding provider.")));
-            builder.Services.AddEmbeddingGenerator(embAzure.GetEmbeddingClient(embeddingModelId).AsIEmbeddingGenerator());
-            break;
-
-        case "ollama":
-            var embOllamaEndpoint = new Uri(embEndpoint);
-            builder.Services.AddEmbeddingGenerator(
-                new OllamaSharp.OllamaApiClient(embOllamaEndpoint, embeddingModelId));
-            break;
-
-        default:
-            throw new InvalidOperationException(
-                $"Unsupported LLM:EmbeddingProvider: '{embProvider}'. Supported values: OpenAI, AzureOpenAI, Ollama.");
-    }
-}
+builder.AddOpenAIModule();
 
 var app = builder.Build();
 

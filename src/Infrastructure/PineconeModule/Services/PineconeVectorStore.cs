@@ -1,7 +1,9 @@
 using MattGPT.Contracts.Models;
+using MattGPT.Contracts.Services;
+using Microsoft.Extensions.Logging;
 using Pinecone;
 
-namespace MattGPT.ApiService.Services;
+namespace MattGPT.PineconeModule.Services;
 
 /// <summary>
 /// Pinecone-backed implementation of <see cref="IVectorStore"/>.

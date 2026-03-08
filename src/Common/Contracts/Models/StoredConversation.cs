@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using MongoDB.Bson.Serialization.Attributes;
 
 namespace MattGPT.Contracts.Models;
 
@@ -73,7 +72,7 @@ public class StoredMessage
 
     private const string HiddenContentReferenceType = "hidden";
 
-    internal static StoredMessage From(Message message)
+    public static StoredMessage From(Message message)
     {
         var stored = new StoredMessage
         {
@@ -281,7 +280,6 @@ public class StoredMessage
 public class StoredConversation
 {
     /// <summary>The original conversation ID from the ChatGPT export, used as the MongoDB document _id.</summary>
-    [BsonId]
     public string ConversationId { get; set; } = string.Empty;
 
     public string? Title { get; set; }
@@ -331,7 +329,7 @@ public class StoredConversation
     /// </summary>
     public string? UserId { get; set; }
 
-    internal static StoredConversation From(ParsedConversation conversation, string? userId = null) => new()
+    public static StoredConversation From(ParsedConversation conversation, string? userId = null) => new()
     {
         ConversationId = conversation.Id,
         Title = conversation.Title,
