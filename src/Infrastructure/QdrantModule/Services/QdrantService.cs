@@ -1,24 +1,10 @@
 using MattGPT.Contracts.Models;
+using MattGPT.Contracts.Services;
+using Microsoft.Extensions.Logging;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
 
-namespace MattGPT.ApiService.Services;
-
-/// <summary>A provider-neutral vector search result.</summary>
-public record VectorSearchResult(string ConversationId, float Score, string? Title, string? Summary);
-
-/// <summary>Provider-agnostic abstraction for vector storage and similarity search.</summary>
-public interface IVectorStore
-{
-    /// <summary>Upsert a conversation embedding with its metadata payload.</summary>
-    Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default);
-
-    /// <summary>Search for the most similar conversations to the given query vector, optionally scoped to a user.</summary>
-    Task<IReadOnlyList<VectorSearchResult>> SearchAsync(float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default);
-
-    /// <summary>Return the number of points in the conversations collection, or null if the collection doesn't exist.</summary>
-    Task<ulong?> GetPointCountAsync(CancellationToken ct = default);
-}
+namespace MattGPT.QdrantModule.Services;
 
 /// <summary>
 /// Qdrant-backed implementation of <see cref="IVectorStore"/>.

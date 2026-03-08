@@ -129,8 +129,7 @@ if (!vectorStoreConfigured)
     switch (vectorStoreOptions.Provider.ToLowerInvariant())
     {
         case "qdrant":
-            builder.AddQdrantClient("qdrant");
-            builder.Services.AddSingleton<IVectorStore, QdrantVectorStore>();
+            
             break;
 
         case "postgres":
@@ -186,8 +185,6 @@ if (!vectorStoreConfigured)
 
         default:
             Console.Error.WriteLine($"[WARNING] Unknown VectorStore:Provider '{vectorStoreOptions.Provider}'; falling back to Qdrant.");
-            builder.AddQdrantClient("qdrant");
-            builder.Services.AddSingleton<IVectorStore, QdrantVectorStore>();
             break;
     }
 }

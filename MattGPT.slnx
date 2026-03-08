@@ -9,7 +9,7 @@
   <Folder Name="/src/Infrastructure/">
     <Project Path="src/Infrastructure/OpenAIModule/OpenAIModule.csproj" Id="16e2810d-7568-4b0f-94cd-4287da712392" />
     <Project Path="src/Infrastructure/PineconeModule/PineconeModule.csproj" Id="01a8d0a2-821b-40fb-8b3b-768c24f8a8fc" />
-    <Project Path="src/Infrastructure/QdrantModule/QdrantModule.csproj" Id="621eebd2-bb73-494b-ad50-d17ec1acc406" />
+    <Project Path="src/Infrastructure/QdrantModule/MattGPT.QdrantModule.csproj" Id="621eebd2-bb73-494b-ad50-d17ec1acc406" />
     <Project Path="src/Infrastructure/WeaviateModule/WeaviateModule.csproj" Id="89e1a7a6-ff84-4dcf-b827-7d863491b314" />
   </Folder>
   <Folder Name="/src/Orchestration/">
