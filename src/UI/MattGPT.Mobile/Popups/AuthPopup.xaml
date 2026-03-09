@@ -4,10 +4,67 @@
              xmlns:vm="clr-namespace:MattGPT.Mobile.ViewModels"
              x:DataType="vm:AuthViewModel"
              x:Class="MattGPT.Mobile.Popups.AuthPopup">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
-    </VerticalStackLayout>
+    <Grid VerticalOptions="Center"
+          HorizontalOptions="Center">
+        <VerticalStackLayout Padding="24"
+                             Spacing="16"
+                             BackgroundColor="White"
+                             HorizontalOptions="Center"
+                             VerticalOptions="Center"
+                             IsVisible="{Binding IsLoginMode}">
+            <Label Text="Sign in"
+                   FontSize="18"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center" />
+            <Label Text="{Binding SuccessMessage}"
+                   HorizontalOptions="Center"/>
+            <Label Text="{Binding ErrorMessage}"
+                   TextColor="Red"
+                   IsVisible="{Binding IsErrorState}"
+                   HorizontalOptions="Center"/>
+            <Entry Text="{Binding Username}"
+                   Placeholder="Username"
+                   HorizontalOptions="Center"/>
+            <Entry Text="{Binding Password}"
+                   Placeholder="Password"
+                   IsPassword="True" />
+            <Button Text="Login"
+                    Command="{Binding AuthenticateCommand}" />
+        </VerticalStackLayout>
+
+        <VerticalStackLayout Padding="24"
+                     Spacing="16"
+                     BackgroundColor="White"
+                     HorizontalOptions="Center"
+                     VerticalOptions="Center"
+                     IsVisible="{Binding IsRegisterMode}">
+            <Label Text="Sign in"
+                   FontSize="18"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center" />
+            <Label Text="{Binding SuccessMessage}"
+                   HorizontalOptions="Center"/>
+            <Label Text="{Binding ErrorMessage}"
+                   TextColor="Red"
+                   IsVisible="{Binding IsErrorState}"
+                   HorizontalOptions="Center"/>
+            <Entry Text="{Binding Username}"
+                   Placeholder="Username"
+                   HorizontalOptions="Center"/>
+            <Entry Text="{Binding Password}"
+                   Placeholder="Password"
+                   IsPassword="True" />
+            <Entry Text="{Binding ConfirmPassword}"
+                   Placeholder="ConfirmPassword"
+                   IsPassword="True" />
+            <Button Text="Register"
+                    Command="{Binding RegisterCommand}" />
+        </VerticalStackLayout>
+
+        <ActivityIndicator IsRunning="{Binding IsBusy}"
+                           IsVisible="{Binding IsBusy}"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center" />
+
+    </Grid>
 </ContentView>
