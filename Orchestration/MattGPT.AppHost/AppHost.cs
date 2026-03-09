@@ -1,5 +1,7 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
+// TODO: organise these regions into extension methods in other satatic classes
+#region Configuration
 // --- LLM configuration (from appsettings.json, env vars, or user secrets) ---
 // To change the LLM provider or model, edit appsettings.json, set environment variables
 // (e.g. LLM__Provider=AzureOpenAI), or use dotnet user-secrets.
@@ -25,6 +27,9 @@ var vectorStoreEndpoint = builder.Configuration["VectorStore:Endpoint"];
 var vectorStoreApiKey = builder.Configuration["VectorStore:ApiKey"];
 var vectorStoreIndexName = builder.Configuration["VectorStore:IndexName"];
 
+#endregion
+
+#region Infrastructure provisioning
 // --- Infrastructure resources ---
 
 // Postgres is provisioned when used for document DB, vector store, or both.
@@ -52,6 +57,9 @@ if (!isPostgresDocumentDb)
         .AddDatabase("mattgptdb");
 }
 
+#endregion
+
+# region API service and dependencies
 // --- API service ---
 var apiService = builder.AddProject<Projects.MattGPT_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
@@ -147,6 +155,10 @@ if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
     }
 }
 
+#endregion
+
+#region UI
+
 // --- Web frontend ---
 builder.AddProject<Projects.MattGPT_Web>("webfrontend")
     .WithExternalHttpEndpoints()
@@ -154,5 +166,32 @@ builder.AddProject<Projects.MattGPT_Web>("webfrontend")
     .WithEnvironment("Auth__Enabled", authEnabled)
     .WithReference(apiService)
     .WaitFor(apiService);
+
+// --- Dev tunnel for secure external access to the API ---
+var tunnel = builder.AddDevTunnel("tunnel")
+    .WithAnonymousAccess()
+    .WithReference(apiService.GetEndpoint("https"));
+
+var mauiapp = builder.AddMauiProject("mauiapp", @"../../src/UI/MattGPT.Mobile/MattGPT.Mobile.csproj");
+
+// Add Windows device (uses localhost directly)
+mauiapp.AddWindowsDevice()
+    .WithReference(apiService);
+
+// Add Mac Catalyst device (uses localhost directly)
+mauiapp.AddMacCatalystDevice()
+    .WithReference(apiService);
+
+// Add iOS simulator with Dev Tunnel
+mauiapp.AddiOSSimulator()
+    .WithOtlpDevTunnel() // Required for OpenTelemetry data collection
+    .WithReference(apiService, tunnel);
+
+// Add Android emulator with Dev Tunnel
+mauiapp.AddAndroidEmulator()
+    .WithOtlpDevTunnel() // Required for OpenTelemetry data collection
+    .WithReference(apiService, tunnel);
+
+#endregion
 
 builder.Build().Run();

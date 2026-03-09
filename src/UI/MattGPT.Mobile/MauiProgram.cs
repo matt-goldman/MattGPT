@@ -23,16 +23,11 @@ public static partial class MauiProgram
 			.UseAutodependencies()
             .UseMauiCommunityToolkit();
 
-		var apiBaseUrl = "http://localhost:5000"; // TODO: replace with Aspire variable
-
 		// Register auth services
 		builder.Services.AddSingleton<MobileAuthService>();
 		builder.Services.AddTransient<AuthDelegatingHandler>();
 
-		// Register MattGPT API client.
-		// Override ApiBaseUrl in appsettings.json to point to your deployed API service.
-		// For Android emulator connecting to the host, use http://10.0.2.2:<port>.
-		builder.Services.AddMattGptApiClient(new Uri(apiBaseUrl))
+		builder.Services.AddMattGptApiClient(new Uri("https+http://apiservice"))
 			.AddHttpMessageHandler<AuthDelegatingHandler>();
 
 #if DEBUG
