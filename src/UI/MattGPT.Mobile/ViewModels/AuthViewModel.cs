@@ -7,7 +7,7 @@ using Plugin.Maui.SmartNavigation.Attributes;
 namespace MattGPT.Mobile.ViewModels;
 
 [Ignore]
-internal partial class AuthViewModel(
+public partial class AuthViewModel(
     IPopupService popupService,
     MobileAuthService authService) : ObservableObject
 {

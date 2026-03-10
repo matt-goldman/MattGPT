@@ -14,7 +14,7 @@
       "src\\Infrastructure\\PostgresModule\\MattGPT.PostgresModule.csproj",
       "src\\Infrastructure\\QdrantModule\\MattGPT.QdrantModule.csproj",
       "src\\Infrastructure\\WeaviateModule\\MattGPT.WeaviateModule.csproj",
-      "src\\Orchestration\\MattGPT.ServiceDefaults\\MattGPT.ServiceDefaults.csproj",
+      "Orchestration\\MattGPT.ServiceDefaults\\MattGPT.ServiceDefaults.csproj",
       "src\\UI\\MattGPT.ApiClient\\MattGPT.ApiClient.csproj",
       "src\\UI\\MattGPT.Web\\MattGPT.Web.csproj",
       "tests\\MattGPT.ApiService.Tests\\MattGPT.ApiService.Tests.csproj"

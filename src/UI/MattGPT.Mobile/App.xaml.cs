@@ -4,13 +4,16 @@ namespace MattGPT.Mobile;
 
 public partial class App : Application
 {
-	public App()
+    private readonly AppShell shell;
+
+    public App(AppShell shell)
 	{
 		InitializeComponent();
-	}
+        this.shell = shell;
+    }
 
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
-		return new Window(new AppShell());
+		return new Window(shell);
 	}
 }

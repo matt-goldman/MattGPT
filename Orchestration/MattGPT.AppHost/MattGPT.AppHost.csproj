@@ -17,9 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\API\MattGPT.ApiService\MattGPT.ApiService.csproj" />
-    <ProjectReference Include="..\..\UI\MattGPT.Mobile\MattGPT.Mobile.csproj" />
-    <ProjectReference Include="..\..\UI\MattGPT.Web\MattGPT.Web.csproj" />
+    <ProjectReference Include="..\..\src\API\MattGPT.ApiService\MattGPT.ApiService.csproj" />
+    <ProjectReference Include="..\..\src\UI\MattGPT.Web\MattGPT.Web.csproj" />
   </ItemGroup>
 
 </Project>

@@ -13,7 +13,7 @@ namespace MattGPT.Mobile.Services;
 /// storage. It acts as a wrapper around the underlying authentication service to facilitate persistent authentication
 /// and token refresh scenarios in mobile environments.</remarks>
 /// <param name="authService">An instance of the authentication service used to perform user authentication operations.</param>
-internal class MobileAuthService (IAuthService authService)
+public class MobileAuthService (IAuthService authService)
 {
     private const string StoredLoginKey = "StoredLogin";
 
