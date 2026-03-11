@@ -2,6 +2,8 @@
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:MattGPT.Mobile.ViewModels"
+             xmlns:fs="clr-namespace:FlagstoneUI.Core.Controls;assembly=FlagstoneUI.Core"
+             xmlns:icons="clr-namespace:Plugin.Maui.Lucide;assembly=Plugin.Maui.Lucide"
              x:DataType="vm:AuthViewModel"
              x:Class="MattGPT.Mobile.Popups.AuthPopup">
     <Grid VerticalOptions="Center"
@@ -11,6 +13,7 @@
                              BackgroundColor="White"
                              HorizontalOptions="Center"
                              VerticalOptions="Center"
+                             MinimumWidthRequest="300"
                              IsVisible="{Binding IsLoginMode}">
             <Label Text="Sign in"
                    FontSize="18"
@@ -22,23 +25,36 @@
                    TextColor="Red"
                    IsVisible="{Binding IsErrorState}"
                    HorizontalOptions="Center"/>
-            <Entry Text="{Binding Username}"
-                   Placeholder="Username"
-                   HorizontalOptions="Center"/>
-            <Entry Text="{Binding Password}"
+            <fs:FsEntry Text="{Binding Username}"
+                   Placeholder="Username"/>
+            <fs:FsEntry Text="{Binding Password}"
                    Placeholder="Password"
                    IsPassword="True" />
             <Button Text="Login"
-                    Command="{Binding AuthenticateCommand}" />
+                    Command="{Binding AuthenticateCommand}"
+                    ContentLayout="Right"
+                    ImageSource="{FontImageSource FontFamily=lucide, Glyph={x:Static icons:Icons.LogIn}}"/>
+            <FlexLayout Direction="Row"
+                        JustifyContent="SpaceBetween"
+                        AlignContent="Center"
+                        AlignItems="Center">
+                <Label Text="No account?"
+                       FontSize="Micro"/>
+                <Button Text="Register"
+                        Command="{Binding ToggleModeCommand}"
+                        Background="Transparent"
+                        TextColor="Blue"/>
+            </FlexLayout>
         </VerticalStackLayout>
 
         <VerticalStackLayout Padding="24"
-                     Spacing="16"
-                     BackgroundColor="White"
-                     HorizontalOptions="Center"
-                     VerticalOptions="Center"
-                     IsVisible="{Binding IsRegisterMode}">
-            <Label Text="Sign in"
+                             Spacing="16"
+                             BackgroundColor="White"
+                             HorizontalOptions="Center"
+                             VerticalOptions="Center"
+                             MinimumWidthRequest="300"
+                             IsVisible="{Binding IsRegisterMode}">
+            <Label Text="Sign Up"
                    FontSize="18"
                    FontAttributes="Bold"
                    HorizontalOptions="Center" />
@@ -48,17 +64,27 @@
                    TextColor="Red"
                    IsVisible="{Binding IsErrorState}"
                    HorizontalOptions="Center"/>
-            <Entry Text="{Binding Username}"
-                   Placeholder="Username"
-                   HorizontalOptions="Center"/>
-            <Entry Text="{Binding Password}"
+            <fs:FsEntry Text="{Binding Username}"
+                   Placeholder="Username"/>
+            <fs:FsEntry Text="{Binding Password}"
                    Placeholder="Password"
                    IsPassword="True" />
-            <Entry Text="{Binding ConfirmPassword}"
+            <fs:FsEntry Text="{Binding ConfirmPassword}"
                    Placeholder="ConfirmPassword"
                    IsPassword="True" />
             <Button Text="Register"
                     Command="{Binding RegisterCommand}" />
+            <FlexLayout Direction="Row"
+                        JustifyContent="SpaceBetween"
+                        AlignContent="Center"
+                        AlignItems="Center">
+                <Label Text="Already have an account?"
+                       FontSize="Micro"/>
+                <Button Text="Sign in"
+                        Command="{Binding ToggleModeCommand}"
+                        Background="Transparent"
+                        TextColor="Blue"/>
+            </FlexLayout>
         </VerticalStackLayout>
 
         <ActivityIndicator IsRunning="{Binding IsBusy}"

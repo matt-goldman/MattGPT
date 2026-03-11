@@ -35,6 +35,7 @@ public partial class AuthViewModel(
     [ObservableProperty]
     private bool _isRegisterMode = false;
 
+    [RelayCommand]
     private void ToggleMode()
     {
         IsLoginMode = !IsLoginMode;

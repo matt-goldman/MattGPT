@@ -5,6 +5,7 @@ using MattGPT.Mobile.Popups;
 using MattGPT.Mobile.Services;
 using MattGPT.Mobile.ViewModels;
 using Microsoft.Extensions.Logging;
+using Plugin.Maui.Lucide;
 using Plugin.Maui.SmartNavigation.Attributes;
 
 namespace MattGPT.Mobile;
@@ -22,6 +23,7 @@ public static partial class MauiProgram
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
 			})
+            .UseLucide()
 			.UseAutodependencies()
             .UseMauiCommunityToolkit(static options => options.SetPopupDefaults(new DefaultPopupSettings { CanBeDismissedByTappingOutsideOfPopup = false }));
 
@@ -31,6 +33,8 @@ public static partial class MauiProgram
 		builder.Services.AddApiClient<AuthDelegatingHandler>(new Uri("https+http://apiservice"));
 
 		builder.Services.AddTransientPopup<AuthPopup, AuthViewModel>();
+
+		builder.Services.AddSingleton<AppShell>();
 
 #if DEBUG
         builder.Logging.AddDebug();
