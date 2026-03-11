@@ -81,6 +81,7 @@
         </Grid>-->
 
         <controls:AIEditor Grid.Row="2"
+                           Margin="5,5,5,2"
                            Prompt="{Binding UserInput}"
                            SendCommand="{Binding SendMessageCommand}"
                            IsEnabled="{Binding IsStreaming, Converter={StaticResource InverseBoolConverter}}" />

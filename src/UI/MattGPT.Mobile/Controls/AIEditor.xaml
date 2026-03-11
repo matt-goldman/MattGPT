@@ -8,12 +8,13 @@
             Stroke="Black"
             StrokeThickness="1">
         <FlexLayout Direction="Column"
-                    Padding="5">
+                    Padding="10,25">
             <fs:FsEditor x:Name="InputEditor"
                          Placeholder="How can I help you today?"
                          AutoSize="TextChanges"
                          TextChanged="InputEditor_TextChanged" 
-                         Margin="8" />
+                         Margin="0"
+                         Padding="0"/>
             <FlexLayout Direction="Row"
                         JustifyContent="End"
                         AlignItems="Center">
@@ -21,6 +22,9 @@
                 <fs:FsButton x:Name="EndAction"
                              Text="{x:Static icons:Icons.AudioLines}"
                              Clicked="EndAction_Clicked"
+                             WidthRequest="20"
+                             HeightRequest="20"
+                             CornerRadius="10"
                              FontFamily="lucide" />
             </FlexLayout>
         </FlexLayout>

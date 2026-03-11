@@ -5,15 +5,15 @@ namespace MattGPT.Mobile.Controls;
 // TODO: move this to FlagstoneUI
 public partial class AIEditor : ContentView
 {
-	public static readonly BindableProperty PromptPropterty = BindableProperty.Create(
+	public static readonly BindableProperty PromptProperty = BindableProperty.Create(
 		nameof(Prompt),
 		typeof(String),
 		typeof(AIEditor),
 		string.Empty);
-    public string Prompt
+	public string Prompt
 	{
-		get => (string)GetValue(PromptPropterty);
-		set => SetValue(PromptPropterty, value);
+		get => (string)GetValue(PromptProperty);
+		set => SetValue(PromptProperty, value);
 	}
 
 	public static readonly BindableProperty SendCommandProperty = BindableProperty.Create(
