@@ -30,7 +30,7 @@ public static partial class MauiProgram
 		// Register auth services
 		builder.Services.AddSingleton<MobileAuthService>();
 
-		builder.Services.AddApiClient<AuthDelegatingHandler>(new Uri("https+http://apiservice"));
+		builder.Services.AddApiClient<AuthDelegatingHandler>(new Uri("https://gqb8jt03-7321.aue.devtunnels.ms"));// "https+http://apiservice"));
 
 		builder.Services.AddTransientPopup<AuthPopup, AuthViewModel>();
 

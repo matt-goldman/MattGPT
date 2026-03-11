@@ -12,28 +12,30 @@ public partial class AuthViewModel(
     MobileAuthService authService) : ObservableObject
 {
     [ObservableProperty]
-    private string _username = string.Empty;
-    [ObservableProperty]
-    private string _password = string.Empty;
-    [ObservableProperty]
-    private string _confirmPassword = string.Empty;
+    public partial string Username { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private bool _isBusy;
+    public partial string Password { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private bool _isErrorState = false;
+    public partial string ConfirmPassword { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _errorMessage = string.Empty;
-    [ObservableProperty]
-    private string _successMessage = string.Empty;
+    public partial bool IsBusy { get; set; } = false;
 
     [ObservableProperty]
-    private bool _isLoginMode = true;
+    public partial bool IsErrorState { get; set; } = false;
 
     [ObservableProperty]
-    private bool _isRegisterMode = false;
+    public partial string ErrorMessage { get; set; } = string.Empty;
+    [ObservableProperty]
+    public partial string SuccessMessage { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool IsLoginMode { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool IsRegisterMode { get; set; }
 
     [RelayCommand]
     private void ToggleMode()
@@ -65,8 +67,16 @@ public partial class AuthViewModel(
 
         try
         {
-            await authService.LoginAsync(Username, Password);
-            isLoggedIn = true;
+            var result = await authService.LoginAsync(Username, Password);
+            if (result.Success)
+            {
+                isLoggedIn = true;
+            }
+            else
+            {
+                IsErrorState = true;
+                ErrorMessage = result.ErrorMessage?? "Unable to log you in, please check your credentials and try again (or register).";
+            }
         }
         catch (Exception ex)
         {
@@ -104,8 +114,8 @@ public partial class AuthViewModel(
         
         try
         {
-            await authService.RegisterAsync(Username, Password);
-            isRegistered = true;
+            var result = await authService.RegisterAsync(Username, Password);
+            isRegistered = result.Success;
         }
         catch (Exception ex)
         {

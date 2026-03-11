@@ -48,6 +48,8 @@
 
 		<!-- WinRT warning suppression -->
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+		<LangVersion>preview</LangVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -75,9 +77,9 @@
 	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Maui" Version="14.0.1" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-		<PackageReference Include="FlagstoneUI.Core" Version="2.0.0" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.41" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.3" />
+		<PackageReference Include="FlagstoneUI.Core" Version="2.0.1" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.50" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.4" />
 		<PackageReference Include="Plugin.Maui.Lucide" Version="1.0.1" />
 		<PackageReference Include="Plugin.Maui.SmartNavigation" Version="3.0.6" />
 	</ItemGroup>

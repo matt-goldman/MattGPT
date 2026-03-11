@@ -25,15 +25,15 @@
                    TextColor="Red"
                    IsVisible="{Binding IsErrorState}"
                    HorizontalOptions="Center"/>
-            <fs:FsEntry Text="{Binding Username}"
-                   Placeholder="Username"/>
-            <fs:FsEntry Text="{Binding Password}"
-                   Placeholder="Password"
-                   IsPassword="True" />
-            <Button Text="Login"
-                    Command="{Binding AuthenticateCommand}"
-                    ContentLayout="Right"
-                    ImageSource="{FontImageSource FontFamily=lucide, Glyph={x:Static icons:Icons.LogIn}}"/>
+            <fs:FsEntry Text="{Binding Username, Mode=TwoWay}"
+                        Placeholder="Username"/>
+            <fs:FsEntry Text="{Binding Password, Mode=TwoWay}"
+                        Placeholder="Password"
+                        IsPassword="True" />
+            <fs:FsButton Text="Login"
+                         Command="{Binding AuthenticateCommand}"
+                         ContentLayout="Right"
+                         ImageSource="{FontImageSource FontFamily=lucide, Glyph={x:Static icons:Icons.LogIn}}"/>
             <FlexLayout Direction="Row"
                         JustifyContent="SpaceBetween"
                         AlignContent="Center"
@@ -64,12 +64,12 @@
                    TextColor="Red"
                    IsVisible="{Binding IsErrorState}"
                    HorizontalOptions="Center"/>
-            <fs:FsEntry Text="{Binding Username}"
+            <fs:FsEntry Text="{Binding Username, Mode=TwoWay}"
                    Placeholder="Username"/>
-            <fs:FsEntry Text="{Binding Password}"
+            <fs:FsEntry Text="{Binding Password, Mode=TwoWay}"
                    Placeholder="Password"
                    IsPassword="True" />
-            <fs:FsEntry Text="{Binding ConfirmPassword}"
+            <fs:FsEntry Text="{Binding ConfirmPassword, Mode=TwoWay}"
                    Placeholder="ConfirmPassword"
                    IsPassword="True" />
             <Button Text="Register"

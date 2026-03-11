@@ -83,7 +83,7 @@ public partial class AIEditor : ContentView
 		else if (_isListening)
 		{
 			_isListening = false;
-			EndAction.Text = string.IsNullOrEmpty(Prompt)?  Icons.AudioLines : Icons.AArrowUp;
+			EndAction.Text = string.IsNullOrEmpty(Prompt)?  Icons.AudioLines : Icons.ArrowBigUp;
         }
 		else
 		{
