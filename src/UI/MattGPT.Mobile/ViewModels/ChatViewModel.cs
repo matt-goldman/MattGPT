@@ -86,6 +86,10 @@ public partial class ChatViewModel(IChatService chatService) : ObservableObject
             {
                 IsStreaming = false;
                 ToolStatusMessage = string.Empty;
+                // If no tokens were received (e.g. cancelled before first token or empty response),
+                // remove the placeholder assistant message so no spinner is left orphaned.
+                if (string.IsNullOrEmpty(assistantMessage.Content))
+                    Messages.Remove(assistantMessage);
             });
             _streamCts?.Dispose();
             _streamCts = null;
