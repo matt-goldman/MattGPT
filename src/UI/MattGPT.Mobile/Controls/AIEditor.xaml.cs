@@ -14,15 +14,15 @@ public partial class AIEditor : ContentView
 		propertyChanged: OnPromptChanged);
 	public string Prompt
 	{
-		get => (string)GetValue(PromptProperty);
-		set => SetValue(PromptProperty, value);
+		get => (string?)GetValue(PromptProperty) ?? string.Empty;
+		set => SetValue(PromptProperty, value ?? string.Empty);
 	}
 
 	private static void OnPromptChanged(BindableObject bindable, object oldValue, object newValue)
 	{
 		if (bindable is AIEditor editor && editor.InputEditor is not null)
 		{
-			var newText = (string)newValue;
+			var newText = (string?)newValue ?? string.Empty;
 			if (editor.InputEditor.Text != newText)
 				editor.InputEditor.Text = newText;
 		}
