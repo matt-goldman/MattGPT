@@ -3,16 +3,19 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MattGPT.Mobile.Services;
 using Plugin.Maui.SmartNavigation.Attributes;
+using System.ComponentModel.DataAnnotations;
 
 namespace MattGPT.Mobile.ViewModels;
 
 [Ignore]
 public partial class AuthViewModel(
     IPopupService popupService,
-    MobileAuthService authService) : ObservableObject
+    MobileAuthService authService) : ObservableValidator
 {
     [ObservableProperty]
-    public partial string Username { get; set; } = string.Empty;
+    [Required(ErrorMessage = "Email is required.")]
+    [EmailAddress(ErrorMessage = "Please enter a valid email address.")]
+    public partial string Email { get; set; } = string.Empty;
 
     [ObservableProperty]
     public partial string Password { get; set; } = string.Empty;
@@ -47,7 +50,7 @@ public partial class AuthViewModel(
 
     private void ClearFields()
     {
-        Username = string.Empty;
+        Email = string.Empty;
         Password = string.Empty;
         ConfirmPassword = string.Empty;
         ErrorMessage = string.Empty;
@@ -60,6 +63,15 @@ public partial class AuthViewModel(
         if (IsBusy)
             return;
 
+        ValidateAllProperties();
+        if (HasErrors)
+        {
+            IsErrorState = true;
+            ErrorMessage = GetErrors(nameof(Email)).FirstOrDefault()?.ErrorMessage
+                ?? "Please enter a valid email address.";
+            return;
+        }
+
         IsBusy = true;
         IsErrorState = false;
         ErrorMessage = string.Empty;
@@ -67,7 +79,7 @@ public partial class AuthViewModel(
 
         try
         {
-            var result = await authService.LoginAsync(Username, Password);
+            var result = await authService.LoginAsync(Email, Password);
             if (result.Success)
             {
                 isLoggedIn = true;
@@ -78,10 +90,10 @@ public partial class AuthViewModel(
                 ErrorMessage = result.ErrorMessage?? "Unable to log you in, please check your credentials and try again (or register).";
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             IsErrorState = true;
-            ErrorMessage = ex.Message;
+            ErrorMessage = "An unexpected error occurred. Please try again.";
         }
         finally
         {
@@ -100,6 +112,15 @@ public partial class AuthViewModel(
         if (IsBusy)
             return;
 
+        ValidateAllProperties();
+        if (HasErrors)
+        {
+            IsErrorState = true;
+            ErrorMessage = GetErrors(nameof(Email)).FirstOrDefault()?.ErrorMessage
+                ?? "Please enter a valid email address.";
+            return;
+        }
+
         if (Password != ConfirmPassword)
         {
             IsErrorState = true;
@@ -114,13 +135,13 @@ public partial class AuthViewModel(
         
         try
         {
-            var result = await authService.RegisterAsync(Username, Password);
+            var result = await authService.RegisterAsync(Email, Password);
             isRegistered = result.Success;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             IsErrorState = true;
-            ErrorMessage = ex.Message;
+            ErrorMessage = "An unexpected error occurred. Please try again.";
         }
         finally
         {

@@ -10,11 +10,22 @@ public partial class AIEditor : ContentView
 		typeof(String),
 		typeof(AIEditor),
 		string.Empty,
-		BindingMode.TwoWay);
+		BindingMode.TwoWay,
+		propertyChanged: OnPromptChanged);
 	public string Prompt
 	{
 		get => (string)GetValue(PromptProperty);
 		set => SetValue(PromptProperty, value);
+	}
+
+	private static void OnPromptChanged(BindableObject bindable, object oldValue, object newValue)
+	{
+		if (bindable is AIEditor editor && editor.InputEditor is not null)
+		{
+			var newText = (string)newValue;
+			if (editor.InputEditor.Text != newText)
+				editor.InputEditor.Text = newText;
+		}
 	}
 
 	public static readonly BindableProperty SendCommandProperty = BindableProperty.Create(
@@ -51,11 +62,6 @@ public partial class AIEditor : ContentView
 				EndAction.IsEnabled = isEnabled;
 			}
 		}
-	}
-
-    private void InputEditor_TextChanged(object sender, TextChangedEventArgs e)
-	{
-		InitializeComponent();
 	}
 
     private void InputEditor_TextChanged(object sender, TextChangedEventArgs e)

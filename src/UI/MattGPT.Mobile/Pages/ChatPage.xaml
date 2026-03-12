@@ -12,6 +12,7 @@
     <ContentPage.Resources>
         <toolkit:InvertedBoolConverter x:Key="InverseBoolConverter" />
         <toolkit:IsStringNotNullOrEmptyConverter x:Key="StringToBoolConverter" />
+        <toolkit:IsStringNullOrEmptyConverter x:Key="IsNullOrEmptyConverter" />
     </ContentPage.Resources>
 
     <Grid RowDefinitions="*, Auto, Auto">
@@ -35,8 +36,8 @@
                             <VerticalStackLayout>
                                 <ActivityIndicator Color="Gray"
                                                    WidthRequest="20"
-                                                   IsRunning="{Binding IsThinking}"
-                                                   IsVisible="{Binding IsThinking}" />
+                                                   IsRunning="{Binding Content, Converter={StaticResource IsNullOrEmptyConverter}}"
+                                                   IsVisible="{Binding Content, Converter={StaticResource IsNullOrEmptyConverter}}" />
                                 <idk:MarkdownView MarkdownText="{Binding Content}" TextFontSize="14" />
                                 <Label Text="{Binding Timestamp, StringFormat='{0:HH:mm}'}"
                                        FontSize="10"

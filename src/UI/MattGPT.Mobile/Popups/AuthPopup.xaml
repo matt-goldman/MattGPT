@@ -25,8 +25,9 @@
                    TextColor="Red"
                    IsVisible="{Binding IsErrorState}"
                    HorizontalOptions="Center"/>
-            <fs:FsEntry Text="{Binding Username, Mode=TwoWay}"
-                        Placeholder="Username"/>
+            <fs:FsEntry Text="{Binding Email, Mode=TwoWay}"
+                        Keyboard="Email"
+                        Placeholder="Email"/>
             <fs:FsEntry Text="{Binding Password, Mode=TwoWay}"
                         Placeholder="Password"
                         IsPassword="True" />
@@ -64,8 +65,9 @@
                    TextColor="Red"
                    IsVisible="{Binding IsErrorState}"
                    HorizontalOptions="Center"/>
-            <fs:FsEntry Text="{Binding Username, Mode=TwoWay}"
-                   Placeholder="Username"/>
+            <fs:FsEntry Text="{Binding Email, Mode=TwoWay}"
+                   Keyboard="Email"
+                   Placeholder="Email"/>
             <fs:FsEntry Text="{Binding Password, Mode=TwoWay}"
                    Placeholder="Password"
                    IsPassword="True" />
