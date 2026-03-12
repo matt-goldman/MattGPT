@@ -23,6 +23,7 @@
                         AlignItems="Center"
                         VerticalOptions="End"
                         HorizontalOptions="Fill">
+                <!-- TODO: Enable attachment support when the API supports it
                 <fs:FsButton x:Name="StartAction"
                              Text="{x:Static icons:Icons.Plus}"
                              TextColor="{AppThemeBinding Light=Black, Dark=White}"
@@ -30,13 +31,13 @@
                              FontSize="Large"
                              Padding="0"
                              Margin="0"
-                             Clicked="EndAction_Clicked"
                              WidthRequest="40"
                              HeightRequest="40"
                              VerticalOptions="End"
                              CornerRadius="20"
                              ZIndex="10"
                              FontFamily="lucide" />
+                -->
                 <fs:FsButton x:Name="EndAction"
                              Text="{x:Static icons:Icons.AudioLines}"
                              FontSize="Large"
