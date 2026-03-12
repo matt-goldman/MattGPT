@@ -34,6 +34,7 @@
                             </Border.Triggers>
                             <VerticalStackLayout>
                                 <ActivityIndicator Color="Gray"
+                                                   WidthRequest="20"
                                                    IsRunning="{Binding IsThinking}"
                                                    IsVisible="{Binding IsThinking}" />
                                 <idk:MarkdownView MarkdownText="{Binding Content}" TextFontSize="14" />

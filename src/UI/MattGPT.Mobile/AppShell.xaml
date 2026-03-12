@@ -10,16 +10,19 @@
 
     <ShellContent Title="Chat"
                   Icon="{FontImageSource FontFamily=lucide,
+                           Color={AppThemeBinding Dark=LightGray, Light=DarkGray},
                            Glyph={x:Static icons:Icons.BotMessageSquare}}"
                   ContentTemplate="{DataTemplate pages:ChatPage}"
                   Route="ChatPage" />
     <ShellContent Title="Search"
                   Icon="{FontImageSource FontFamily=lucide,
+                           Color={AppThemeBinding Dark=LightGray, Light=DarkGray},
                             Glyph={x:Static icons:Icons.Search}}"
                   ContentTemplate="{DataTemplate pages:SearchPage}"
                   Route="SearchPage" />
     <ShellContent Title="Settings"
                   Icon="{FontImageSource FontFamily=lucide,
+                            Color={AppThemeBinding Dark=LightGray, Light=DarkGray},
                             Glyph={x:Static icons:Icons.Settings}}"
                   ContentTemplate="{DataTemplate pages:SettingsPage}"
                   Route="SettingsPage" />
