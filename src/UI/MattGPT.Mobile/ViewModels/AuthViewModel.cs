@@ -136,7 +136,15 @@ public partial class AuthViewModel(
         try
         {
             var result = await authService.RegisterAsync(Email, Password);
-            isRegistered = result.Success;
+            if (result.Success)
+            {
+                isRegistered = true;
+            }
+            else
+            {
+                IsErrorState = true;
+                ErrorMessage = "Registration failed. Please verify your details and try again.";
+            }
         }
         catch (Exception)
         {
