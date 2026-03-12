@@ -28,31 +28,32 @@ public partial class AIEditor : ContentView
 		set => SetValue(SendCommandProperty, value);
     }
 
-	public static readonly new BindableProperty IsEnabledProperty = BindableProperty.Create(
-		nameof(IsEnabled),
-		typeof(bool),
-		typeof(AIEditor),
-		true,
-		BindingMode.TwoWay,
-		propertyChanged: IsEnabledChanged);
-	private static void IsEnabledChanged(BindableObject bindable, object oldValue, object newValue)
-    {
-		if (bindable is AIEditor editor)
-		{
-			bool isEnabled = (bool)newValue;
-			editor.InputEditor.IsEnabled = isEnabled;
-			editor.EndAction.IsEnabled = isEnabled;
-        }
-    }
-    public new bool IsEnabled
-	{
-		get => (bool)GetValue(IsEnabledProperty);
-		set => SetValue(IsEnabledProperty, value);
-	}
-
     private bool _isListening = false;
 
 	public AIEditor()
+	{
+		InitializeComponent();
+	}
+
+	protected override void OnPropertyChanged(string propertyName = null)
+	{
+		base.OnPropertyChanged(propertyName);
+
+		if (string.IsNullOrEmpty(propertyName) || propertyName == nameof(IsEnabled))
+		{
+			var isEnabled = IsEnabled;
+			if (InputEditor is not null)
+			{
+				InputEditor.IsEnabled = isEnabled;
+			}
+			if (EndAction is not null)
+			{
+				EndAction.IsEnabled = isEnabled;
+			}
+		}
+	}
+
+    private void InputEditor_TextChanged(object sender, TextChangedEventArgs e)
 	{
 		InitializeComponent();
 	}
