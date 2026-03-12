@@ -49,6 +49,7 @@
 		<!-- WinRT warning suppression -->
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
+		<!-- C# preview is enabled because the project depends on preview language/tooling features (e.g., MVVM Toolkit source generators). -->
 		<LangVersion>preview</LangVersion>
 	</PropertyGroup>
 
