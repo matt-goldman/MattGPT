@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/Orchestration/">
+    <Project Path="Orchestration/MattGPT.AppHost/MattGPT.AppHost.csproj" />
+    <Project Path="Orchestration/MattGPT.MauiServiceDefaults/MattGPT.MauiServiceDefaults.csproj" />
+    <Project Path="Orchestration/MattGPT.ServiceDefaults/MattGPT.ServiceDefaults.csproj" />
+  </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/API/">
     <Project Path="src/API/MattGPT.ApiService/MattGPT.ApiService.csproj" />
@@ -17,10 +22,6 @@
     <Project Path="src/Infrastructure/PostgresModule/MattGPT.PostgresModule.csproj" />
     <Project Path="src/Infrastructure/QdrantModule/MattGPT.QdrantModule.csproj" Id="621eebd2-bb73-494b-ad50-d17ec1acc406" />
     <Project Path="src/Infrastructure/WeaviateModule/MattGPT.WeaviateModule.csproj" Id="89e1a7a6-ff84-4dcf-b827-7d863491b314" />
-  </Folder>
-  <Folder Name="/src/Orchestration/">
-    <Project Path="src/Orchestration/MattGPT.AppHost/MattGPT.AppHost.csproj" />
-    <Project Path="src/Orchestration/MattGPT.ServiceDefaults/MattGPT.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/src/UI/">
     <Project Path="src/UI/MattGPT.ApiClient/MattGPT.ApiClient.csproj" />

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:fs="clr-namespace:FlagstoneUI.Core.Controls;assembly=FlagstoneUI.Core"
+             xmlns:icons="clr-namespace:Plugin.Maui.Lucide;assembly=Plugin.Maui.Lucide"
+             xmlns:controls="clr-namespace:MattGPT.Mobile.Controls"
+             x:Name="Self"
+             x:Class="MattGPT.Mobile.Controls.AIEditor">
+    <Border StrokeShape="RoundRectangle 8"
+            Stroke="{DynamicResource Gray400}"
+            StrokeThickness="1">
+        <VerticalStackLayout VerticalOptions="Fill"
+                             Padding="10,10,10,20"
+                             x:DataType="controls:AIEditor">
+            <fs:FsEditor x:Name="InputEditor"
+                         Placeholder="How can I help you today?"
+                         AutoSize="TextChanges"
+                         TextChanged="InputEditor_TextChanged"
+                         Margin="0,0,0,10"
+                         Padding="0"/>
+            <FlexLayout Direction="Row"
+                        JustifyContent="SpaceBetween"
+                        AlignItems="Center"
+                        VerticalOptions="End"
+                        HorizontalOptions="Fill">
+                <!-- TODO: Enable attachment support when the API supports it
+                <fs:FsButton x:Name="StartAction"
+                             Text="{x:Static icons:Icons.Plus}"
+                             TextColor="{AppThemeBinding Light=Black, Dark=White}"
+                             Background="Transparent"
+                             FontSize="Large"
+                             Padding="0"
+                             Margin="0"
+                             WidthRequest="40"
+                             HeightRequest="40"
+                             VerticalOptions="End"
+                             CornerRadius="20"
+                             ZIndex="10"
+                             FontFamily="lucide" />
+                -->
+                <fs:FsButton x:Name="EndAction"
+                             Text="{x:Static icons:Icons.AudioLines}"
+                             FontSize="Large"
+                             Padding="0"
+                             Margin="0"
+                             Clicked="EndAction_Clicked"
+                             WidthRequest="36"
+                             HeightRequest="36"
+                             VerticalOptions="End"
+                             CornerRadius="18"
+                             ZIndex="1000"
+                             FontFamily="lucide" />
+            </FlexLayout>
+        </VerticalStackLayout>
+    </Border>
+</ContentView>

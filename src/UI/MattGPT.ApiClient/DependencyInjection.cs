@@ -39,4 +39,33 @@ public static class MattGptApiClientExtensions
             client.Timeout = TimeSpan.FromMinutes(10);
         });
     }
+
+    /// <summary>
+    /// Adds the MattGPT API client services and registers a named <see cref="System.Net.Http.HttpClient"/>
+    /// with a custom <see cref="DelegatingHandler"/>.
+    /// </summary>
+    /// <typeparam name="THandler">The type of the custom <see cref="DelegatingHandler"/>.</typeparam>
+    /// <param name="services">The service collection to add services to.</param>
+    /// <param name="baseAddress">The base address of the MattGPT API service.</param>
+    /// <returns>The updated service collection.</returns>
+    public static IServiceCollection AddApiClient<THandler>(this IServiceCollection services, Uri baseAddress)
+        where THandler : DelegatingHandler
+    {
+        services.AddTransient<THandler>();
+
+        services.AddSingleton<IAuthService, AuthService>();
+        services.AddSingleton<IChatService, ChatService>();
+        services.AddSingleton<IConversationService, ConversationService>();
+        services.AddSingleton<ISearchService, SearchService>();
+        services.AddSingleton<ISettingsService, SettingsService>();
+
+        services.AddHttpClient(MattGptApiClientDefaults.ClientName, client =>
+        {
+            client.BaseAddress = baseAddress;
+            client.Timeout = TimeSpan.FromMinutes(10);
+        })
+        .AddHttpMessageHandler<THandler>();
+
+        return services;
+    }
 }

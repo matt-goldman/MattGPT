@@ -9,7 +9,7 @@ namespace MattGPT.Mobile.ViewModels;
 public partial class ChatMessage : ObservableObject
 {
     [ObservableProperty]
-    private string _content = string.Empty;
+    public partial string Content { get; set; } = string.Empty;
 
     public required string Role { get; init; }
     public DateTimeOffset Timestamp { get; init; }

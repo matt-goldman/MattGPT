@@ -77,7 +77,7 @@ app.UseAntiforgery();
 
 app.UseOutputCache();
 
-app.MapStaticAssets();
+app.MapStaticAssets().AllowAnonymous();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

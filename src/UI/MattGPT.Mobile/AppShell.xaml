@@ -4,18 +4,27 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:pages="clr-namespace:MattGPT.Mobile.Pages"
+    xmlns:icons="clr-namespace:Plugin.Maui.Lucide;assembly=Plugin.Maui.Lucide"
+    FlyoutBehavior="Flyout"
     Title="MattGPT">
 
-    <TabBar>
-        <ShellContent Title="Chat"
-                      ContentTemplate="{DataTemplate pages:ChatPage}"
-                      Route="ChatPage" />
-        <ShellContent Title="Search"
-                      ContentTemplate="{DataTemplate pages:SearchPage}"
-                      Route="SearchPage" />
-        <ShellContent Title="Settings"
-                      ContentTemplate="{DataTemplate pages:SettingsPage}"
-                      Route="SettingsPage" />
-    </TabBar>
+    <ShellContent Title="Chat"
+                  Icon="{FontImageSource FontFamily=lucide,
+                           Color={AppThemeBinding Dark=LightGray, Light=DarkGray},
+                           Glyph={x:Static icons:Icons.BotMessageSquare}}"
+                  ContentTemplate="{DataTemplate pages:ChatPage}"
+                  Route="ChatPage" />
+    <ShellContent Title="Search"
+                  Icon="{FontImageSource FontFamily=lucide,
+                           Color={AppThemeBinding Dark=LightGray, Light=DarkGray},
+                            Glyph={x:Static icons:Icons.Search}}"
+                  ContentTemplate="{DataTemplate pages:SearchPage}"
+                  Route="SearchPage" />
+    <ShellContent Title="Settings"
+                  Icon="{FontImageSource FontFamily=lucide,
+                            Color={AppThemeBinding Dark=LightGray, Light=DarkGray},
+                            Glyph={x:Static icons:Icons.Settings}}"
+                  ContentTemplate="{DataTemplate pages:SettingsPage}"
+                  Route="SettingsPage" />
 
 </Shell>

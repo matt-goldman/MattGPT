@@ -48,6 +48,9 @@
 
 		<!-- WinRT warning suppression -->
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+		<!-- C# preview is enabled because the project depends on preview language/tooling features (e.g., MVVM Toolkit source generators). -->
+		<LangVersion>preview</LangVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -73,23 +76,25 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CommunityToolkit.Maui" Version="14.0.0" />
+		<PackageReference Include="CommunityToolkit.Maui" Version="14.0.1" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-		<PackageReference Include="FlagstoneUI.Core" Version="2.0.0" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.30" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.2" />
-		<PackageReference Include="Plugin.Maui.SmartNavigation" Version="3.0.5" />
+		<PackageReference Include="FlagstoneUI.Core" Version="2.0.1" />
+		<PackageReference Include="Indiko.Maui.Controls.Markdown" Version="1.5.0" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.50" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.4" />
+		<PackageReference Include="Plugin.Maui.Lucide" Version="1.0.1" />
+		<PackageReference Include="Plugin.Maui.SmartNavigation" Version="3.0.6" />
 	</ItemGroup>
 
 	<ItemGroup>
+	  <ProjectReference Include="..\..\..\Orchestration\MattGPT.MauiServiceDefaults\MattGPT.MauiServiceDefaults.csproj" />
 	  <ProjectReference Include="..\MattGPT.ApiClient\MattGPT.ApiClient.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Popups\" />
-	</ItemGroup>
-
-	<ItemGroup>
+	  <MauiXaml Update="Controls\AIEditor.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
 	  <MauiXaml Update="Pages\ChatPage.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
@@ -97,6 +102,12 @@
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	  <MauiXaml Update="Pages\SettingsPage.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="Popups\AuthPopup.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="Resources\Styles\Theme.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	</ItemGroup>

@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Maui" Version="13.1.2-preview.1.26125.13" />
     <PackageReference Include="Aspire.Hosting.MongoDB" Version="13.1.2" />
     <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.1.2" />
     <PackageReference Include="Aspire.Hosting.Qdrant" Version="13.1.2" />
@@ -16,8 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\API\MattGPT.ApiService\MattGPT.ApiService.csproj" />
-    <ProjectReference Include="..\..\UI\MattGPT.Web\MattGPT.Web.csproj" />
+    <ProjectReference Include="..\..\src\API\MattGPT.ApiService\MattGPT.ApiService.csproj" />
+    <ProjectReference Include="..\..\src\UI\MattGPT.Web\MattGPT.Web.csproj" />
   </ItemGroup>
 
 </Project>

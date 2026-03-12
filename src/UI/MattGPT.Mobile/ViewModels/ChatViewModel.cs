@@ -13,18 +13,19 @@ public partial class ChatViewModel(IChatService chatService) : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendMessageCommand))]
-    private string _userInput = string.Empty;
+    public partial string UserInput { get; set; } = string.Empty;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendMessageCommand))]
-    private bool _isStreaming;
+    public partial bool IsStreaming { get; set; }
 
     [ObservableProperty]
-    private string _sessionTitle = "New Chat";
+    public partial string SessionTitle { get; set; } = "New Chat";
 
     [ObservableProperty]
-    private string _toolStatusMessage = string.Empty;
+    public partial string ToolStatusMessage { get; set; } = string.Empty;
 
+    
     public ObservableCollection<ChatMessage> Messages { get; } = [];
 
     [RelayCommand(CanExecute = nameof(CanSend))]
@@ -85,6 +86,10 @@ public partial class ChatViewModel(IChatService chatService) : ObservableObject
             {
                 IsStreaming = false;
                 ToolStatusMessage = string.Empty;
+                // If no tokens were received (e.g. cancelled before first token or empty response),
+                // remove the placeholder assistant message so no spinner is left orphaned.
+                if (string.IsNullOrEmpty(assistantMessage.Content))
+                    Messages.Remove(assistantMessage);
             });
             _streamCts?.Dispose();
             _streamCts = null;

@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Common\Contracts\MattGPT.Contracts.csproj" />
-    <ProjectReference Include="..\..\Orchestration\MattGPT.ServiceDefaults\MattGPT.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\..\Orchestration\MattGPT.ServiceDefaults\MattGPT.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\Infrastructure\AnthropicModule\MattGPT.AnthropicModule.csproj" />
     <ProjectReference Include="..\..\Infrastructure\AzureModule\MattGPT.AzureModule.csproj" />
     <ProjectReference Include="..\..\Infrastructure\GeminiModule\MattGPT.GeminiModule.csproj" />

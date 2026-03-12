@@ -3,12 +3,16 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:MattGPT.Mobile.ViewModels"
              xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             xmlns:controls="clr-namespace:MattGPT.Mobile.Controls"
+             xmlns:idk="clr-namespace:Indiko.Maui.Controls.Markdown;assembly=Indiko.Maui.Controls.Markdown"
              x:Class="MattGPT.Mobile.Pages.ChatPage"
+             x:DataType="vm:ChatViewModel"
              Title="{Binding SessionTitle}">
 
     <ContentPage.Resources>
         <toolkit:InvertedBoolConverter x:Key="InverseBoolConverter" />
         <toolkit:IsStringNotNullOrEmptyConverter x:Key="StringToBoolConverter" />
+        <toolkit:IsStringNullOrEmptyConverter x:Key="IsNullOrEmptyConverter" />
     </ContentPage.Resources>
 
     <Grid RowDefinitions="*, Auto, Auto">
@@ -17,25 +21,24 @@
         <CollectionView Grid.Row="0" ItemsSource="{Binding Messages}">
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="vm:ChatMessage">
-                    <Grid Padding="12,6">
+                    <Grid Padding="20,6">
                         <Border StrokeShape="RoundRectangle 12"
+                                StrokeThickness="0"
                                 Padding="12,8"
                                 HorizontalOptions="Start"
-                                BackgroundColor="{StaticResource Gray100}">
+                                BackgroundColor="Transparent">
                             <Border.Triggers>
                                 <DataTrigger TargetType="Border" Binding="{Binding IsUser}" Value="True">
                                     <Setter Property="HorizontalOptions" Value="End" />
-                                    <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                                    <Setter Property="BackgroundColor" Value="{StaticResource Gray100}" />
                                 </DataTrigger>
                             </Border.Triggers>
                             <VerticalStackLayout>
-                                <Label Text="{Binding Content}" FontSize="14">
-                                    <Label.Triggers>
-                                        <DataTrigger TargetType="Label" Binding="{Binding IsUser}" Value="True">
-                                            <Setter Property="TextColor" Value="White" />
-                                        </DataTrigger>
-                                    </Label.Triggers>
-                                </Label>
+                                <ActivityIndicator Color="Gray"
+                                                   WidthRequest="20"
+                                                   IsRunning="{Binding Content, Converter={StaticResource IsNullOrEmptyConverter}}"
+                                                   IsVisible="{Binding Content, Converter={StaticResource IsNullOrEmptyConverter}}" />
+                                <idk:MarkdownView MarkdownText="{Binding Content}" TextFontSize="14" />
                                 <Label Text="{Binding Timestamp, StringFormat='{0:HH:mm}'}"
                                        FontSize="10"
                                        TextColor="Gray"
@@ -63,20 +66,11 @@
                HorizontalOptions="Center"
                Margin="8,4" />
 
-        <!-- Input area -->
-        <Grid Grid.Row="2"
-              ColumnDefinitions="*, Auto"
-              Padding="8"
-              ColumnSpacing="8">
-            <Entry Grid.Column="0"
-                   Text="{Binding UserInput}"
-                   Placeholder="Type a message…"
-                   ReturnCommand="{Binding SendMessageCommand}"
-                   IsEnabled="{Binding IsStreaming, Converter={StaticResource InverseBoolConverter}}" />
-            <Button Grid.Column="1"
-                    Text="Send"
-                    Command="{Binding SendMessageCommand}" />
-        </Grid>
+        <controls:AIEditor Grid.Row="2"
+                           Margin="20,5,20,2"
+                           Prompt="{Binding UserInput, Mode=TwoWay}"
+                           SendCommand="{Binding SendMessageCommand}"
+                           IsEnabled="{Binding IsStreaming, Converter={StaticResource InverseBoolConverter}}" />
 
     </Grid>
 
