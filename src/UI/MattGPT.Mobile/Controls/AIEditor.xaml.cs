@@ -9,7 +9,8 @@ public partial class AIEditor : ContentView
 		nameof(Prompt),
 		typeof(String),
 		typeof(AIEditor),
-		string.Empty);
+		string.Empty,
+		BindingMode.TwoWay);
 	public string Prompt
 	{
 		get => (string)GetValue(PromptProperty);
@@ -19,7 +20,8 @@ public partial class AIEditor : ContentView
 	public static readonly BindableProperty SendCommandProperty = BindableProperty.Create(
 		nameof(SendCommand),
 		typeof(ICommand),
-		typeof(AIEditor));
+		typeof(AIEditor),
+		defaultBindingMode: BindingMode.TwoWay);
     public ICommand SendCommand
 	{
 		get => (ICommand)GetValue(SendCommandProperty);
@@ -31,9 +33,9 @@ public partial class AIEditor : ContentView
 		typeof(bool),
 		typeof(AIEditor),
 		true,
+		BindingMode.TwoWay,
 		propertyChanged: IsEnabledChanged);
-
-    private static void IsEnabledChanged(BindableObject bindable, object oldValue, object newValue)
+	private static void IsEnabledChanged(BindableObject bindable, object oldValue, object newValue)
     {
 		if (bindable is AIEditor editor)
 		{
@@ -42,7 +44,6 @@ public partial class AIEditor : ContentView
 			editor.EndAction.IsEnabled = isEnabled;
         }
     }
-
     public new bool IsEnabled
 	{
 		get => (bool)GetValue(IsEnabledProperty);
@@ -51,7 +52,7 @@ public partial class AIEditor : ContentView
 
     private bool _isListening = false;
 
-    public AIEditor()
+	public AIEditor()
 	{
 		InitializeComponent();
 	}
@@ -66,21 +67,22 @@ public partial class AIEditor : ContentView
 		}
 		else
 		{
-            EndAction.Text = Icons.AArrowUp;
-			Prompt = e.NewTextValue;
+            EndAction.Text = Icons.ArrowBigUp;
         }
+
+		Prompt = e.NewTextValue;
     }
 
     private void EndAction_Clicked(object sender, EventArgs e)
     {
-		if (string.IsNullOrEmpty(Prompt))
+        if (string.IsNullOrEmpty(Prompt) && !_isListening)
 		{
 			_isListening = true;
 			EndAction.Text = Icons.Square;
 
-			// TODO: Community Toolkit STT
+            // TODO: start CommunityToolkit STT
         }
-		else if (_isListening)
+        else if (_isListening)
 		{
 			_isListening = false;
 			EndAction.Text = string.IsNullOrEmpty(Prompt)?  Icons.AudioLines : Icons.ArrowBigUp;
@@ -88,7 +90,7 @@ public partial class AIEditor : ContentView
 		else
 		{
 			SendCommand?.Execute(Prompt);
-			Prompt = string.Empty;
+            Prompt = string.Empty;
 			InputEditor.Text = string.Empty;
         }
     }
