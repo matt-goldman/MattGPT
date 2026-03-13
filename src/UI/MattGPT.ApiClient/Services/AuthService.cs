@@ -6,7 +6,7 @@ using MattGPT.ApiClient.Models;
 namespace MattGPT.ApiClient.Services;
 
 /// <inheritdoc cref="IAuthService"/>
-public sealed class AuthService(IHttpClientFactory factory) : IAuthService
+public sealed class AuthService(IHttpClientFactory factory, IAuthFailureHandler authFailureHandler) : IAuthService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 

@@ -6,7 +6,7 @@ using MattGPT.ApiClient.Models;
 namespace MattGPT.ApiClient.Services;
 
 /// <inheritdoc cref="IChatService"/>
-public sealed class ChatService(IHttpClientFactory factory) : IChatService
+public sealed class ChatService(IHttpClientFactory factory, IAuthFailureHandler authFailureHandler) : IChatService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -31,6 +31,13 @@ public sealed class ChatService(IHttpClientFactory factory) : IChatService
         request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await authFailureHandler.HandleAsync(cancellationToken);
+            yield break;
+        }
+
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -80,14 +87,28 @@ public sealed class ChatService(IHttpClientFactory factory) : IChatService
     public async Task<SessionDetail?> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        return await client.GetFromJsonAsync<SessionDetail>($"/chat/sessions/{sessionId}", JsonOptions, cancellationToken);
+        var response = await client.GetAsync($"/chat/sessions/{sessionId}", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await authFailureHandler.HandleAsync(cancellationToken);
+            return default;
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<SessionDetail>(JsonOptions, cancellationToken);
     }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<ChatSessionItem>> GetSessionsAsync(int limit = 50, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        return await client.GetFromJsonAsync<List<ChatSessionItem>>($"/chat/sessions?limit={limit}", JsonOptions, cancellationToken)
+        var response = await client.GetAsync($"/chat/sessions?limit={limit}", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await authFailureHandler.HandleAsync(cancellationToken);
+            return [];
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<ChatSessionItem>>(JsonOptions, cancellationToken)
             ?? [];
     }
 
@@ -95,7 +116,14 @@ public sealed class ChatService(IHttpClientFactory factory) : IChatService
     public async Task<ImportedConversationDetail?> GetConversationAsync(string conversationId, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        return await client.GetFromJsonAsync<ImportedConversationDetail>($"/conversations/{conversationId}", JsonOptions, cancellationToken);
+        var response = await client.GetAsync($"/conversations/{conversationId}", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await authFailureHandler.HandleAsync(cancellationToken);
+            return default;
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ImportedConversationDetail>(JsonOptions, cancellationToken);
     }
 
     // ── SSE event parsers ─────────────────────────────────────────────────

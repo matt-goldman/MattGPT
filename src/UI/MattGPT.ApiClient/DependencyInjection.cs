@@ -25,13 +25,15 @@ public static class MattGptApiClientExtensions
     /// The <see cref="IHttpClientBuilder"/> for the underlying named client, allowing callers
     /// to add delegating handlers (e.g. authentication) if required.
     /// </returns>
-    public static IHttpClientBuilder AddMattGptApiClient(this IServiceCollection services, Uri baseAddress)
+    public static IHttpClientBuilder AddMattGptApiClient<TFailureHandler>(this IServiceCollection services, Uri baseAddress)
+        where TFailureHandler : class, IAuthFailureHandler
     {
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IChatService, ChatService>();
         services.AddScoped<IConversationService, ConversationService>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<ISettingsService, SettingsService>();
+        services.AddScoped<IAuthFailureHandler, TFailureHandler>();
 
         return services.AddHttpClient(MattGptApiClientDefaults.ClientName, client =>
         {
