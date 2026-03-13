@@ -62,8 +62,12 @@ if (authOptions.Enabled)
             {
                 options.Authority = keycloakAuthority;
                 options.Audience = builder.Configuration["Auth:Keycloak:Audience"] ?? "account";
-                // Allow HTTP for local dev (Aspire internal network uses HTTP).
-                options.RequireHttpsMetadata = false;
+                // Allow HTTP for local dev (Aspire internal network uses HTTP),
+                // but require HTTPS metadata by default in non-development environments
+                // or when using an HTTPS authority.
+                var requireHttpsMetadata = !builder.Environment.IsDevelopment()
+                    || keycloakAuthority.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+                options.RequireHttpsMetadata = requireHttpsMetadata;
                 options.TokenValidationParameters.NameClaimType = ClaimTypes.NameIdentifier;
             });
 
