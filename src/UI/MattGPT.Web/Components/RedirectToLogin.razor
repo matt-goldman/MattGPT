@@ -7,17 +7,15 @@
         if (AuthConfig.Value.Provider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase))
         {
             // Trigger the OIDC challenge directly (avoids an extra redirect hop).
-            var baseRelativePath = Navigation.ToBaseRelativePath(Navigation.Uri);
-            if (string.IsNullOrEmpty(baseRelativePath))
+            var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri);
+            if (string.IsNullOrEmpty(relativePath))
             {
-                baseRelativePath = "/";
+                relativePath = "/";
             }
-            else if (!baseRelativePath.StartsWith("/", StringComparison.Ordinal))
+            else if (!relativePath.StartsWith("/", StringComparison.Ordinal))
             {
-                baseRelativePath = "/" + baseRelativePath;
+                relativePath = "/" + relativePath;
             }
-            var returnUrl = Uri.EscapeDataString(baseRelativePath);
-            var relativePath = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
             Navigation.NavigateTo($"/auth/login-oidc?returnUrl={Uri.EscapeDataString(relativePath)}", forceLoad: true);
         }
         else
