@@ -1,3 +1,5 @@
+using Duende.AccessTokenManagement.OpenIdConnect;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 
@@ -46,7 +48,7 @@ public static class AppExtensions
             options.TokenValidationParameters.ValidateIssuer = !builder.Environment.IsDevelopment();
         });
         
-        builder.Services.AddTransient<KeycloakAuthDelegatingHandler>();
+        builder.Services.AddOpenIdConnectAccessTokenManagement();
 
         return builder;
     }
@@ -54,21 +56,20 @@ public static class AppExtensions
     public static WebApplication UseKeycloak(this WebApplication app)
     {
         // Trigger the OIDC login challenge (redirects the browser to Keycloak).
-        app.MapGet("/auth/login-oidc", (HttpContext context, string? returnUrl) =>
+        app.MapGet("/auth/logout-oidc", async (HttpContext context) =>
         {
-            var redirectUri = returnUrl.IsLocalUrl() ? returnUrl! : "/";
-            return Results.Challenge(
-                new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = redirectUri },
-                [OpenIdConnectDefaults.AuthenticationScheme]);
-        }).AllowAnonymous();
+            // Retrieve the id_token so Keycloak's end-session endpoint can identify the session.
+            var idToken = await context.GetTokenAsync("id_token");
 
-        // Trigger OIDC sign-out (signs out locally and redirects to Keycloak end-session).
-        app.MapGet("/auth/logout-oidc", (HttpContext context) =>
-        {
-            var authProperties = new Microsoft.AspNetCore.Authentication.AuthenticationProperties
+            var authProperties = new AuthenticationProperties
             {
                 RedirectUri = "/"
             };
+
+            if (idToken is not null)
+            {
+                authProperties.SetParameter("id_token_hint", idToken);
+            }
 
             return Results.SignOut(
                 authProperties,

@@ -355,3 +355,16 @@ public class EmbeddingService(
         }
     }
 }
+
+/*
+TODO: solve this:
+
+OllamaSharp.Models.Exceptions.OllamaException: the input length exceeds the context length
+   at OllamaSharp.OllamaApiClient.EnsureSuccessStatusCodeAsync(HttpResponseMessage response)
+   at OllamaSharp.OllamaApiClient.SendToOllamaAsync(HttpRequestMessage requestMessage, OllamaRequest ollamaRequest, HttpCompletionOption completionOption, CancellationToken cancellationToken)
+   at OllamaSharp.OllamaApiClient.PostAsync[TRequest,TResponse](String endpoint, TRequest ollamaRequest, CancellationToken cancellationToken)
+   at OllamaSharp.OllamaApiClient.Microsoft.Extensions.AI.IEmbeddingGenerator<System.String,Microsoft.Extensions.AI.Embedding<System.Single>>.GenerateAsync(IEnumerable`1 values, EmbeddingGenerationOptions options, CancellationToken cancellationToken)
+   at Microsoft.Extensions.AI.OpenTelemetryEmbeddingGenerator`2.GenerateAsync(IEnumerable`1 values, EmbeddingGenerationOptions options, CancellationToken cancellationToken)
+   at MattGPT.ApiService.Services.EmbeddingService.GenerateChunkedEmbeddingAsync(String text, CancellationToken ct) in E:\repos\MattGPT\src\API\MattGPT.ApiService\Services\EmbeddingService.cs:line 237
+   at MattGPT.ApiService.Services.EmbeddingService.EmbedConversationAsync(StoredConversation conversation, CancellationToken ct) in E:\repos\MattGPT\src\API\MattGPT.ApiService\Services\EmbeddingService.cs:line 117
+*/

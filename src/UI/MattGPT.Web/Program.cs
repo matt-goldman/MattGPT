@@ -1,3 +1,4 @@
+using Duende.AccessTokenManagement.OpenIdConnect;
 using LumexUI.Extensions;
 using MattGPT.ApiClient;
 using MattGPT.Web;
@@ -27,7 +28,7 @@ if (authOptions.Enabled)
     if (isKeycloak)
     {
         builder.AddKeycloakAuthentication();
-        mattGptClientBuilder.AddHttpMessageHandler<KeycloakAuthDelegatingHandler>();
+        mattGptClientBuilder.AddUserAccessTokenHandler();
     }
     else
     {

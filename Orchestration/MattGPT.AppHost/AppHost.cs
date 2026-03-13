@@ -66,6 +66,7 @@ var isKeycloakProvider = authProvider.Equals("Keycloak", StringComparison.Ordina
 if (isAuthEnabled && isKeycloakProvider)
 {
     keycloak = builder.AddKeycloak("keycloak")
+        .WithLifetime(ContainerLifetime.Persistent)
         .WithDataVolume()
         .WithRealmImport(Path.Combine(AppContext.BaseDirectory, "keycloak", "mattgpt-realm.json"));
 }
