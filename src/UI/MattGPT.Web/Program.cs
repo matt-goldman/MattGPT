@@ -100,7 +100,7 @@ builder.Services.AddOutputCache();
 var mattGptClientBuilder = builder.Services.AddMattGptApiClient(new Uri("https+http://apiservice"));
 if (authOptions.Enabled)
 {
-    mattGptClientBuilder.AddHttpMessageHandler<ApiAuthDelegatingHandler>();
+    mattGptClientBuilder.AddHttpMessageHandler<UserIdDelegatingHandler>();
 }
 
 // Configure Kestrel for large file uploads (up to 250 MB).
