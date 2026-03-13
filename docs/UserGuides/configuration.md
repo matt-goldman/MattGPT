@@ -155,7 +155,9 @@ The `Auth` section controls whether authentication is required and which provide
 | `Auth:AuthDbProvider` | string | `"SQLite"` | **Identity only, when `UseDocumentDbForAuth = false`.** Supported: `"SQLite"`, `"Postgres"`. |
 | `Auth:Keycloak:Realm` | string | `"mattgpt"` | **Keycloak only.** The Keycloak realm name. |
 | `Auth:Keycloak:ClientId` | string | `"mattgpt-web"` | **Keycloak only.** The OIDC client ID for the web frontend. |
-
+| `Auth:Keycloak:ServerUrl` | string | - | **Keycloak only.** Optional override for the Keycloak server / authority base URL used for OIDC discovery and token validation. |
+| `ConnectionStrings:keycloak` | string | - | **Keycloak only.** Optional connection string-style value that can be used by the hosting environment (for example, Aspire) to supply the Keycloak base URL / authority. |
+| `Auth:Keycloak:Audience` | string | - | **Keycloak only.** Expected JWT audience for API access tokens issued by Keycloak; must match the API client/resource configuration in the realm. |
 ### `Auth:Provider = "Keycloak"` (default, recommended)
 
 When running locally with Aspire, a Keycloak container is provisioned automatically and a `mattgpt` realm is imported from `Orchestration/MattGPT.AppHost/keycloak/mattgpt-realm.json`. No manual Keycloak setup is required.
@@ -172,7 +174,7 @@ Uses ASP.NET Core Identity with a local database. Login and registration are han
 
 ## Switching Providers at Runtime
 
-Update `appsettings.json` and restart the API service. No data migration is required — conversations remain in MongoDB and embeddings in the vector store.
+Update `appsettings.json` and restart both the API service and the web frontend. No data migration is required — conversations remain in MongoDB and embeddings in the vector store. Both components read `Auth:*` settings at startup, so changes will not take effect until they are restarted.
 
 > **Important:** If you change the embedding model, existing embeddings become incompatible. Re-embed by calling `POST /conversations/embed` on the API, or re-import your conversations.
 
