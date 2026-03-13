@@ -26,7 +26,7 @@ if (authOptions.Enabled)
         // --- Keycloak path: OIDC with authorization code + PKCE ---
         var keycloakBase = builder.Configuration.GetConnectionString("keycloak")
             ?? builder.Configuration["Auth:Keycloak:ServerUrl"]
-            ?? "https://localhost:8080";
+            ?? builder.Configuration["KEYCLOAK_HTTPS"] ?? throw new InvalidOperationException("Keycloak server URL must be provided via configuration.");
         var keycloakRealm = builder.Configuration["Auth:Keycloak:Realm"] ?? "mattgpt";
         var keycloakAuthority = $"{keycloakBase.TrimEnd('/')}/realms/{keycloakRealm}";
         var oidcClientId = builder.Configuration["Auth:Keycloak:ClientId"] ?? "mattgpt-web";

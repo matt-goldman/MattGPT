@@ -53,6 +53,7 @@ if (authOptions.Enabled)
         // --- Keycloak path: validate JWTs issued by the Keycloak realm ---
         var keycloakBase = builder.Configuration.GetConnectionString("keycloak")
             ?? builder.Configuration["Auth:Keycloak:ServerUrl"]
+            ?? builder.Configuration["KEYCLOAK_HTTPS"]
             ?? "https://localhost:8080";
         var keycloakRealm = builder.Configuration["Auth:Keycloak:Realm"] ?? "mattgpt";
         var keycloakAuthority = $"{keycloakBase.TrimEnd('/')}/realms/{keycloakRealm}";
