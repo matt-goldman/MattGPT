@@ -7,7 +7,16 @@
         if (AuthConfig.Value.Provider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase))
         {
             // Trigger the OIDC challenge directly (avoids an extra redirect hop).
-            // Use a base-relative path so IsLocalUrl validation on the server side accepts it.
+            var baseRelativePath = Navigation.ToBaseRelativePath(Navigation.Uri);
+            if (string.IsNullOrEmpty(baseRelativePath))
+            {
+                baseRelativePath = "/";
+            }
+            else if (!baseRelativePath.StartsWith("/", StringComparison.Ordinal))
+            {
+                baseRelativePath = "/" + baseRelativePath;
+            }
+            var returnUrl = Uri.EscapeDataString(baseRelativePath);
             var relativePath = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
             Navigation.NavigateTo($"/auth/login-oidc?returnUrl={Uri.EscapeDataString(relativePath)}", forceLoad: true);
         }
