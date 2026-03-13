@@ -26,7 +26,7 @@ if (authOptions.Enabled)
         // --- Keycloak path: OIDC with authorization code + PKCE ---
         var keycloakBase = builder.Configuration.GetConnectionString("keycloak")
             ?? builder.Configuration["Auth:Keycloak:ServerUrl"]
-            ?? "http://localhost:8080";
+            ?? "https://localhost:8080";
         var keycloakRealm = builder.Configuration["Auth:Keycloak:Realm"] ?? "mattgpt";
         var keycloakAuthority = $"{keycloakBase.TrimEnd('/')}/realms/{keycloakRealm}";
         var oidcClientId = builder.Configuration["Auth:Keycloak:ClientId"] ?? "mattgpt-web";
@@ -146,7 +146,7 @@ if (authOptions.Enabled && authOptions.Provider.Equals("Keycloak", StringCompari
     }).AllowAnonymous();
 
     // Trigger OIDC sign-out (signs out locally and redirects to Keycloak end-session).
-    app.MapPost("/auth/logout-oidc", (HttpContext context) =>
+    app.MapGet("/auth/logout-oidc", (HttpContext context) =>
     {
         var authProperties = new Microsoft.AspNetCore.Authentication.AuthenticationProperties
         {
@@ -159,7 +159,7 @@ if (authOptions.Enabled && authOptions.Provider.Equals("Keycloak", StringCompari
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 OpenIdConnectDefaults.AuthenticationScheme
             ]);
-    }).RequireAntiforgery();
+    }).AllowAnonymous();
 }
 
 app.MapDefaultEndpoints();

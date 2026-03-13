@@ -53,7 +53,7 @@ if (authOptions.Enabled)
         // --- Keycloak path: validate JWTs issued by the Keycloak realm ---
         var keycloakBase = builder.Configuration.GetConnectionString("keycloak")
             ?? builder.Configuration["Auth:Keycloak:ServerUrl"]
-            ?? "http://localhost:8080";
+            ?? "https://localhost:8080";
         var keycloakRealm = builder.Configuration["Auth:Keycloak:Realm"] ?? "mattgpt";
         var keycloakAuthority = $"{keycloakBase.TrimEnd('/')}/realms/{keycloakRealm}";
 
@@ -62,12 +62,7 @@ if (authOptions.Enabled)
             {
                 options.Authority = keycloakAuthority;
                 options.Audience = builder.Configuration["Auth:Keycloak:Audience"] ?? "account";
-                // Allow HTTP for local dev (Aspire internal network uses HTTP),
-                // but require HTTPS metadata by default in non-development environments
-                // or when using an HTTPS authority.
-                var requireHttpsMetadata = !builder.Environment.IsDevelopment()
-                    || keycloakAuthority.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
-                options.RequireHttpsMetadata = requireHttpsMetadata;
+                options.RequireHttpsMetadata = true;
                 options.TokenValidationParameters.NameClaimType = ClaimTypes.NameIdentifier;
             });
 
