@@ -146,9 +146,9 @@ if (authOptions.Enabled && authOptions.Provider.Equals("Keycloak", StringCompari
     // Trigger OIDC sign-out (signs out locally and redirects to Keycloak end-session).
     app.MapGet("/auth/logout-oidc", async (HttpContext context) =>
     {
-        await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         await context.SignOutAsync(OpenIdConnectDefaults.AuthenticationScheme,
             new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = "/" });
+        await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     }).AllowAnonymous();
 }
 
