@@ -58,7 +58,8 @@ if (authOptions.Enabled)
                 options.Scope.Add("profile");
                 options.Scope.Add("email");
                 options.TokenValidationParameters.NameClaimType = "preferred_username";
-                // Map standard OIDC claims so AuthorizeView/ClaimsPrincipal work correctly.
+                // Preserve raw OIDC/JWT claim names (e.g. "sub", "email") rather than
+                // mapping them to WS-Federation types like ClaimTypes.NameIdentifier.
                 options.MapInboundClaims = false;
                 // Only relax issuer validation in local development where the issuer may vary per host.
                 options.TokenValidationParameters.ValidateIssuer = !builder.Environment.IsDevelopment();
@@ -100,7 +101,7 @@ builder.Services.AddOutputCache();
 var mattGptClientBuilder = builder.Services.AddMattGptApiClient(new Uri("https+http://apiservice"));
 if (authOptions.Enabled)
 {
-    mattGptClientBuilder.AddHttpMessageHandler<UserIdDelegatingHandler>();
+    mattGptClientBuilder.AddHttpMessageHandler<ApiAuthDelegatingHandler>();
 }
 
 // Configure Kestrel for large file uploads (up to 250 MB).

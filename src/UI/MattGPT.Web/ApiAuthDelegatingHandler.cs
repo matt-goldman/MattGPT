@@ -24,7 +24,7 @@ namespace MattGPT.Web;
 ///   </item>
 /// </list>
 /// </summary>
-public class UserIdDelegatingHandler(
+public class ApiAuthDelegatingHandler(
     IHttpContextAccessor httpContextAccessor,
     IOptions<AuthOptions> authOptions) : DelegatingHandler
 {

@@ -22,4 +22,10 @@
     <ProjectReference Include="..\..\src\UI\MattGPT.Web\MattGPT.Web.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="keycloak\mattgpt-realm.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

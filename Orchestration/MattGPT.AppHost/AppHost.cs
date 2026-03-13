@@ -67,7 +67,7 @@ if (isAuthEnabled && isKeycloakProvider)
 {
     keycloak = builder.AddKeycloak("keycloak")
         .WithDataVolume()
-        .WithRealmImport("./keycloak/mattgpt-realm.json");
+        .WithRealmImport(Path.Combine(AppContext.BaseDirectory, "keycloak", "mattgpt-realm.json"));
 }
 
 #endregion

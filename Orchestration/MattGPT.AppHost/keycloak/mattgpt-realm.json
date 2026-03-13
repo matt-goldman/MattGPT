@@ -12,8 +12,14 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "frontchannelLogout": true,
-      "redirectUris": ["*"],
-      "webOrigins": ["+"],
+      "redirectUris": [
+        "http://localhost:*",
+        "https://localhost:*"
+      ],
+      "webOrigins": [
+        "http://localhost:*",
+        "https://localhost:*"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256"
       }
