@@ -30,8 +30,6 @@ if (authOptions.Enabled)
         var keycloakRealm = builder.Configuration["Auth:Keycloak:Realm"] ?? "mattgpt";
         var keycloakAuthority = $"{keycloakBase.TrimEnd('/')}/realms/{keycloakRealm}";
         var oidcClientId = builder.Configuration["Auth:Keycloak:ClientId"] ?? "mattgpt-web";
-        var isDevelopment = builder.Environment.IsDevelopment();
-        var allowInsecureMetadata = isDevelopment || keycloakAuthority.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
 
         builder.Services.AddAuthentication(options =>
             {
@@ -52,8 +50,7 @@ if (authOptions.Enabled)
                 options.ResponseType = "code";
                 options.SaveTokens = true;
                 options.UsePkce = true;
-                // Require HTTPS metadata by default; only allow HTTP in development or when the authority is explicitly HTTP.
-                options.RequireHttpsMetadata = !allowInsecureMetadata;
+                options.RequireHttpsMetadata = true;
                 options.Scope.Add("openid");
                 options.Scope.Add("profile");
                 options.Scope.Add("email");
