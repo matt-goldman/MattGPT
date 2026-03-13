@@ -170,7 +170,9 @@ Uses ASP.NET Core Identity with a local database. Login and registration are han
 
 > **Note:** The default configuration has `Auth:Enabled = false`. Set it to `true` in `appsettings.json` or via user secrets to enable authentication.
 
-## Switching Providers at Runtime No data migration is required — conversations remain in MongoDB and embeddings in the vector store.
+## Switching Providers at Runtime
+
+Update `appsettings.json` and restart the API service. No data migration is required — conversations remain in MongoDB and embeddings in the vector store.
 
 > **Important:** If you change the embedding model, existing embeddings become incompatible. Re-embed by calling `POST /conversations/embed` on the API, or re-import your conversations.
 
