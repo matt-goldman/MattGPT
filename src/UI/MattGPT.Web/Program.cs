@@ -146,12 +146,20 @@ if (authOptions.Enabled && authOptions.Provider.Equals("Keycloak", StringCompari
     }).AllowAnonymous();
 
     // Trigger OIDC sign-out (signs out locally and redirects to Keycloak end-session).
-    app.MapGet("/auth/logout-oidc", async (HttpContext context) =>
+    app.MapPost("/auth/logout-oidc", (HttpContext context) =>
     {
-        await context.SignOutAsync(OpenIdConnectDefaults.AuthenticationScheme,
-            new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = "/" });
-        await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-    }).AllowAnonymous();
+        var authProperties = new Microsoft.AspNetCore.Authentication.AuthenticationProperties
+        {
+            RedirectUri = "/"
+        };
+
+        return Results.SignOut(
+            authProperties,
+            [
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                OpenIdConnectDefaults.AuthenticationScheme
+            ]);
+    }).RequireAntiforgery();
 }
 
 app.MapDefaultEndpoints();
