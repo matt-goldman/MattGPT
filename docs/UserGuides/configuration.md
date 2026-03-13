@@ -162,7 +162,7 @@ When running locally with Aspire, a Keycloak container is provisioned automatica
 
 The web frontend uses an OIDC authorization code flow with PKCE. After login, the access token is forwarded to the API service as a `Bearer` header and validated against Keycloak's JWKS endpoint. Login and registration are handled by Keycloak's hosted UI.
 
-For production deployments, configure a confidential client with a client secret and specific redirect URIs via `Auth:Keycloak:*` environment variables or user secrets.
+For production deployments, configure the Keycloak realm and the public OIDC client (with PKCE and the appropriate redirect URIs) and set `Auth:Keycloak:Realm` and `Auth:Keycloak:ClientId` via environment variables or user secrets.
 
 ### `Auth:Provider = "Identity"` (legacy)
 
