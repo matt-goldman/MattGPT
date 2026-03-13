@@ -137,7 +137,7 @@ if (authOptions.Enabled && authOptions.Provider.Equals("Keycloak", StringCompari
     // Trigger the OIDC login challenge (redirects the browser to Keycloak).
     app.MapGet("/auth/login-oidc", (HttpContext context, string? returnUrl) =>
     {
-        var redirectUri = returnUrl ?? "/";
+        var redirectUri = IsLocalUrl(returnUrl) ? returnUrl! : "/";
         return Results.Challenge(
             new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = redirectUri },
             [OpenIdConnectDefaults.AuthenticationScheme]);
@@ -153,5 +153,33 @@ if (authOptions.Enabled && authOptions.Provider.Equals("Keycloak", StringCompari
 }
 
 app.MapDefaultEndpoints();
+
+static bool IsLocalUrl(string? url)
+{
+    if (string.IsNullOrEmpty(url))
+    {
+        return false;
+    }
+
+    // Based on Microsoft.AspNetCore.Mvc.IUrlHelper.IsLocalUrl logic:
+    if (url[0] == '/')
+    {
+        // Allow "/" or "/foo", but not "//" or "/\"
+        if (url.Length == 1)
+        {
+            return true;
+        }
+
+        return url[1] != '/' && url[1] != '\\';
+    }
+
+    // Allow application-relative URLs like "~/foo"
+    if (url.Length > 1 && url[0] == '~' && url[1] == '/')
+    {
+        return true;
+    }
+
+    return false;
+}
 
 app.Run();
