@@ -56,6 +56,15 @@ public static class AppExtensions
     public static WebApplication UseKeycloak(this WebApplication app)
     {
         // Trigger the OIDC login challenge (redirects the browser to Keycloak).
+        app.MapGet("/auth/login-oidc", (HttpContext context, string? returnUrl) =>
+        {
+            var redirectUri = returnUrl.IsLocalUrl() ? returnUrl! : "/";
+            return Results.Challenge(
+                new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = redirectUri },
+                [OpenIdConnectDefaults.AuthenticationScheme]);
+        }).AllowAnonymous();
+
+        // Trigger OIDC sign-out (signs out locally and redirects to Keycloak end-session).
         app.MapGet("/auth/logout-oidc", async (HttpContext context) =>
         {
             // Retrieve the id_token so Keycloak's end-session endpoint can identify the session.
