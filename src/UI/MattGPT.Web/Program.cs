@@ -60,7 +60,8 @@ if (authOptions.Enabled)
                 options.TokenValidationParameters.NameClaimType = "preferred_username";
                 // Map standard OIDC claims so AuthorizeView/ClaimsPrincipal work correctly.
                 options.MapInboundClaims = false;
-                options.TokenValidationParameters.ValidateIssuer = false; // Issuer varies per host in local dev.
+                // Only relax issuer validation in local development where the issuer may vary per host.
+                options.TokenValidationParameters.ValidateIssuer = !builder.Environment.IsDevelopment();
             });
     }
     else
