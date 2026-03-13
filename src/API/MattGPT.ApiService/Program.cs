@@ -14,6 +14,7 @@ using MattGPT.PostgresModule;
 using MattGPT.QdrantModule;
 using MattGPT.WeaviateModule;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
@@ -45,36 +46,80 @@ var documentDbOptions = builder.Configuration.GetSection(DocumentDbOptions.Secti
 
 if (authOptions.Enabled)
 {
-    // ASP.NET Core Identity with standard API endpoints.
-    builder.Services.AddIdentityApiEndpoints<IdentityUser>()
-        .AddEntityFrameworkStores<AppIdentityDbContext>();
+    var isKeycloak = authOptions.Provider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase);
 
-    // Identity backing store: same Postgres instance when available, otherwise SQLite.
-    if (documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+    if (isKeycloak)
     {
-        builder.AddNpgsqlDbContext<AppIdentityDbContext>("mattgptdb");
+        // --- Keycloak path: validate JWTs issued by the Keycloak realm ---
+        var keycloakBase = builder.Configuration.GetConnectionString("keycloak")
+            ?? builder.Configuration["Auth:Keycloak:ServerUrl"]
+            ?? "http://localhost:8080";
+        var keycloakRealm = builder.Configuration["Auth:Keycloak:Realm"] ?? "mattgpt";
+        var keycloakAuthority = $"{keycloakBase.TrimEnd('/')}/realms/{keycloakRealm}";
+
+        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.Authority = keycloakAuthority;
+                options.Audience = builder.Configuration["Auth:Keycloak:Audience"] ?? "account";
+                // Allow HTTP for local dev (Aspire internal network uses HTTP).
+                options.RequireHttpsMetadata = false;
+                options.TokenValidationParameters.NameClaimType = ClaimTypes.NameIdentifier;
+            });
+
+        builder.Services.AddAuthorization(options =>
+        {
+            options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser()
+                .Build();
+        });
     }
     else
     {
-        builder.Services.AddDbContext<AppIdentityDbContext>(options =>
-            options.UseSqlite("Data Source=mattgpt-identity.db"));
+        // --- Legacy Identity path ---
+
+        // ASP.NET Core Identity with standard API endpoints.
+        builder.Services.AddIdentityApiEndpoints<IdentityUser>()
+            .AddEntityFrameworkStores<AppIdentityDbContext>();
+
+        // Identity backing store: driven by AuthOptions settings.
+        if (authOptions.UseDocumentDbForAuth && documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.AddNpgsqlDbContext<AppIdentityDbContext>("mattgptdb");
+        }
+        else if (!authOptions.UseDocumentDbForAuth && authOptions.AuthDbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.AddNpgsqlDbContext<AppIdentityDbContext>("mattgpt-identity-db");
+        }
+        else
+        {
+            if (authOptions.UseDocumentDbForAuth && !documentDbOptions.Provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine(
+                    $"[WARNING] Document DB provider '{documentDbOptions.Provider}' does not support bundled Identity storage; " +
+                    "falling back to SQLite for auth.");
+            }
+            builder.Services.AddDbContext<AppIdentityDbContext>(options =>
+                options.UseSqlite("Data Source=mattgpt-identity.db"));
+        }
+
+        // Trusted header scheme for Blazor BFF → API service-to-service calls.
+        builder.Services.AddAuthentication()
+            .AddScheme<AuthenticationSchemeOptions, ServiceToServiceAuthHandler>(
+                ServiceToServiceAuthHandler.SchemeName, null);
+
+        builder.Services.AddAuthorization(options =>
+        {
+            options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .AddAuthenticationSchemes(
+                    IdentityConstants.BearerScheme,
+                    IdentityConstants.ApplicationScheme,
+                    ServiceToServiceAuthHandler.SchemeName)
+                .RequireAuthenticatedUser()
+                .Build();
+        });
     }
-
-    // Trusted header scheme for Blazor BFF → API service-to-service calls.
-    builder.Services.AddAuthentication()
-        .AddScheme<AuthenticationSchemeOptions, ServiceToServiceAuthHandler>(
-            ServiceToServiceAuthHandler.SchemeName, null);
-
-    builder.Services.AddAuthorization(options =>
-    {
-        options.FallbackPolicy = new AuthorizationPolicyBuilder()
-            .AddAuthenticationSchemes(
-                IdentityConstants.BearerScheme,
-                IdentityConstants.ApplicationScheme,
-                ServiceToServiceAuthHandler.SchemeName)
-            .RequireAuthenticatedUser()
-            .Build();
-    });
 }
 
 // --- Document DB configuration (options already read above for Identity backing-store selection) ---
@@ -248,8 +293,9 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-if (authOptions.Enabled)
+if (authOptions.Enabled && !authOptions.Provider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase))
 {
+    // Legacy Identity endpoints — not needed when using Keycloak.
     var authGroup = app.MapGroup("/auth");
     authGroup.MapIdentityApi<IdentityUser>().AllowAnonymous();
     authGroup.MapGet("/me", (HttpContext context) =>

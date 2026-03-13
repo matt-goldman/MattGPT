@@ -2,7 +2,9 @@ using LumexUI.Extensions;
 using MattGPT.ApiClient;
 using MattGPT.Web;
 using MattGPT.Web.Components;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,22 +18,69 @@ var authOptions = builder.Configuration.GetSection(AuthOptions.SectionName).Get<
 if (authOptions.Enabled)
 {
     builder.Services.AddHttpContextAccessor();
-    builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-        .AddCookie(options =>
-        {
-            options.LoginPath = "/login";
-            options.LogoutPath = "/logout";
-            options.Cookie.HttpOnly = true;
-            options.Cookie.SameSite = SameSiteMode.Lax;
-            options.ExpireTimeSpan = TimeSpan.FromDays(7);
-            options.SlidingExpiration = true;
-        });
+
+    var isKeycloak = authOptions.Provider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase);
+
+    if (isKeycloak)
+    {
+        // --- Keycloak path: OIDC with authorization code + PKCE ---
+        var keycloakBase = builder.Configuration.GetConnectionString("keycloak")
+            ?? builder.Configuration["Auth:Keycloak:ServerUrl"]
+            ?? "http://localhost:8080";
+        var keycloakRealm = builder.Configuration["Auth:Keycloak:Realm"] ?? "mattgpt";
+        var keycloakAuthority = $"{keycloakBase.TrimEnd('/')}/realms/{keycloakRealm}";
+        var oidcClientId = builder.Configuration["Auth:Keycloak:ClientId"] ?? "mattgpt-web";
+
+        builder.Services.AddAuthentication(options =>
+            {
+                options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+            })
+            .AddCookie(options =>
+            {
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.ExpireTimeSpan = TimeSpan.FromDays(7);
+                options.SlidingExpiration = true;
+            })
+            .AddOpenIdConnect(options =>
+            {
+                options.Authority = keycloakAuthority;
+                options.ClientId = oidcClientId;
+                options.ResponseType = "code";
+                options.SaveTokens = true;
+                options.UsePkce = true;
+                options.RequireHttpsMetadata = false; // Allow HTTP in Aspire's internal network.
+                options.Scope.Add("openid");
+                options.Scope.Add("profile");
+                options.Scope.Add("email");
+                options.TokenValidationParameters.NameClaimType = "preferred_username";
+                // Map standard OIDC claims so AuthorizeView/ClaimsPrincipal work correctly.
+                options.MapInboundClaims = false;
+                options.TokenValidationParameters.ValidateIssuer = false; // Issuer varies per host in local dev.
+            });
+    }
+    else
+    {
+        // --- Legacy Identity path: cookie auth ---
+        builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddCookie(options =>
+            {
+                options.LoginPath = "/login";
+                options.LogoutPath = "/logout";
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.ExpireTimeSpan = TimeSpan.FromDays(7);
+                options.SlidingExpiration = true;
+            });
+    }
+
     builder.Services.AddAuthorizationBuilder()
         .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
             .Build());
     builder.Services.AddCascadingAuthenticationState();
-    builder.Services.AddTransient<UserIdDelegatingHandler>();
+    builder.Services.AddTransient<ApiAuthDelegatingHandler>();
 }
 
 // Add services to the container.
@@ -47,7 +96,7 @@ builder.Services.AddOutputCache();
 var mattGptClientBuilder = builder.Services.AddMattGptApiClient(new Uri("https+http://apiservice"));
 if (authOptions.Enabled)
 {
-    mattGptClientBuilder.AddHttpMessageHandler<UserIdDelegatingHandler>();
+    mattGptClientBuilder.AddHttpMessageHandler<ApiAuthDelegatingHandler>();
 }
 
 // Configure Kestrel for large file uploads (up to 250 MB).
@@ -81,6 +130,27 @@ app.MapStaticAssets().AllowAnonymous();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// --- OIDC challenge/sign-out endpoints for Keycloak path ---
+if (authOptions.Enabled && authOptions.Provider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase))
+{
+    // Trigger the OIDC login challenge (redirects the browser to Keycloak).
+    app.MapGet("/auth/login-oidc", (HttpContext context, string? returnUrl) =>
+    {
+        var redirectUri = returnUrl ?? "/";
+        return Results.Challenge(
+            new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = redirectUri },
+            [OpenIdConnectDefaults.AuthenticationScheme]);
+    }).AllowAnonymous();
+
+    // Trigger OIDC sign-out (signs out locally and redirects to Keycloak end-session).
+    app.MapGet("/auth/logout-oidc", async (HttpContext context) =>
+    {
+        await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        await context.SignOutAsync(OpenIdConnectDefaults.AuthenticationScheme,
+            new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = "/" });
+    }).AllowAnonymous();
+}
 
 app.MapDefaultEndpoints();
 

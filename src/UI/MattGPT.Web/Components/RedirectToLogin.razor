@@ -1,8 +1,18 @@
 @inject NavigationManager Navigation
+@inject Microsoft.Extensions.Options.IOptions<MattGPT.Web.AuthOptions> AuthConfig
 
 @code {
     protected override void OnInitialized()
     {
-        Navigation.NavigateTo("/login", forceLoad: true);
+        if (AuthConfig.Value.Provider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase))
+        {
+            // Trigger the OIDC challenge directly (avoids an extra redirect hop).
+            var returnUrl = Uri.EscapeDataString(Navigation.Uri);
+            Navigation.NavigateTo($"/auth/login-oidc?returnUrl={returnUrl}", forceLoad: true);
+        }
+        else
+        {
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
     }
 }

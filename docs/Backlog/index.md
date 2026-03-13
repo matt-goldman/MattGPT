@@ -76,7 +76,7 @@ This document is the **system of record** for project planning and issue trackin
 | 42 | 042-publish-docker-image.md | Publish Docker image to public registry | TODO | TODO/ | Depends on 41. CI/CD to ghcr.io; Dockerfile; docker-compose variant templates. |
 | 43 | 043-application-level-config-wizard.md | Application-level first-run configuration wizard | TODO | TODO/ | Depends on 040, 029. Supersedes 014. Env-var → DB → wizard config chain; LLM, vector store, auth setup in Blazor UI. |
 | 44 | 044-plugin-extensibility-system.md | Plugin system for tool-calling extensibility | TODO | TODO/ | Depends on 020. Drop-in DLL plugins via Plugins/ directory; reflection-based loader; ToolPlugin contract in separate abstractions package. |
-| 45 | 045-separate-auth-from-conversation-db.md | Separate auth backing store from document DB provider | TODO | TODO/ | Depends on 040. Independent auth DB config; UseDocumentDbForAuth option; Keycloak external provider via Aspire. |
+| 45 | 045-separate-auth-from-conversation-db.md | Separate auth backing store from document DB provider | In Progress | TODO/ | Depends on 040. Independent auth DB config; UseDocumentDbForAuth option; Keycloak external provider via Aspire. |
 
 ---
 

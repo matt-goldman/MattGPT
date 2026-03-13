@@ -14,6 +14,7 @@
   <ItemGroup>
     <PackageReference Include="LumexUI" Version="2.3.2" />
     <PackageReference Include="Markdig" Version="1.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.3" />
   </ItemGroup>
 
   <Target Name="BuildTailwindCSS" BeforeTargets="Build" DependsOnTargets="CopyContents">

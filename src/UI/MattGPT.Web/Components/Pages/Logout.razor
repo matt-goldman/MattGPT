@@ -1,6 +1,7 @@
 @page "/logout"
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authentication.Cookies
+@using Microsoft.AspNetCore.Authentication.OpenIdConnect
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @inject NavigationManager Navigation
 @inject Microsoft.Extensions.Options.IOptions<MattGPT.Web.AuthOptions> AuthConfig
@@ -16,11 +17,20 @@
             return;
         }
 
-        if (HttpContext is not null)
+        if (AuthConfig.Value.Provider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase))
         {
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            // OIDC sign-out: clear the local cookie and trigger Keycloak end-session.
+            Navigation.NavigateTo("/auth/logout-oidc", forceLoad: true);
         }
+        else
+        {
+            // Legacy Identity: clear the local cookie and redirect to login.
+            if (HttpContext is not null)
+            {
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            }
 
-        Navigation.NavigateTo("/login");
+            Navigation.NavigateTo("/login");
+        }
     }
 }

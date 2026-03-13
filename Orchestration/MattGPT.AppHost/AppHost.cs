@@ -19,6 +19,7 @@ var embeddingEndpoint = builder.Configuration["LLM:EmbeddingEndpoint"];
 
 // --- Optional authentication ---
 var authEnabled = builder.Configuration["Auth:Enabled"] ?? "false";
+var authProvider = builder.Configuration["Auth:Provider"] ?? "Keycloak";
 
 // --- Document DB and vector store configuration ---
 var documentDbProvider = builder.Configuration["DocumentDb:Provider"] ?? "MongoDB";
@@ -57,6 +58,18 @@ if (!isPostgresDocumentDb)
         .AddDatabase("mattgptdb");
 }
 
+// --- Keycloak (when auth is enabled and provider is Keycloak) ---
+IResourceBuilder<KeycloakResource>? keycloak = null;
+var isAuthEnabled = bool.TryParse(authEnabled, out var authEnabledBool) && authEnabledBool;
+var isKeycloakProvider = authProvider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase);
+
+if (isAuthEnabled && isKeycloakProvider)
+{
+    keycloak = builder.AddKeycloak("keycloak")
+        .WithDataVolume()
+        .WithRealmImport("./keycloak/mattgpt-realm.json");
+}
+
 #endregion
 
 # region API service and dependencies
@@ -64,6 +77,7 @@ if (!isPostgresDocumentDb)
 var apiService = builder.AddProject<Projects.MattGPT_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
     .WithEnvironment("Auth__Enabled", authEnabled)
+    .WithEnvironment("Auth__Provider", authProvider)
     .WithEnvironment("LLM__Provider", provider)
     .WithEnvironment("LLM__ModelId", modelId)
     .WithEnvironment("LLM__EmbeddingModelId", embeddingModelId)
@@ -171,12 +185,25 @@ if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
 #region UI
 
 // --- Web frontend ---
-builder.AddProject<Projects.MattGPT_Web>("webfrontend")
+var webfrontend = builder.AddProject<Projects.MattGPT_Web>("webfrontend")
     .WithExternalHttpEndpoints()
     .WithHttpHealthCheck("/health")
     .WithEnvironment("Auth__Enabled", authEnabled)
+    .WithEnvironment("Auth__Provider", authProvider)
     .WithReference(apiService)
     .WaitFor(apiService);
+
+// --- Wire up Keycloak to API service and web frontend ---
+if (keycloak is not null)
+{
+    apiService
+        .WithReference(keycloak)
+        .WaitFor(keycloak);
+
+    webfrontend
+        .WithReference(keycloak)
+        .WaitFor(keycloak);
+}
 
 // --- Dev tunnel for secure external access to the API ---
 var tunnel = builder.AddDevTunnel("tunnel")
