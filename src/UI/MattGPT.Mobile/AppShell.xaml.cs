@@ -6,27 +6,44 @@ namespace MattGPT.Mobile;
 
 public partial class AppShell : Shell
 {
-    private readonly IPopupService popupService;
-    private readonly NetCoreIdAuthService authService;
+    private readonly KeycloakAuthService? _keycloakAuth;
+    private readonly IPopupService? _popupService;
+    private readonly NetCoreIdAuthService? _legacyAuth;
 
-    public AppShell(
-        IPopupService popupService,
-        NetCoreIdAuthService authService)
+    /// <summary>Keycloak auth path — login is handled via system browser.</summary>
+    public AppShell(KeycloakAuthService keycloakAuth)
 	{
 		InitializeComponent();
-        this.popupService = popupService;
-        this.authService = authService;
+        _keycloakAuth = keycloakAuth;
+    }
+
+    /// <summary>Legacy Identity auth path — login is handled via in-app popup.</summary>
+    public AppShell(IPopupService popupService, NetCoreIdAuthService legacyAuth)
+    {
+        InitializeComponent();
+        _popupService = popupService;
+        _legacyAuth = legacyAuth;
     }
 
 	protected override async void OnAppearing()
 	{
 		base.OnAppearing();
 
-        var accessToken = await authService.GetAccessTokenAsync();
-        
-        if (accessToken is null)
+        if (_keycloakAuth is not null)
         {
-            await popupService.ShowPopupAsync<AuthViewModel>(this);
+            var token = await _keycloakAuth.GetAccessTokenAsync();
+            if (token is null)
+            {
+                await _keycloakAuth.LoginAsync();
+            }
+        }
+        else if (_legacyAuth is not null)
+        {
+            var token = await _legacyAuth.GetAccessTokenAsync();
+            if (token is null && _popupService is not null)
+            {
+                await _popupService.ShowPopupAsync<AuthViewModel>(this);
+            }
         }
     }
 }

@@ -1,14 +1,13 @@
 ﻿using MattGPT.ApiClient.Services;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace MattGPT.Mobile.Services;
 
 internal class KeycloakAuthFailureHandler(KeycloakAuthService authService) : IAuthFailureHandler
 {
-    public Task<bool> HandleAsync(CancellationToken cancellationToken = default)
+    public async Task<bool> HandleAsync(CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        // Re-authenticate via the OIDC browser flow; returns true if login succeeds
+        // so the caller can retry the failed request.
+        return await authService.LoginAsync();
     }
 }

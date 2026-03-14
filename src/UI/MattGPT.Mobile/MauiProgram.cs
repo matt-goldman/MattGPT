@@ -1,6 +1,7 @@
 ﻿using CommunityToolkit.Maui;
 using Duende.IdentityModel.OidcClient;
 using MattGPT.ApiClient;
+using MattGPT.ApiClient.Services;
 using MattGPT.Mobile.Auth;
 using MattGPT.Mobile.Popups;
 using MattGPT.Mobile.Services;
@@ -38,7 +39,9 @@ public static partial class MauiProgram
 		{
             builder.Services.AddSingleton(new OidcClient(new()
             {
-                Authority = "https://demo.duendesoftware.com",
+                // TODO: resolve Keycloak authority from Aspire service discovery when the MauiAspire issue is fixed
+                // For now, use the realm URL from the local Keycloak instance (via Aspire AppHost)
+                Authority = "https://localhost:8443/realms/mattgpt",
 
                 ClientId = "mattgpt-mobile",
                 Scope = "openid profile email",
@@ -48,17 +51,30 @@ public static partial class MauiProgram
             }));
 
             builder.Services.AddSingleton<KeycloakAuthService>();
+            builder.Services.AddSingleton<IAuthFailureHandler, KeycloakAuthFailureHandler>();
+
+            // same Aspire issue mentioned above, so hardcoding the API base address for now
+            builder.Services.AddApiClient<KeycloakAuthDelegatingHandler>(
+                new Uri("https://gqb8jt03-7321.aue.devtunnels.ms")); // "https+http://apiservice"
+
+            builder.Services.AddSingleton<AppShell>(sp =>
+                new AppShell(sp.GetRequiredService<KeycloakAuthService>()));
         }
 		else
 		{
             builder.Services.AddSingleton<NetCoreIdAuthService>();
-            // same Aspire issue mentioned above, so hardcoding this for now
-            builder.Services.AddApiClient<AuthDelegatingHandler>(new Uri("https://gqb8jt03-7321.aue.devtunnels.ms"));// "https+http://apiservice"));
+
+            // same Aspire issue mentioned above, so hardcoding the API base address for now
+            builder.Services.AddApiClient<AuthDelegatingHandler>(
+                new Uri("https://gqb8jt03-7321.aue.devtunnels.ms")); // "https+http://apiservice"
 
             builder.Services.AddTransientPopup<AuthPopup, AuthViewModel>();
-        }
 
-		builder.Services.AddSingleton<AppShell>();
+            builder.Services.AddSingleton<AppShell>(sp =>
+                new AppShell(
+                    sp.GetRequiredService<IPopupService>(),
+                    sp.GetRequiredService<NetCoreIdAuthService>()));
+        }
 
 #if DEBUG
         builder.Logging.AddDebug();
