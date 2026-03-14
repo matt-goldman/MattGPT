@@ -23,6 +23,20 @@
       "attributes": {
         "pkce.code.challenge.method": "S256"
       }
+    },
+    {
+      "clientId": "mattgpt-mobile",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "frontchannelLogout": true,
+      "redirectUris": [
+        "mattgpt://*"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
     }
   ]
 }

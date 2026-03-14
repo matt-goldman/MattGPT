@@ -1,0 +1,6 @@
+root = true
+
+[*.cs]
+# Collection-expression "simplification" harms readability — see ADR-010
+dotnet_diagnostic.IDE0028.severity = none
+dotnet_diagnostic.IDE0300.severity = none

@@ -7,11 +7,11 @@ namespace MattGPT.Mobile;
 public partial class AppShell : Shell
 {
     private readonly IPopupService popupService;
-    private readonly MobileAuthService authService;
+    private readonly NetCoreIdAuthService authService;
 
     public AppShell(
         IPopupService popupService,
-        MobileAuthService authService)
+        NetCoreIdAuthService authService)
 	{
 		InitializeComponent();
         this.popupService = popupService;

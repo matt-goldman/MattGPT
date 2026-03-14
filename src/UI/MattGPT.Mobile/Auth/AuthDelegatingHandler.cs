@@ -3,7 +3,7 @@ using MattGPT.Mobile.Services;
 
 namespace MattGPT.Mobile.Auth;
 
-internal partial class AuthDelegatingHandler(MobileAuthService authService) : DelegatingHandler
+internal partial class AuthDelegatingHandler(NetCoreIdAuthService authService) : DelegatingHandler
 {
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {

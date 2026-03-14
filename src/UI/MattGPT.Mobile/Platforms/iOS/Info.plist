@@ -9,6 +9,13 @@
 		<integer>1</integer>
 		<integer>2</integer>
 	</array>
+	<key>CFBundleURLSchemes</key>
+	<array>
+		<string>mattgpt</string>
+	</array>
+	<key>CFBundleTypeRole</key>
+	<string>Editor</string>
+
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>arm64</string>

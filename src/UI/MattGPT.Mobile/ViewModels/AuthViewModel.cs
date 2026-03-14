@@ -10,7 +10,7 @@ namespace MattGPT.Mobile.ViewModels;
 [Ignore]
 public partial class AuthViewModel(
     IPopupService popupService,
-    MobileAuthService authService) : ObservableValidator
+    NetCoreIdAuthService authService) : ObservableValidator
 {
     [ObservableProperty]
     [Required(ErrorMessage = "Email is required.")]

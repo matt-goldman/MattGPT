@@ -1,4 +1,5 @@
 ﻿using CommunityToolkit.Maui;
+using Duende.IdentityModel.OidcClient;
 using MattGPT.ApiClient;
 using MattGPT.Mobile.Auth;
 using MattGPT.Mobile.Popups;
@@ -28,11 +29,34 @@ public static partial class MauiProgram
             .UseMauiCommunityToolkit(static options => options.SetPopupDefaults(new DefaultPopupSettings { CanBeDismissedByTappingOutsideOfPopup = false }));
 
 		// Register auth services
-		builder.Services.AddSingleton<MobileAuthService>();
+		
+        // currently unable to get config from Aspire, see: https://github.com/jfversluis/MauiAspire/issues/7#issuecomment-4037843834
+        // in the meantime, specify this manually to control whether the app uses Keycloak auth or not
+        var useKeycloakAuth = true; // get this from Aspire when the issue is resolved
 
-		builder.Services.AddApiClient<AuthDelegatingHandler>(new Uri("https://gqb8jt03-7321.aue.devtunnels.ms"));// "https+http://apiservice"));
+		if (useKeycloakAuth)
+		{
+            builder.Services.AddSingleton(new OidcClient(new()
+            {
+                Authority = "https://demo.duendesoftware.com",
 
-		builder.Services.AddTransientPopup<AuthPopup, AuthViewModel>();
+                ClientId = "mattgpt-mobile",
+                Scope = "openid profile email",
+                RedirectUri = "mattgpt://callback",
+
+                Browser = new MobileAuthBrowser()
+            }));
+
+            builder.Services.AddSingleton<KeycloakAuthService>();
+        }
+		else
+		{
+            builder.Services.AddSingleton<NetCoreIdAuthService>();
+            // same Aspire issue mentioned above, so hardcoding this for now
+            builder.Services.AddApiClient<AuthDelegatingHandler>(new Uri("https://gqb8jt03-7321.aue.devtunnels.ms"));// "https+http://apiservice"));
+
+            builder.Services.AddTransientPopup<AuthPopup, AuthViewModel>();
+        }
 
 		builder.Services.AddSingleton<AppShell>();
 

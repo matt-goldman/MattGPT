@@ -84,6 +84,7 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.4" />
 		<PackageReference Include="Plugin.Maui.Lucide" Version="1.0.1" />
 		<PackageReference Include="Plugin.Maui.SmartNavigation" Version="3.0.6" />
+		<PackageReference Include="Duende.IdentityModel.OidcClient" Version="7.0.1" />
 	</ItemGroup>
 
 	<ItemGroup>
