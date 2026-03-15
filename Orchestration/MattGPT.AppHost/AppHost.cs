@@ -236,7 +236,7 @@ var android = mauiapp.AddAndroidEmulator()
     .WithOtlpDevTunnel() // Required for OpenTelemetry data collection
     .WithReference(apiService, tunnel);
 
-if (authProvider == "Keycloak" && keycloak is not null)
+if (string.Equals(authProvider, "Keycloak", StringComparison.OrdinalIgnoreCase) && keycloak is not null)
 {
     var kcTunnel = builder.AddDevTunnel("kcTunnel")
         .WithAnonymousAccess()
