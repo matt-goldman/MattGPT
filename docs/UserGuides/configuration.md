@@ -198,7 +198,7 @@ Uses ASP.NET Core Identity with a local database. Login and registration are han
 
 **Local development (emulator):** Update the value in the Azure App Configuration emulator directly (via the Aspire dashboard's resource details, the `az appconfig` CLI pointed at `http://localhost:<PORT>`, or by editing `AppHost/appsettings.json` and removing the emulator's data volume so the next start re-seeds it). Then restart the affected service.
 
-**Deployed:** Update the value in the Azure App Configuration store via the Azure portal or `az appconfig kv set`, then restart the affected service (or use App Configuration's push-refresh feature).
+**Deployed:** Update the value in the Azure App Configuration store via the Azure portal or `az appconfig kv set`, then restart the affected service (or use App Configuration's push-refresh feature, **note** this is not currently implemented).
 
 > **Important:** If you change the embedding model, existing embeddings become incompatible. Re-embed by calling `POST /conversations/embed` on the API, or re-import your conversations.
 
