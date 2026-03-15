@@ -87,7 +87,7 @@ public sealed class ChatService(IHttpClientFactory factory, IAuthFailureHandler 
     public async Task<SessionDetail?> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.GetAsync($"/chat/sessions/{sessionId}", cancellationToken);
+        using var response = await client.GetAsync($"/chat/sessions/{sessionId}", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
@@ -101,7 +101,7 @@ public sealed class ChatService(IHttpClientFactory factory, IAuthFailureHandler 
     public async Task<IReadOnlyList<ChatSessionItem>> GetSessionsAsync(int limit = 50, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.GetAsync($"/chat/sessions?limit={limit}", cancellationToken);
+        using var response = await client.GetAsync($"/chat/sessions?limit={limit}", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
@@ -116,7 +116,7 @@ public sealed class ChatService(IHttpClientFactory factory, IAuthFailureHandler 
     public async Task<ImportedConversationDetail?> GetConversationAsync(string conversationId, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.GetAsync($"/conversations/{conversationId}", cancellationToken);
+        using var response = await client.GetAsync($"/conversations/{conversationId}", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
