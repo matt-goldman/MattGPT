@@ -1,7 +1,9 @@
 using Azure;
 using Azure.Data.AppConfiguration;
 
+#pragma warning disable IDE0130 // Namespace does not match folder structure - AppHost uses top-level statements, so the namespace is not expected to match the folder structure.
 namespace Aspire.Hosting;
+#pragma warning restore IDE0130 // Namespace does not match folder structure
 
 /// <summary>
 /// Seeds an Azure App Configuration store (or local emulator) with a set of key-value pairs.
