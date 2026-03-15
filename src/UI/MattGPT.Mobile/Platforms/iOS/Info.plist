@@ -35,5 +35,9 @@
 	</array>
 	<key>XSAppIconAssets</key>
 	<string>Assets.xcassets/appicon.appiconset</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>MattGPT uses speech recognition to convert your voice to text for chat input.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>MattGPT requires microphone access to capture your voice for speech-to-text.</string>
 </dict>
 </plist>
