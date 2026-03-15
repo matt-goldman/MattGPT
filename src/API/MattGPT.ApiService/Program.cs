@@ -67,7 +67,6 @@ if (authOptions.Enabled)
                 if (builder.Environment.IsDevelopment())
                 {
                     options.TokenValidationParameters.ValidateIssuer = false; // Dev tunnel doesn't use host header forwarding, so issuer name doesn't match authority.
-                    //options.TokenValidationParameters.Valid
                 }
 
                 options.RequireHttpsMetadata = true;
