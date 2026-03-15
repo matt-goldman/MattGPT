@@ -15,7 +15,7 @@ public sealed class SearchService(IHttpClientFactory factory, IAuthFailureHandle
     public async Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit = 20, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.GetAsync($"/search?q={Uri.EscapeDataString(query)}&limit={limit}", cancellationToken);
+        using var response = await client.GetAsync($"/search?q={Uri.EscapeDataString(query)}&limit={limit}", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
