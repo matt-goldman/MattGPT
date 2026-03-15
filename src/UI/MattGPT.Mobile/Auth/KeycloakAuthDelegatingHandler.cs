@@ -1,9 +1,9 @@
-﻿using MattGPT.ApiClient.Services;
 using MattGPT.Mobile.Services;
+using System.Net.Http.Headers;
 
 namespace MattGPT.Mobile.Auth;
 
-internal partial class AuthDelegatingHandler(NetCoreIdAuthService authService) : DelegatingHandler
+internal partial class KeycloakAuthDelegatingHandler(KeycloakAuthService authService) : DelegatingHandler
 {
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -11,7 +11,7 @@ internal partial class AuthDelegatingHandler(NetCoreIdAuthService authService) :
 
         if (!string.IsNullOrEmpty(token))
         {
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
         return await base.SendAsync(request, cancellationToken);

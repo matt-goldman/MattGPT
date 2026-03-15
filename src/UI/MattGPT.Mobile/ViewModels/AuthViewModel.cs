@@ -10,8 +10,11 @@ namespace MattGPT.Mobile.ViewModels;
 [Ignore]
 public partial class AuthViewModel(
     IPopupService popupService,
-    MobileAuthService authService) : ObservableValidator
+    IMobileAuthService authService) : ObservableValidator
 {
+    public bool IsKeycloakMode => authService is IKeycloakAuthService;
+    public bool IsLegacyMode => authService is ILegacyAuthService;
+
     [ObservableProperty]
     [Required(ErrorMessage = "Email is required.")]
     [EmailAddress(ErrorMessage = "Please enter a valid email address.")]
@@ -39,6 +42,51 @@ public partial class AuthViewModel(
 
     [ObservableProperty]
     public partial bool IsRegisterMode { get; set; }
+
+    [RelayCommand]
+    private async Task InitializeAsync()
+    {
+        string? token = await authService.GetAccessTokenAsync();
+
+        if (token is not null)
+        {
+            await popupService.ClosePopupAsync(Shell.Current);
+        }
+    }
+
+    [RelayCommand]
+    private async Task LoginWithKeycloakAsync()
+    {
+        if (IsBusy)
+            return;
+
+        IsBusy = true;
+        IsErrorState = false;
+        ErrorMessage = string.Empty;
+
+        try
+        {
+            var loginSucceeded = await ((IKeycloakAuthService)authService).LoginAsync();
+            if (loginSucceeded)
+            {
+                await popupService.ClosePopupAsync(Shell.Current);
+            }
+            else
+            {
+                IsErrorState = true;
+                ErrorMessage = "Login failed. Please try again.";
+            }
+        }
+        catch (Exception)
+        {
+            IsErrorState = true;
+            ErrorMessage = "An unexpected error occurred. Please try again.";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 
     [RelayCommand]
     private void ToggleMode()
@@ -79,7 +127,7 @@ public partial class AuthViewModel(
 
         try
         {
-            var result = await authService.LoginAsync(Email, Password);
+            var result = await ((ILegacyAuthService)authService).LoginAsync(Email, Password);
             if (result.Success)
             {
                 isLoggedIn = true;
@@ -135,7 +183,7 @@ public partial class AuthViewModel(
         
         try
         {
-            var result = await authService.RegisterAsync(Email, Password);
+            var result = await ((ILegacyAuthService)authService).RegisterAsync(Email, Password);
             if (result.Success)
             {
                 isRegistered = true;

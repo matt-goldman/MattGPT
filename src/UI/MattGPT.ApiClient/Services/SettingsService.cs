@@ -5,7 +5,7 @@ using MattGPT.ApiClient.Models;
 namespace MattGPT.ApiClient.Services;
 
 /// <inheritdoc cref="ISettingsService"/>
-public sealed class SettingsService(IHttpClientFactory factory) : ISettingsService
+public sealed class SettingsService(IHttpClientFactory factory, IAuthFailureHandler authFailureHandler) : ISettingsService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -15,14 +15,35 @@ public sealed class SettingsService(IHttpClientFactory factory) : ISettingsServi
     public async Task<SystemPromptResponse?> GetSystemPromptAsync(CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        return await client.GetFromJsonAsync<SystemPromptResponse>("/system-prompt", JsonOptions, cancellationToken);
+        using var response = await client.GetAsync("/system-prompt", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync("/system-prompt", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<SystemPromptResponse>(JsonOptions, cancellationToken);
+            }
+            return default;
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<SystemPromptResponse>(JsonOptions, cancellationToken);
     }
 
     /// <inheritdoc/>
     public async Task SaveSystemPromptAsync(string? systemPrompt, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.PutAsJsonAsync("/system-prompt", new { systemPrompt }, JsonOptions, cancellationToken);
+        using var response = await client.PutAsJsonAsync("/system-prompt", new { systemPrompt }, JsonOptions, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.PutAsJsonAsync("/system-prompt", new { systemPrompt }, JsonOptions, cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+            }
+            return;
+        }
         response.EnsureSuccessStatusCode();
     }
 
@@ -30,7 +51,17 @@ public sealed class SettingsService(IHttpClientFactory factory) : ISettingsServi
     public async Task<SystemPromptResponse?> ResetSystemPromptAsync(CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.DeleteAsync("/system-prompt", cancellationToken);
+        using var response = await client.DeleteAsync("/system-prompt", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.DeleteAsync("/system-prompt", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<SystemPromptResponse>(JsonOptions, cancellationToken);
+            }
+            return default;
+        }
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<SystemPromptResponse>(JsonOptions, cancellationToken);
     }
@@ -39,18 +70,43 @@ public sealed class SettingsService(IHttpClientFactory factory) : ISettingsServi
     public async Task<UserProfileResponse?> GetUserProfileAsync(CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        return await client.GetFromJsonAsync<UserProfileResponse>("/user-profile", JsonOptions, cancellationToken);
+        using var response = await client.GetAsync("/user-profile", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync("/user-profile", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<UserProfileResponse>(JsonOptions, cancellationToken);
+            }
+            return default;
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<UserProfileResponse>(JsonOptions, cancellationToken);
     }
 
     /// <inheritdoc/>
     public async Task SaveUserProfileAsync(string? userProfileText, string? userInstructions, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.PutAsJsonAsync(
+        using var response = await client.PutAsJsonAsync(
             "/user-profile",
             new { userProfileText, userInstructions },
             JsonOptions,
             cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.PutAsJsonAsync(
+                    "/user-profile",
+                    new { userProfileText, userInstructions },
+                    JsonOptions,
+                    cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+            }
+            return;
+        }
         response.EnsureSuccessStatusCode();
     }
 }

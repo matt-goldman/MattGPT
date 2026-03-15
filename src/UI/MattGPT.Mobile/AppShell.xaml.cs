@@ -1,32 +1,27 @@
 ﻿using CommunityToolkit.Maui;
-using MattGPT.Mobile.Services;
 using MattGPT.Mobile.ViewModels;
 
 namespace MattGPT.Mobile;
 
 public partial class AppShell : Shell
 {
-    private readonly IPopupService popupService;
-    private readonly MobileAuthService authService;
+	private readonly IPopupService _popupService;
+	private bool _hasAttemptedAuth = false;
 
-    public AppShell(
-        IPopupService popupService,
-        MobileAuthService authService)
+	public AppShell(IPopupService popupService)
 	{
 		InitializeComponent();
-        this.popupService = popupService;
-        this.authService = authService;
-    }
+		_popupService = popupService;
+	}
 
 	protected override async void OnAppearing()
 	{
 		base.OnAppearing();
 
-        var accessToken = await authService.GetAccessTokenAsync();
-        
-        if (accessToken is null)
-        {
-            await popupService.ShowPopupAsync<AuthViewModel>(this);
-        }
-    }
+		if (!_hasAttemptedAuth)
+		{
+			_hasAttemptedAuth = true;
+			await _popupService.ShowPopupAsync<AuthViewModel>(this);
+		}
+	}
 }

@@ -215,12 +215,13 @@ Use Aspire MCP tooling to identify the correct NuGet packages for both the Aspir
 
 ## Acceptance Criteria
 
-- [ ] `Auth:UseDocumentDbForAuth = true` with `DocumentDb:Provider = Postgres` uses the existing Postgres database for Identity — no behavioural change from today.
-- [ ] `Auth:UseDocumentDbForAuth = true` with `DocumentDb:Provider = MongoDB` (or any non-Postgres provider) logs a warning and uses SQLite. App starts and authenticates successfully.
-- [ ] `Auth:UseDocumentDbForAuth = false`, `Auth:AuthDbProvider = SQLite` uses SQLite for Identity regardless of the document DB provider.
+- [x] `Auth:Provider = Keycloak` provisions a Keycloak container in the Aspire AppHost, no ASP.NET Core Identity is registered, and the API service validates JWTs against Keycloak's OIDC endpoint.
+- [x] `Auth:Provider = Keycloak` redirects unauthenticated Blazor users to Keycloak login via OIDC authorization code + PKCE.
+- [x] `Auth:Enabled = false` continues to work with zero regressions regardless of any Provider/UseDocumentDbForAuth/AuthDbProvider setting.
+- [x] `Auth:Provider` defaults to `"Keycloak"` — new installations use Keycloak out of the box.
+- [x] `Auth:UseDocumentDbForAuth = true` with `DocumentDb:Provider = Postgres` uses the existing Postgres database for Identity — no behavioural change from today (Identity path).
+- [x] `Auth:UseDocumentDbForAuth = true` with `DocumentDb:Provider = MongoDB` (or any non-Postgres provider) logs a warning and uses SQLite. App starts and authenticates successfully.
+- [x] `Auth:UseDocumentDbForAuth = false`, `Auth:AuthDbProvider = SQLite` uses SQLite for Identity regardless of the document DB provider.
 - [ ] `Auth:UseDocumentDbForAuth = false`, `Auth:AuthDbProvider = Postgres` provisions (or reuses) a Postgres resource for Identity in Aspire and connects the API service to it. Identity tables are created in that database.
-- [ ] `Auth:Provider = Keycloak` provisions a Keycloak container in the Aspire AppHost, no ASP.NET Core Identity is registered, and the API service validates JWTs against Keycloak's OIDC endpoint.
-- [ ] `Auth:Provider = Keycloak` redirects unauthenticated Blazor users to Keycloak login.
-- [ ] `Auth:Enabled = false` continues to work with zero regressions regardless of any Provider/UseDocumentDbForAuth/AuthDbProvider setting.
-- [ ] All existing tests pass (`dotnet test MattGPT.slnx`).
-- [ ] `docs/UserGuides/configuration.md` updated with the new `Auth` settings table.
+- [x] All existing tests pass (`dotnet test MattGPT.slnx`).
+- [x] `docs/UserGuides/configuration.md` updated with the new `Auth` settings table.

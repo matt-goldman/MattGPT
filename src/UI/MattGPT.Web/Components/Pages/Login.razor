@@ -11,42 +11,54 @@
 
 <PageTitle>Login — MattGPT</PageTitle>
 
-<div class="flex items-center justify-center min-h-[60vh]">
-    <div class="w-full max-w-sm space-y-6">
-        <h1 class="text-2xl font-bold text-center">Sign In</h1>
-
-        @if (!string.IsNullOrEmpty(_error))
-        {
-            <div class="bg-danger-50 border border-danger-200 text-danger-700 p-3 rounded-lg text-sm">
-                @_error
-            </div>
-        }
-
-        <EditForm Model="_model" OnValidSubmit="HandleLogin" FormName="login">
-            <div class="space-y-4">
-                <div>
-                    <label for="email" class="block text-sm font-medium mb-1">Email</label>
-                    <InputText id="email" @bind-Value="_model.Email"
-                               class="w-full px-3 py-2 border border-default-300 rounded-lg bg-default-100 focus:outline-none focus:ring-2 focus:ring-primary" />
-                </div>
-                <div>
-                    <label for="password" class="block text-sm font-medium mb-1">Password</label>
-                    <InputText id="password" @bind-Value="_model.Password" type="password"
-                               class="w-full px-3 py-2 border border-default-300 rounded-lg bg-default-100 focus:outline-none focus:ring-2 focus:ring-primary" />
-                </div>
-                <button type="submit" disabled="@_loading"
-                        class="w-full py-2 px-4 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 disabled:opacity-50">
-                    @(_loading ? "Signing in…" : "Sign in")
-                </button>
-            </div>
-        </EditForm>
-
-        <p class="text-center text-sm text-default-500">
-            Don't have an account?
-            <a href="/register" class="text-primary hover:underline">Register</a>
-        </p>
+@if (AuthConfig.Value.Provider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase))
+{
+    @* Keycloak path: the OIDC middleware handles the challenge; this page just triggers it. *@
+    <div class="flex items-center justify-center min-h-[60vh]">
+        <div class="text-center space-y-4">
+            <p class="text-default-500">Redirecting to login…</p>
+        </div>
     </div>
-</div>
+}
+else
+{
+    <div class="flex items-center justify-center min-h-[60vh]">
+        <div class="w-full max-w-sm space-y-6">
+            <h1 class="text-2xl font-bold text-center">Sign In</h1>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="bg-danger-50 border border-danger-200 text-danger-700 p-3 rounded-lg text-sm">
+                    @_error
+                </div>
+            }
+
+            <EditForm Model="_model" OnValidSubmit="HandleLogin" FormName="login">
+                <div class="space-y-4">
+                    <div>
+                        <label for="email" class="block text-sm font-medium mb-1">Email</label>
+                        <InputText id="email" @bind-Value="_model.Email"
+                                   class="w-full px-3 py-2 border border-default-300 rounded-lg bg-default-100 focus:outline-none focus:ring-2 focus:ring-primary" />
+                    </div>
+                    <div>
+                        <label for="password" class="block text-sm font-medium mb-1">Password</label>
+                        <InputText id="password" @bind-Value="_model.Password" type="password"
+                                   class="w-full px-3 py-2 border border-default-300 rounded-lg bg-default-100 focus:outline-none focus:ring-2 focus:ring-primary" />
+                    </div>
+                    <button type="submit" disabled="@_loading"
+                            class="w-full py-2 px-4 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 disabled:opacity-50">
+                        @(_loading ? "Signing in…" : "Sign in")
+                    </button>
+                </div>
+            </EditForm>
+
+            <p class="text-center text-sm text-default-500">
+                Don't have an account?
+                <a href="/register" class="text-primary hover:underline">Register</a>
+            </p>
+        </div>
+    </div>
+}
 
 @code {
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
@@ -61,7 +73,16 @@
     protected override void OnInitialized()
     {
         if (!AuthConfig.Value.Enabled)
+        {
             Navigation.NavigateTo("/");
+            return;
+        }
+
+        if (AuthConfig.Value.Provider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase))
+        {
+            // Trigger the OIDC challenge, which redirects the browser to Keycloak.
+            Navigation.NavigateTo("/auth/login-oidc", forceLoad: true);
+        }
     }
 
     private async Task HandleLogin()

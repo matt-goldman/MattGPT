@@ -5,7 +5,7 @@ using MattGPT.ApiClient.Models;
 namespace MattGPT.ApiClient.Services;
 
 /// <inheritdoc cref="IConversationService"/>
-public sealed class ConversationService(IHttpClientFactory factory) : IConversationService
+public sealed class ConversationService(IHttpClientFactory factory, IAuthFailureHandler authFailureHandler) : IConversationService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -21,7 +21,25 @@ public sealed class ConversationService(IHttpClientFactory factory) : IConversat
         streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
         content.Add(streamContent, "file", fileName);
 
-        var response = await client.PostAsync("/conversations/upload", content, cancellationToken);
+        using var response = await client.PostAsync("/conversations/upload", content, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            // Retry is only possible when the stream can be seeked back to the beginning.
+            // Non-seekable streams (e.g., network or pipe streams) cannot be replayed after the
+            // initial request body was consumed, so the retry is skipped in that case.
+            if (await authFailureHandler.HandleAsync(cancellationToken) && fileStream.CanSeek)
+            {
+                fileStream.Seek(0, SeekOrigin.Begin);
+                using var retryContent = new MultipartFormDataContent();
+                var retryStreamContent = new StreamContent(fileStream);
+                retryStreamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                retryContent.Add(retryStreamContent, "file", fileName);
+                using var retryResponse = await client.PostAsync("/conversations/upload", retryContent, cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<UploadResponse>(JsonOptions, cancellationToken);
+            }
+            return default;
+        }
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<UploadResponse>(JsonOptions, cancellationToken);
@@ -31,7 +49,17 @@ public sealed class ConversationService(IHttpClientFactory factory) : IConversat
     public async Task<JobStatusResponse?> GetJobStatusAsync(string jobId, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.GetAsync($"/conversations/status/{jobId}", cancellationToken);
+        using var response = await client.GetAsync($"/conversations/status/{jobId}", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync($"/conversations/status/{jobId}", cancellationToken);
+                if (!retryResponse.IsSuccessStatusCode) return null;
+                return await retryResponse.Content.ReadFromJsonAsync<JobStatusResponse>(JsonOptions, cancellationToken);
+            }
+            return null;
+        }
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<JobStatusResponse>(JsonOptions, cancellationToken);
     }
@@ -40,7 +68,20 @@ public sealed class ConversationService(IHttpClientFactory factory) : IConversat
     public async Task<IReadOnlyList<ProjectItem>> GetProjectsAsync(CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        return await client.GetFromJsonAsync<List<ProjectItem>>("/conversations/projects", JsonOptions, cancellationToken)
+        using var response = await client.GetAsync("/conversations/projects", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync("/conversations/projects", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<List<ProjectItem>>(JsonOptions, cancellationToken)
+                    ?? [];
+            }
+            return [];
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<ProjectItem>>(JsonOptions, cancellationToken)
             ?? [];
     }
 
@@ -49,8 +90,19 @@ public sealed class ConversationService(IHttpClientFactory factory) : IConversat
         string templateId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        return await client.GetFromJsonAsync<ProjectConversationsResponse>(
-            $"/conversations/projects/{templateId}?page={page}&pageSize={pageSize}", JsonOptions, cancellationToken);
+        using var response = await client.GetAsync($"/conversations/projects/{templateId}?page={page}&pageSize={pageSize}", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync($"/conversations/projects/{templateId}?page={page}&pageSize={pageSize}", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<ProjectConversationsResponse>(JsonOptions, cancellationToken);
+            }
+            return default;
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ProjectConversationsResponse>(JsonOptions, cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -58,19 +110,43 @@ public sealed class ConversationService(IHttpClientFactory factory) : IConversat
         int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        return await client.GetFromJsonAsync<StandaloneConversationsResponse>(
-            $"/conversations/standalone?page={page}&pageSize={pageSize}", JsonOptions, cancellationToken);
+        using var response = await client.GetAsync($"/conversations/standalone?page={page}&pageSize={pageSize}", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync($"/conversations/standalone?page={page}&pageSize={pageSize}", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<StandaloneConversationsResponse>(JsonOptions, cancellationToken);
+            }
+            return default;
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<StandaloneConversationsResponse>(JsonOptions, cancellationToken);
     }
 
     /// <inheritdoc/>
     public async Task RenameProjectAsync(string templateId, string name, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.PatchAsJsonAsync(
+        using var response = await client.PatchAsJsonAsync(
             $"/conversations/projects/{templateId}/name",
             new { name },
             JsonOptions,
             cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.PatchAsJsonAsync(
+                    $"/conversations/projects/{templateId}/name",
+                    new { name },
+                    JsonOptions,
+                    cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+            }
+            return;
+        }
         response.EnsureSuccessStatusCode();
     }
 }

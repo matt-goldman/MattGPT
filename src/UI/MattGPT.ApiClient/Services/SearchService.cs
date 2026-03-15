@@ -5,7 +5,7 @@ using MattGPT.ApiClient.Models;
 namespace MattGPT.ApiClient.Services;
 
 /// <inheritdoc cref="ISearchService"/>
-public sealed class SearchService(IHttpClientFactory factory) : ISearchService
+public sealed class SearchService(IHttpClientFactory factory, IAuthFailureHandler authFailureHandler) : ISearchService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -15,8 +15,20 @@ public sealed class SearchService(IHttpClientFactory factory) : ISearchService
     public async Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit = 20, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        return await client.GetFromJsonAsync<List<SearchResult>>(
-            $"/search?q={Uri.EscapeDataString(query)}&limit={limit}", JsonOptions, cancellationToken)
+        using var response = await client.GetAsync($"/search?q={Uri.EscapeDataString(query)}&limit={limit}", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync($"/search?q={Uri.EscapeDataString(query)}&limit={limit}", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<List<SearchResult>>(JsonOptions, cancellationToken)
+                    ?? [];
+            }
+            return [];
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<SearchResult>>(JsonOptions, cancellationToken)
             ?? [];
     }
 }

@@ -1,6 +1,10 @@
 # Configuration
 
-All configuration is in `src/MattGPT.ApiService/appsettings.json`. For provider-specific setup (examples, prerequisites, and notes), see [Integrations](integrations.md).
+## Overview
+
+Configuration is managed centrally in `Orchestration/MattGPT.AppHost/appsettings.json` when running locally with Aspire. The AppHost cascades settings to the API service and web frontend at startup. You can override specific settings in `src/API/MattGPT.ApiService/appsettings.json` or `src/UI/MattGPT.Web/appsettings.json` if needed, but this is not required for local development.
+
+In deployed scenarios (non-Aspire), each service reads its own `appsettings.json` independently. For provider-specific setup (examples, prerequisites, and notes), see [Integrations](integrations.md).
 
 ## LLM Settings
 
@@ -134,9 +138,47 @@ The `RAG` section controls retrieval behaviour.
 - Raise thresholds to require higher relevance.
 - For `Auto` mode, the light pass provides baseline context while the tool enables deeper retrieval on demand.
 
+## Authentication Settings
+
+The `Auth` section controls whether authentication is required and which provider handles it.
+
+```json
+{
+  "Auth": {
+    "Enabled": false,
+    "Provider": "Keycloak"
+  }
+}
+```
+
+| Setting | Type | Default | Notes |
+|---------|------|---------|-------|
+| `Auth:Enabled` | bool | `false` | When `true`, all pages and API endpoints require an authenticated user. Data is automatically scoped per user. |
+| `Auth:Provider` | string | `"Keycloak"` | `"Keycloak"` (recommended) or `"Identity"` (legacy). See below. |
+| `Auth:UseDocumentDbForAuth` | bool | `true` | **Identity only.** When `true`, the Identity backing store uses the same database as `DocumentDb:Provider` (Postgres) if supported; otherwise falls back to SQLite. |
+| `Auth:AuthDbProvider` | string | `"SQLite"` | **Identity only, when `UseDocumentDbForAuth = false`.** Supported: `"SQLite"`, `"Postgres"`. |
+| `Auth:Keycloak:Realm` | string | `"mattgpt"` | **Keycloak only.** The Keycloak realm name. |
+| `Auth:Keycloak:ClientId` | string | `"mattgpt-web"` | **Keycloak only.** The OIDC client ID for the web frontend. |
+| `Auth:Keycloak:ServerUrl` | string | - | **Keycloak only.** Optional override for the Keycloak server / authority base URL used for OIDC discovery and token validation. |
+| `ConnectionStrings:keycloak` | string | - | **Keycloak only.** Optional connection string-style value that can be used by the hosting environment (for example, Aspire) to supply the Keycloak base URL / authority. |
+| `Auth:Keycloak:Audience` | string | - | **Keycloak only.** Expected JWT audience for API access tokens issued by Keycloak; must match the API client/resource configuration in the realm. |
+### `Auth:Provider = "Keycloak"` (default, recommended)
+
+When running locally with Aspire, a Keycloak container is provisioned automatically and a `mattgpt` realm is imported from `Orchestration/MattGPT.AppHost/keycloak/mattgpt-realm.json`. No manual Keycloak setup is required.
+
+The web frontend uses an OIDC authorization code flow with PKCE. After login, the access token is forwarded to the API service as a `Bearer` header and validated against Keycloak's JWKS endpoint. Login and registration are handled by Keycloak's hosted UI.
+
+For production deployments, configure the Keycloak realm and the public OIDC client (with PKCE and the appropriate redirect URIs) and set `Auth:Keycloak:Realm` and `Auth:Keycloak:ClientId` via environment variables or user secrets.
+
+### `Auth:Provider = "Identity"` (legacy)
+
+Uses ASP.NET Core Identity with a local database. Login and registration are handled by the app's built-in `/login` and `/register` pages. The backing store is controlled by `Auth:UseDocumentDbForAuth` and `Auth:AuthDbProvider`.
+
+> **Note:** The default configuration has `Auth:Enabled = false`. Set it to `true` in `appsettings.json` or via user secrets to enable authentication.
+
 ## Switching Providers at Runtime
 
-Update `appsettings.json` and restart the API service. No data migration is required — conversations remain in MongoDB and embeddings in the vector store.
+Update `appsettings.json` and restart both the API service and the web frontend. No data migration is required — conversations remain in MongoDB and embeddings in the vector store. Both components read `Auth:*` settings at startup, so changes will not take effect until they are restarted.
 
 > **Important:** If you change the embedding model, existing embeddings become incompatible. Re-embed by calling `POST /conversations/embed` on the API, or re-import your conversations.
 

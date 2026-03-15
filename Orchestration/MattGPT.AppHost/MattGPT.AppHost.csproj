@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.1.2">
+﻿<Project Sdk="Aspire.AppHost.Sdk/13.1.2">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Keycloak" Version="13.1.2-preview.1.26125.13" />
     <PackageReference Include="Aspire.Hosting.Maui" Version="13.1.2-preview.1.26125.13" />
     <PackageReference Include="Aspire.Hosting.MongoDB" Version="13.1.2" />
     <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.1.2" />
@@ -19,6 +20,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\API\MattGPT.ApiService\MattGPT.ApiService.csproj" />
     <ProjectReference Include="..\..\src\UI\MattGPT.Web\MattGPT.Web.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="keycloak\mattgpt-realm.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

@@ -6,7 +6,7 @@ using MattGPT.ApiClient.Models;
 namespace MattGPT.ApiClient.Services;
 
 /// <inheritdoc cref="IAuthService"/>
-public sealed class AuthService(IHttpClientFactory factory) : IAuthService
+public sealed class AuthService(IHttpClientFactory factory, IAuthFailureHandler authFailureHandler) : IAuthService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -59,7 +59,16 @@ public sealed class AuthService(IHttpClientFactory factory) : IAuthService
         request.Headers.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
-        var response = await client.SendAsync(request, cancellationToken);
+        using var response = await client.SendAsync(request, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            // HandleAsync is called for its side-effect (e.g., redirect to login or token refresh).
+            // A retry is not possible here because the access token is an explicit caller-provided
+            // parameter; the callers that supply an updated token are responsible for retrying.
+            await authFailureHandler.HandleAsync(cancellationToken);
+            return null;
+        }
+
         if (!response.IsSuccessStatusCode)
             return null;
 

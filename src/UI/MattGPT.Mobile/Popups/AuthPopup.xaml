@@ -8,85 +8,111 @@
              x:Class="MattGPT.Mobile.Popups.AuthPopup">
     <Grid VerticalOptions="Center"
           HorizontalOptions="Center">
+
+        <!-- Keycloak auth panel -->
         <VerticalStackLayout Padding="24"
                              Spacing="16"
                              BackgroundColor="White"
                              HorizontalOptions="Center"
                              VerticalOptions="Center"
                              MinimumWidthRequest="300"
-                             IsVisible="{Binding IsLoginMode}">
-            <Label Text="Sign in"
+                             IsVisible="{Binding IsKeycloakMode}">
+            <Label Text="Welcome"
                    FontSize="18"
                    FontAttributes="Bold"
                    HorizontalOptions="Center" />
-            <Label Text="{Binding SuccessMessage}"
-                   HorizontalOptions="Center"/>
             <Label Text="{Binding ErrorMessage}"
                    TextColor="Red"
                    IsVisible="{Binding IsErrorState}"
                    HorizontalOptions="Center"/>
-            <fs:FsEntry Text="{Binding Email, Mode=TwoWay}"
-                        Keyboard="Email"
-                        Placeholder="Email"/>
-            <fs:FsEntry Text="{Binding Password, Mode=TwoWay}"
-                        Placeholder="Password"
-                        IsPassword="True" />
-            <fs:FsButton Text="Login"
-                         Command="{Binding AuthenticateCommand}"
+            <fs:FsButton Text="Sign In / Sign Up"
+                         Command="{Binding LoginWithKeycloakCommand}"
                          ContentLayout="Right"
                          ImageSource="{FontImageSource FontFamily=lucide, Glyph={x:Static icons:Icons.LogIn}}"/>
-            <FlexLayout Direction="Row"
-                        JustifyContent="SpaceBetween"
-                        AlignContent="Center"
-                        AlignItems="Center">
-                <Label Text="No account?"
-                       FontSize="Micro"/>
-                <Button Text="Register"
-                        Command="{Binding ToggleModeCommand}"
-                        Background="Transparent"
-                        TextColor="Blue"/>
-            </FlexLayout>
         </VerticalStackLayout>
 
-        <VerticalStackLayout Padding="24"
-                             Spacing="16"
-                             BackgroundColor="White"
-                             HorizontalOptions="Center"
-                             VerticalOptions="Center"
-                             MinimumWidthRequest="300"
-                             IsVisible="{Binding IsRegisterMode}">
-            <Label Text="Sign Up"
-                   FontSize="18"
-                   FontAttributes="Bold"
-                   HorizontalOptions="Center" />
-            <Label Text="{Binding SuccessMessage}"
-                   HorizontalOptions="Center"/>
-            <Label Text="{Binding ErrorMessage}"
-                   TextColor="Red"
-                   IsVisible="{Binding IsErrorState}"
-                   HorizontalOptions="Center"/>
-            <fs:FsEntry Text="{Binding Email, Mode=TwoWay}"
-                   Keyboard="Email"
-                   Placeholder="Email"/>
-            <fs:FsEntry Text="{Binding Password, Mode=TwoWay}"
-                   Placeholder="Password"
-                   IsPassword="True" />
-            <fs:FsEntry Text="{Binding ConfirmPassword, Mode=TwoWay}"
-                   Placeholder="ConfirmPassword"
-                   IsPassword="True" />
-            <Button Text="Register"
-                    Command="{Binding RegisterCommand}" />
-            <FlexLayout Direction="Row"
-                        JustifyContent="SpaceBetween"
-                        AlignContent="Center"
-                        AlignItems="Center">
-                <Label Text="Already have an account?"
-                       FontSize="Micro"/>
-                <Button Text="Sign in"
-                        Command="{Binding ToggleModeCommand}"
-                        Background="Transparent"
-                        TextColor="Blue"/>
-            </FlexLayout>
+        <!-- Legacy auth panels -->
+        <VerticalStackLayout IsVisible="{Binding IsLegacyMode}">
+            <VerticalStackLayout Padding="24"
+                                 Spacing="16"
+                                 BackgroundColor="White"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Center"
+                                 MinimumWidthRequest="300"
+                                 IsVisible="{Binding IsLoginMode}">
+                <Label Text="Sign in"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       HorizontalOptions="Center" />
+                <Label Text="{Binding SuccessMessage}"
+                       HorizontalOptions="Center"/>
+                <Label Text="{Binding ErrorMessage}"
+                       TextColor="Red"
+                       IsVisible="{Binding IsErrorState}"
+                       HorizontalOptions="Center"/>
+                <fs:FsEntry Text="{Binding Email, Mode=TwoWay}"
+                            Keyboard="Email"
+                            Placeholder="Email"/>
+                <fs:FsEntry Text="{Binding Password, Mode=TwoWay}"
+                            Placeholder="Password"
+                            IsPassword="True" />
+                <fs:FsButton Text="Login"
+                             Command="{Binding AuthenticateCommand}"
+                             ContentLayout="Right"
+                             ImageSource="{FontImageSource FontFamily=lucide, Glyph={x:Static icons:Icons.LogIn}}"/>
+                <FlexLayout Direction="Row"
+                            JustifyContent="SpaceBetween"
+                            AlignContent="Center"
+                            AlignItems="Center">
+                    <Label Text="No account?"
+                           FontSize="Micro"/>
+                    <Button Text="Register"
+                            Command="{Binding ToggleModeCommand}"
+                            Background="Transparent"
+                            TextColor="Blue"/>
+                </FlexLayout>
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Padding="24"
+                                 Spacing="16"
+                                 BackgroundColor="White"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Center"
+                                 MinimumWidthRequest="300"
+                                 IsVisible="{Binding IsRegisterMode}">
+                <Label Text="Sign Up"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       HorizontalOptions="Center" />
+                <Label Text="{Binding SuccessMessage}"
+                       HorizontalOptions="Center"/>
+                <Label Text="{Binding ErrorMessage}"
+                       TextColor="Red"
+                       IsVisible="{Binding IsErrorState}"
+                       HorizontalOptions="Center"/>
+                <fs:FsEntry Text="{Binding Email, Mode=TwoWay}"
+                       Keyboard="Email"
+                       Placeholder="Email"/>
+                <fs:FsEntry Text="{Binding Password, Mode=TwoWay}"
+                       Placeholder="Password"
+                       IsPassword="True" />
+                <fs:FsEntry Text="{Binding ConfirmPassword, Mode=TwoWay}"
+                       Placeholder="ConfirmPassword"
+                       IsPassword="True" />
+                <Button Text="Register"
+                        Command="{Binding RegisterCommand}" />
+                <FlexLayout Direction="Row"
+                            JustifyContent="SpaceBetween"
+                            AlignContent="Center"
+                            AlignItems="Center">
+                    <Label Text="Already have an account?"
+                           FontSize="Micro"/>
+                    <Button Text="Sign in"
+                            Command="{Binding ToggleModeCommand}"
+                            Background="Transparent"
+                            TextColor="Blue"/>
+                </FlexLayout>
+            </VerticalStackLayout>
         </VerticalStackLayout>
 
         <ActivityIndicator IsRunning="{Binding IsBusy}"

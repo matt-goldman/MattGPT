@@ -1,4 +1,7 @@
+using CommunityToolkit.Maui.Alerts;
+using CommunityToolkit.Maui.Media;
 using Plugin.Maui.Lucide;
+using System.Globalization;
 using System.Windows.Input;
 namespace MattGPT.Mobile.Controls;
 
@@ -40,6 +43,8 @@ public partial class AIEditor : ContentView
     }
 
     private bool _isListening = false;
+    private ISpeechToText? _activeSpeechService;
+    private CancellationTokenSource? _speechCts;
 
 	public AIEditor()
 	{
@@ -80,25 +85,104 @@ public partial class AIEditor : ContentView
 		Prompt = e.NewTextValue;
     }
 
-    private void EndAction_Clicked(object sender, EventArgs e)
+    private async void EndAction_Clicked(object sender, EventArgs e)
     {
-        if (string.IsNullOrEmpty(Prompt) && !_isListening)
-		{
-			_isListening = true;
-			EndAction.Text = Icons.Square;
-
-            // TODO: start CommunityToolkit STT
+        if (_isListening)
+        {
+            await StopListeningAsync();
         }
-        else if (_isListening)
-		{
-			_isListening = false;
-			EndAction.Text = string.IsNullOrEmpty(Prompt)?  Icons.AudioLines : Icons.ArrowBigUp;
+        else if (string.IsNullOrEmpty(Prompt))
+        {
+            await StartListeningAsync();
         }
-		else
-		{
-			SendCommand?.Execute(Prompt);
+        else
+        {
+            SendCommand?.Execute(Prompt);
             Prompt = string.Empty;
-			InputEditor.Text = string.Empty;
+            InputEditor.Text = string.Empty;
         }
+    }
+
+    private async Task StartListeningAsync()
+    {
+        var speechService = await AIEditor.ResolveSpeechServiceAsync();
+        if (speechService is null) return;
+
+        _activeSpeechService = speechService;
+        _activeSpeechService.RecognitionResultUpdated += OnRecognitionResultUpdated;
+        _activeSpeechService.RecognitionResultCompleted += OnRecognitionResultCompleted;
+
+        _isListening = true;
+        EndAction.Text = Icons.Square;
+
+        _speechCts = new CancellationTokenSource();
+        await _activeSpeechService.StartListenAsync(
+            new SpeechToTextOptions { Culture = CultureInfo.CurrentCulture, ShouldReportPartialResults = true },
+            _speechCts.Token);
+    }
+
+    private async Task StopListeningAsync()
+    {
+        if (_activeSpeechService is null) return;
+        await _activeSpeechService.StopListenAsync(CancellationToken.None);
+        // Cleanup happens in OnRecognitionResultCompleted once the service fires the final result
+    }
+
+    private static async Task<ISpeechToText?> ResolveSpeechServiceAsync()
+    {
+        if (Connectivity.NetworkAccess == NetworkAccess.Internet)
+        {
+            var granted = await RequestSpeechPermissionsAsync(SpeechToText.Default);
+            return granted ? SpeechToText.Default : null;
+        }
+
+        // No network — try offline recognition
+        try
+        {
+            var granted = await RequestSpeechPermissionsAsync(OfflineSpeechToText.Default);
+            return granted ? OfflineSpeechToText.Default : null;
+        }
+        catch (Exception)
+        {
+            await Toast.Make("Speech recognition requires an internet connection on this device.").Show(CancellationToken.None);
+            return null;
+        }
+    }
+
+    private static async Task<bool> RequestSpeechPermissionsAsync(ISpeechToText speechService)
+    {
+        var micStatus = await Permissions.RequestAsync<Permissions.Microphone>();
+        if (micStatus != PermissionStatus.Granted)
+            return false;
+
+        return await speechService.RequestPermissions(CancellationToken.None);
+    }
+
+    private void OnRecognitionResultUpdated(object? sender, SpeechToTextRecognitionResultUpdatedEventArgs e)
+    {
+        // Partial result — update prompt so the user sees live transcription.
+        // OnPromptChanged propagates the value to InputEditor.Text automatically.
+        Prompt = e.RecognitionResult;
+    }
+
+    private void OnRecognitionResultCompleted(object? sender, SpeechToTextRecognitionResultCompletedEventArgs e)
+    {
+        Prompt = e.RecognitionResult.IsSuccessful ? e.RecognitionResult.Text : Prompt;
+        CleanupSpeechService();
+    }
+
+    private void CleanupSpeechService()
+    {
+        if (_activeSpeechService is not null)
+        {
+            _activeSpeechService.RecognitionResultUpdated -= OnRecognitionResultUpdated;
+            _activeSpeechService.RecognitionResultCompleted -= OnRecognitionResultCompleted;
+            _activeSpeechService = null;
+        }
+
+        _speechCts?.Dispose();
+        _speechCts = null;
+        _isListening = false;
+        EndAction.Text = string.IsNullOrEmpty(Prompt) ? Icons.AudioLines : Icons.ArrowBigUp;
     }
 }
