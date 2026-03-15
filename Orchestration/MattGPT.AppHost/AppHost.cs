@@ -239,6 +239,7 @@ var android = mauiapp.AddAndroidEmulator()
 if (authProvider == "Keycloak" && keycloak is not null)
 {
     var kcTunnel = builder.AddDevTunnel("kcTunnel")
+        .WithAnonymousAccess()
         .WithReference(keycloak);
 
     ios.WithReference(keycloak, kcTunnel);

@@ -34,7 +34,12 @@ public partial class AppShell : Shell
             var token = await _keycloakAuth.GetAccessTokenAsync();
             if (token is null)
             {
-                await _keycloakAuth.LoginAsync();
+                var loginSucceeded = await _keycloakAuth.LoginAsync();
+                if (!loginSucceeded && _popupService is not null)
+                {
+                    // TODO: replace with a custom popup
+                    await DisplayAlertAsync("Authentication Failed", "Unable to authenticate via Keycloak. Please try again.", "OK");
+                }
             }
         }
         else if (_legacyAuth is not null)

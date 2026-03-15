@@ -41,11 +41,12 @@ public static partial class MauiProgram
             {
                 // TODO: resolve Keycloak authority from Aspire service discovery when the MauiAspire issue is fixed
                 // For now, use the realm URL from the local Keycloak instance (via Aspire AppHost)
-                Authority   = "https://jvv8rkv2-58471.aue.devtunnels.ms/realms/mattgpt",
+                Authority   = "https://jvv8rkv2-54109.aue.devtunnels.ms/realms/mattgpt",
                 ClientId    = "mattgpt-mobile",
                 Scope       = "openid profile email",
                 RedirectUri = "mattgpt://callback",
-                Browser     = new MobileAuthBrowser()
+                Browser     = new MobileAuthBrowser(),
+                DisablePushedAuthorization = true
             });
 
 #if DEBUG
@@ -54,10 +55,10 @@ public static partial class MauiProgram
             oidcClient.Options.Policy = new Policy
             {
                 ValidateTokenIssuerName = false,
-                Discovery               = new Duende.IdentityModel.Client.DiscoveryPolicy
+                Discovery = new Duende.IdentityModel.Client.DiscoveryPolicy
                 {
-                    ValidateEndpoints   = false,
-                    ValidateIssuerName  = false,
+                    ValidateEndpoints = false,
+                    ValidateIssuerName = false,
                 }
             };
 #endif
@@ -69,7 +70,7 @@ public static partial class MauiProgram
 
             // same Aspire issue mentioned above, so hardcoding the API base address for now
             builder.Services.AddApiClient<KeycloakAuthDelegatingHandler, KeycloakAuthFailureHandler>(
-                new Uri("https://gqb8jt03-7321.aue.devtunnels.ms"));
+                new Uri("https://cdxbwtnz-21089.aue.devtunnels.ms"));
 
             builder.Services.AddSingleton<AppShell>(sp =>
                 new AppShell(sp.GetRequiredService<KeycloakAuthService>()));
@@ -80,7 +81,7 @@ public static partial class MauiProgram
 
             // same Aspire issue mentioned above, so hardcoding the API base address for now
             builder.Services.AddApiClient<AuthDelegatingHandler>(
-                new Uri("https://gqb8jt03-7321.aue.devtunnels.ms")); // "https+http://apiservice"
+                new Uri("https://cdxbwtnz-21089.aue.devtunnels.ms")); // "https+http://apiservice"
 
             builder.Services.AddTransientPopup<AuthPopup, AuthViewModel>();
 

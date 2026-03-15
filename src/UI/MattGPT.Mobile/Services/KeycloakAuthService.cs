@@ -1,8 +1,9 @@
 ﻿using Duende.IdentityModel.OidcClient;
+using Microsoft.Extensions.Logging;
 
 namespace MattGPT.Mobile.Services;
 
-public class KeycloakAuthService(OidcClient oidcClient)
+public class KeycloakAuthService(OidcClient oidcClient, ILogger<KeycloakAuthService> logger)
 {
     private const string AccessTokenKey = "oidc_access_token";
     private const string RefreshTokenKey = "oidc_refresh_token";
@@ -15,18 +16,30 @@ public class KeycloakAuthService(OidcClient oidcClient)
     /// </summary>
     public async Task<bool> LoginAsync()
     {
-        var result = await oidcClient.LoginAsync(new LoginRequest());
+        try
+        {
+            var result = await oidcClient.LoginAsync(new LoginRequest());
 
-        if (result.IsError)
+            if (result.IsError)
+            {
+                logger.LogError("Login error: {error} due to {description}", result.Error, result.ErrorDescription);
+                return false;
+            }
+
+            await StoreTokensAsync(
+                result.AccessToken,
+                result.RefreshToken,
+                result.AccessTokenExpiration,
+                result.IdentityToken);
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Log the exception as needed; for now, just return false to indicate login failure
+            logger.LogError(ex, "Exception during login");
             return false;
-
-        await StoreTokensAsync(
-            result.AccessToken,
-            result.RefreshToken,
-            result.AccessTokenExpiration,
-            result.IdentityToken);
-
-        return true;
+        }
     }
 
     /// <summary>
