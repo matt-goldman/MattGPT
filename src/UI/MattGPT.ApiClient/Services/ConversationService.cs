@@ -21,7 +21,7 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
         streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
         content.Add(streamContent, "file", fileName);
 
-        var response = await client.PostAsync("/conversations/upload", content, cancellationToken);
+        using var response = await client.PostAsync("/conversations/upload", content, cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
@@ -36,7 +36,7 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
     public async Task<JobStatusResponse?> GetJobStatusAsync(string jobId, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.GetAsync($"/conversations/status/{jobId}", cancellationToken);
+        using var response = await client.GetAsync($"/conversations/status/{jobId}", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
@@ -50,7 +50,7 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
     public async Task<IReadOnlyList<ProjectItem>> GetProjectsAsync(CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.GetAsync("/conversations/projects", cancellationToken);
+        using var response = await client.GetAsync("/conversations/projects", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
@@ -66,7 +66,7 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
         string templateId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.GetAsync($"/conversations/projects/{templateId}?page={page}&pageSize={pageSize}", cancellationToken);
+        using var response = await client.GetAsync($"/conversations/projects/{templateId}?page={page}&pageSize={pageSize}", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
@@ -81,7 +81,7 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
         int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.GetAsync($"/conversations/standalone?page={page}&pageSize={pageSize}", cancellationToken);
+        using var response = await client.GetAsync($"/conversations/standalone?page={page}&pageSize={pageSize}", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
@@ -95,7 +95,7 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
     public async Task RenameProjectAsync(string templateId, string name, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.PatchAsJsonAsync(
+        using var response = await client.PatchAsJsonAsync(
             $"/conversations/projects/{templateId}/name",
             new { name },
             JsonOptions,
