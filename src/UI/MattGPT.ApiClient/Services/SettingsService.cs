@@ -15,7 +15,7 @@ public sealed class SettingsService(IHttpClientFactory factory, IAuthFailureHand
     public async Task<SystemPromptResponse?> GetSystemPromptAsync(CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.GetAsync("/system-prompt", cancellationToken);
+        using var response = await client.GetAsync("/system-prompt", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
@@ -29,7 +29,7 @@ public sealed class SettingsService(IHttpClientFactory factory, IAuthFailureHand
     public async Task SaveSystemPromptAsync(string? systemPrompt, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.PutAsJsonAsync("/system-prompt", new { systemPrompt }, JsonOptions, cancellationToken);
+        using var response = await client.PutAsJsonAsync("/system-prompt", new { systemPrompt }, JsonOptions, cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
@@ -42,7 +42,7 @@ public sealed class SettingsService(IHttpClientFactory factory, IAuthFailureHand
     public async Task<SystemPromptResponse?> ResetSystemPromptAsync(CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.DeleteAsync("/system-prompt", cancellationToken);
+        using var response = await client.DeleteAsync("/system-prompt", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
@@ -56,7 +56,7 @@ public sealed class SettingsService(IHttpClientFactory factory, IAuthFailureHand
     public async Task<UserProfileResponse?> GetUserProfileAsync(CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.GetAsync("/user-profile", cancellationToken);
+        using var response = await client.GetAsync("/user-profile", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await authFailureHandler.HandleAsync(cancellationToken);
@@ -70,7 +70,7 @@ public sealed class SettingsService(IHttpClientFactory factory, IAuthFailureHand
     public async Task SaveUserProfileAsync(string? userProfileText, string? userInstructions, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        var response = await client.PutAsJsonAsync(
+        using var response = await client.PutAsJsonAsync(
             "/user-profile",
             new { userProfileText, userInstructions },
             JsonOptions,
