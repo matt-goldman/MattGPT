@@ -7,27 +7,13 @@ using MattGPT.Web.Auth.Keycloak;
 using MattGPT.Web.Auth.NetCoreId;
 using MattGPT.Web.Components;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.Extensions.Configuration.AzureAppConfiguration;
-
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Azure App Configuration ---
-// When Aspire injects a "appconfig" connection string (local emulator in run mode, or real
-// Azure App Configuration in deployed mode), add it as the highest-priority configuration
-// source so that auth settings and other app config are read from the central store.
-var appConfigConnectionString = builder.Configuration.GetConnectionString("appconfig");
-if (!string.IsNullOrEmpty(appConfigConnectionString))
-{
-    builder.Configuration.AddAzureAppConfiguration(options =>
-    {
-        options.Connect(appConfigConnectionString);
-        options.ConfigureClientOptions(clientOptions =>
-        {
-            clientOptions.Retry.MaxRetries = 5;
-            clientOptions.Retry.Delay = TimeSpan.FromSeconds(1);
-        });
-    });
-}
+// Uses the Aspire client integration which automatically handles emulator connections
+// (anonymous auth) and production connections (DefaultAzureCredential) based on the
+// connection string injected by the AppHost.
+builder.AddAzureAppConfiguration("appconfig");
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();

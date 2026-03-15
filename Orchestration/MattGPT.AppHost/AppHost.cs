@@ -38,21 +38,36 @@ var vectorStoreIndexName = builder.Configuration["VectorStore:IndexName"];
 // customisations survive restarts). In publish mode the resource maps to a real Azure
 // App Configuration store provisioned via Bicep/azd.
 var appConfig = builder.AddAzureAppConfiguration("appconfig");
+
+// In run mode the emulator is used and a dedicated ConfigSeeder project handles
+// populating the store. Services WaitFor the seeder so they won't read config
+// until seeding is complete. In publish mode the real Azure resource is used and
+// values are managed externally (portal / CLI / CI).
+IResourceBuilder<ProjectResource>? configSeeder = null;
 if (builder.ExecutionContext.IsRunMode)
 {
     appConfig.RunAsEmulator(emulator => emulator.WithDataVolume());
 
-    // Seed the emulator with all application-level config once it is ready.
-    // Uses set-if-not-exists semantics so that any values the developer has already
-    // customised in the emulator are never overwritten.
-    appConfig.OnResourceReady(async (resource, _, ct) =>
-    {
-        var connectionString = await ((IResourceWithConnectionString)resource).GetConnectionStringAsync(ct);
-        if (string.IsNullOrEmpty(connectionString))
-            return;
-
-        await AppConfigSeeder.SeedAsync(connectionString, builder.Configuration, ct);
-    });
+    configSeeder = builder.AddProject<Projects.MattGPT_ConfigSeeder>("configseeder")
+        .WithHttpHealthCheck("/health")
+        .WithReference(appConfig)
+        .WaitFor(appConfig)
+        .WithEnvironment("Seed__Auth__Enabled", authEnabled)
+        .WithEnvironment("Seed__Auth__Provider", authProvider)
+        .WithEnvironment("Seed__LLM__Provider", provider)
+        .WithEnvironment("Seed__LLM__ModelId", modelId)
+        .WithEnvironment("Seed__LLM__EmbeddingModelId", embeddingModelId)
+        .WithEnvironment("Seed__LLM__Endpoint", endpoint)
+        .WithEnvironment("Seed__LLM__ApiKey", apiKey ?? "")
+        .WithEnvironment("Seed__LLM__EmbeddingProvider", embeddingProvider ?? "")
+        .WithEnvironment("Seed__LLM__EmbeddingApiKey", embeddingApiKey ?? "")
+        .WithEnvironment("Seed__LLM__EmbeddingEndpoint", embeddingEndpoint ?? "")
+        .WithEnvironment("Seed__RAG__Mode", ragMode ?? "")
+        .WithEnvironment("Seed__DocumentDb__Provider", documentDbProvider)
+        .WithEnvironment("Seed__VectorStore__Provider", vectorStoreProvider)
+        .WithEnvironment("Seed__VectorStore__Endpoint", vectorStoreEndpoint ?? "")
+        .WithEnvironment("Seed__VectorStore__ApiKey", vectorStoreApiKey ?? "")
+        .WithEnvironment("Seed__VectorStore__IndexName", vectorStoreIndexName ?? "");
 }
 
 #endregion
@@ -110,6 +125,9 @@ var apiService = builder.AddProject<Projects.MattGPT_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
     .WithReference(appConfig)
     .WaitFor(appConfig);
+
+if (configSeeder is not null)
+    apiService.WaitFor(configSeeder);
 
 bool dbConfigured = false;
 
@@ -186,7 +204,7 @@ if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
 #region UI
 
 // --- Web frontend ---
-// Auth settings are read from Azure App Configuration (seeded by AppHost above),
+// Auth settings are read from Azure App Configuration (seeded by ConfigSeeder in run mode),
 // so no environment-variable passthrough is required here.
 var webfrontend = builder.AddProject<Projects.MattGPT_Web>("webfrontend")
     .WithExternalHttpEndpoints()
@@ -195,6 +213,9 @@ var webfrontend = builder.AddProject<Projects.MattGPT_Web>("webfrontend")
     .WaitFor(appConfig)
     .WithReference(apiService)
     .WaitFor(apiService);
+
+if (configSeeder is not null)
+    webfrontend.WaitFor(configSeeder);
 
 // --- Wire up Keycloak to API service and web frontend ---
 if (keycloak is not null)

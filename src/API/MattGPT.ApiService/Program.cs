@@ -20,7 +20,6 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Configuration.AzureAppConfiguration;
 using System.Security.Claims;
 using System.Threading.Channels;
 
@@ -33,23 +32,10 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 // --- Azure App Configuration ---
-// When Aspire injects a "appconfig" connection string (local emulator in run mode, or real
-// Azure App Configuration in deployed mode), add it as the highest-priority configuration
-// source so that all application settings are read from the central store rather than
-// relying on environment-variable passthrough from the AppHost.
-var appConfigConnectionString = builder.Configuration.GetConnectionString("appconfig");
-if (!string.IsNullOrEmpty(appConfigConnectionString))
-{
-    builder.Configuration.AddAzureAppConfiguration(options =>
-    {
-        options.Connect(appConfigConnectionString);
-        options.ConfigureClientOptions(clientOptions =>
-        {
-            clientOptions.Retry.MaxRetries = 5;
-            clientOptions.Retry.Delay = TimeSpan.FromSeconds(1);
-        });
-    });
-}
+// Uses the Aspire client integration which automatically handles emulator connections
+// (anonymous auth) and production connections (DefaultAzureCredential) based on the
+// connection string injected by the AppHost.
+builder.AddAzureAppConfiguration("appconfig");
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();

@@ -16,7 +16,7 @@
     <PackageReference Include="LumexUI" Version="2.3.2" />
     <PackageReference Include="Markdig" Version="1.1.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.4" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.AzureAppConfiguration" Version="8.5.0" />
+    <PackageReference Include="Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration" Version="13.1.2" />
   </ItemGroup>
 
   <Target Name="BuildTailwindCSS" BeforeTargets="Build" DependsOnTargets="CopyContents">
