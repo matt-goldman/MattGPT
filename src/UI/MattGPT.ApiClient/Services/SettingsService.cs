@@ -18,7 +18,12 @@ public sealed class SettingsService(IHttpClientFactory factory, IAuthFailureHand
         using var response = await client.GetAsync("/system-prompt", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await authFailureHandler.HandleAsync(cancellationToken);
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync("/system-prompt", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<SystemPromptResponse>(JsonOptions, cancellationToken);
+            }
             return default;
         }
         response.EnsureSuccessStatusCode();
@@ -32,7 +37,11 @@ public sealed class SettingsService(IHttpClientFactory factory, IAuthFailureHand
         using var response = await client.PutAsJsonAsync("/system-prompt", new { systemPrompt }, JsonOptions, cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await authFailureHandler.HandleAsync(cancellationToken);
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.PutAsJsonAsync("/system-prompt", new { systemPrompt }, JsonOptions, cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+            }
             return;
         }
         response.EnsureSuccessStatusCode();
@@ -45,7 +54,12 @@ public sealed class SettingsService(IHttpClientFactory factory, IAuthFailureHand
         using var response = await client.DeleteAsync("/system-prompt", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await authFailureHandler.HandleAsync(cancellationToken);
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.DeleteAsync("/system-prompt", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<SystemPromptResponse>(JsonOptions, cancellationToken);
+            }
             return default;
         }
         response.EnsureSuccessStatusCode();
@@ -59,7 +73,12 @@ public sealed class SettingsService(IHttpClientFactory factory, IAuthFailureHand
         using var response = await client.GetAsync("/user-profile", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await authFailureHandler.HandleAsync(cancellationToken);
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync("/user-profile", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<UserProfileResponse>(JsonOptions, cancellationToken);
+            }
             return default;
         }
         response.EnsureSuccessStatusCode();
@@ -77,7 +96,15 @@ public sealed class SettingsService(IHttpClientFactory factory, IAuthFailureHand
             cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await authFailureHandler.HandleAsync(cancellationToken);
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.PutAsJsonAsync(
+                    "/user-profile",
+                    new { userProfileText, userInstructions },
+                    JsonOptions,
+                    cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+            }
             return;
         }
         response.EnsureSuccessStatusCode();

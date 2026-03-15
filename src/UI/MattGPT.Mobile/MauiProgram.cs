@@ -79,7 +79,7 @@ public static partial class MauiProgram
 			builder.Services.AddSingleton<IMobileAuthService>(sp => sp.GetRequiredService<NetCoreIdAuthService>());
 
 			// same Aspire issue mentioned above, so hardcoding the API base address for now
-			builder.Services.AddApiClient<AuthDelegatingHandler>(
+			builder.Services.AddApiClient<AuthDelegatingHandler, NetCoreIdMobileAuthFailureHandler>(
 				new Uri("https://gqb8jt03-7321.aue.devtunnels.ms")); // "https+http://apiservice"
 		}
 

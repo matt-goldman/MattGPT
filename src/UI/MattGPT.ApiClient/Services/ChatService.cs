@@ -90,7 +90,12 @@ public sealed class ChatService(IHttpClientFactory factory, IAuthFailureHandler 
         using var response = await client.GetAsync($"/chat/sessions/{sessionId}", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await authFailureHandler.HandleAsync(cancellationToken);
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync($"/chat/sessions/{sessionId}", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<SessionDetail>(JsonOptions, cancellationToken);
+            }
             return default;
         }
         response.EnsureSuccessStatusCode();
@@ -104,7 +109,13 @@ public sealed class ChatService(IHttpClientFactory factory, IAuthFailureHandler 
         using var response = await client.GetAsync($"/chat/sessions?limit={limit}", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await authFailureHandler.HandleAsync(cancellationToken);
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync($"/chat/sessions?limit={limit}", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<List<ChatSessionItem>>(JsonOptions, cancellationToken)
+                    ?? [];
+            }
             return [];
         }
         response.EnsureSuccessStatusCode();
@@ -119,7 +130,12 @@ public sealed class ChatService(IHttpClientFactory factory, IAuthFailureHandler 
         using var response = await client.GetAsync($"/conversations/{conversationId}", cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await authFailureHandler.HandleAsync(cancellationToken);
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync($"/conversations/{conversationId}", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<ImportedConversationDetail>(JsonOptions, cancellationToken);
+            }
             return default;
         }
         response.EnsureSuccessStatusCode();
