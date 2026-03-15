@@ -2,7 +2,7 @@
 
 ## Overview
 
-Configuration is managed centrally in `Orchestration/MattGPT.AppHost/appsettings.json` when running locally with Aspire. The AppHost cascades settings to the API service and web frontend at startup. You can override specific settings in `src/MattGPT.ApiService/appsettings.json` or `src/MattGPT.Web/appsettings.json` if needed, but this is not required for local development.
+Configuration is managed centrally in `Orchestration/MattGPT.AppHost/appsettings.json` when running locally with Aspire. The AppHost cascades settings to the API service and web frontend at startup. You can override specific settings in `src/API/MattGPT.ApiService/appsettings.json` or `src/UI/MattGPT.Web/appsettings.json` if needed, but this is not required for local development.
 
 In deployed scenarios (non-Aspire), each service reads its own `appsettings.json` independently. For provider-specific setup (examples, prerequisites, and notes), see [Integrations](integrations.md).
 
