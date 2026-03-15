@@ -31,16 +31,19 @@ public partial class AppShell : Shell
 
         if (_keycloakAuth is not null)
         {
-            var token = await _keycloakAuth.GetAccessTokenAsync();
-            if (token is null)
+            MainThread.BeginInvokeOnMainThread(async () =>
             {
-                var loginSucceeded = await _keycloakAuth.LoginAsync();
-                if (!loginSucceeded && _popupService is not null)
+                var token = await _keycloakAuth.GetAccessTokenAsync();
+                if (token is null)
                 {
-                    // TODO: replace with a custom popup
-                    await DisplayAlertAsync("Authentication Failed", "Unable to authenticate via Keycloak. Please try again.", "OK");
+                    var loginSucceeded = await _keycloakAuth.LoginAsync();
+                    if (!loginSucceeded && _popupService is not null)
+                    {
+                        // TODO: replace with a custom popup
+                        await DisplayAlertAsync("Authentication Failed", "Unable to authenticate via Keycloak. Please try again.", "OK");
+                    }
                 }
-            }
+            });
         }
         else if (_legacyAuth is not null)
         {
