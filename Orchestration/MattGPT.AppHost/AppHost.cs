@@ -66,7 +66,7 @@ var isKeycloakProvider = authProvider.Equals("Keycloak", StringComparison.Ordina
 if (isAuthEnabled && isKeycloakProvider)
 {
     keycloak = builder.AddKeycloak("keycloak")
-        .WithLifetime(ContainerLifetime.Persistent)
+        .WithEnvironment("KC_PROXY_HEADERS", "xforwarded")
         .WithDataVolume()
         .WithRealmImport(Path.Combine(AppContext.BaseDirectory, "keycloak", "mattgpt-realm.json"));
 }
@@ -225,16 +225,25 @@ mauiapp.AddMacCatalystDevice()
     .WithReference(apiService);
 
 // Add iOS simulator with Dev Tunnel
-mauiapp.AddiOSSimulator()
+var ios = mauiapp.AddiOSSimulator()
     .WaitFor(apiService)
     .WithOtlpDevTunnel() // Required for OpenTelemetry data collection
     .WithReference(apiService, tunnel);
 
 // Add Android emulator with Dev Tunnel
-mauiapp.AddAndroidEmulator()
+var android = mauiapp.AddAndroidEmulator()
     .WaitFor(apiService)
     .WithOtlpDevTunnel() // Required for OpenTelemetry data collection
     .WithReference(apiService, tunnel);
+
+if (authProvider == "Keycloak" && keycloak is not null)
+{
+    var kcTunnel = builder.AddDevTunnel("kcTunnel")
+        .WithReference(keycloak);
+
+    ios.WithReference(keycloak, kcTunnel);
+    android.WithReference(keycloak, kcTunnel);
+}
 
 #endregion
 

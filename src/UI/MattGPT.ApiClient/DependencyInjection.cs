@@ -81,7 +81,7 @@ public static class MattGptApiClientExtensions
     /// <param name="baseAddress">The base address of the MattGPT API service.</param>
     /// <param name="authorityAddress">The authority address for authentication.</param>
     /// <returns>The updated service collection.</returns>
-    public static IServiceCollection AddApiClient<THandler, TAuthFailureHandler>(this IServiceCollection services, Uri baseAddress, Uri authorityAddress)
+    public static IServiceCollection AddApiClient<THandler, TAuthFailureHandler>(this IServiceCollection services, Uri baseAddress)
         where THandler : DelegatingHandler
         where TAuthFailureHandler : class, IAuthFailureHandler
     {

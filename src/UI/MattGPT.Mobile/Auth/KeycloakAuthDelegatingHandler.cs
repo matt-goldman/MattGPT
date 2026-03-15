@@ -3,7 +3,7 @@ using System.Net.Http.Headers;
 
 namespace MattGPT.Mobile.Auth;
 
-internal class KeycloakAuthDelegatingHandler(KeycloakAuthService authService) : DelegatingHandler
+internal partial class KeycloakAuthDelegatingHandler(KeycloakAuthService authService) : DelegatingHandler
 {
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {

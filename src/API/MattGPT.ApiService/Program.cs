@@ -67,13 +67,11 @@ if (authOptions.Enabled)
                 options.TokenValidationParameters.NameClaimType = ClaimTypes.NameIdentifier;
             });
 
-        builder.Services.AddAuthorization(options =>
-        {
-            options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        builder.Services.AddAuthorizationBuilder()
+            .SetFallbackPolicy(new AuthorizationPolicyBuilder()
                 .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
                 .RequireAuthenticatedUser()
-                .Build();
-        });
+                .Build());
     }
     else
     {

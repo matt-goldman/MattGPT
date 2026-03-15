@@ -37,25 +37,39 @@ public static partial class MauiProgram
 
 		if (useKeycloakAuth)
 		{
-            builder.Services.AddSingleton(new OidcClient(new()
+            var oidcClient = new OidcClient(new()
             {
                 // TODO: resolve Keycloak authority from Aspire service discovery when the MauiAspire issue is fixed
                 // For now, use the realm URL from the local Keycloak instance (via Aspire AppHost)
-                Authority = "https://localhost:8443/realms/mattgpt",
-
-                ClientId = "mattgpt-mobile",
-                Scope = "openid profile email",
+                Authority   = "https://jvv8rkv2-58471.aue.devtunnels.ms/realms/mattgpt",
+                ClientId    = "mattgpt-mobile",
+                Scope       = "openid profile email",
                 RedirectUri = "mattgpt://callback",
+                Browser     = new MobileAuthBrowser()
+            });
 
-                Browser = new MobileAuthBrowser()
-            }));
+#if DEBUG
+            // Dev tunnel doesn't use host header forwarding, so issuer name doesn't match authority.
+            // Disable issuer name validation for debug only.
+            oidcClient.Options.Policy = new Policy
+            {
+                ValidateTokenIssuerName = false,
+                Discovery               = new Duende.IdentityModel.Client.DiscoveryPolicy
+                {
+                    ValidateEndpoints   = false,
+                    ValidateIssuerName  = false,
+                }
+            };
+#endif
+
+            builder.Services.AddSingleton(oidcClient);
 
             builder.Services.AddSingleton<KeycloakAuthService>();
             builder.Services.AddSingleton<IAuthFailureHandler, KeycloakAuthFailureHandler>();
 
             // same Aspire issue mentioned above, so hardcoding the API base address for now
-            builder.Services.AddApiClient<KeycloakAuthDelegatingHandler>(
-                new Uri("https://gqb8jt03-7321.aue.devtunnels.ms")); // "https+http://apiservice"
+            builder.Services.AddApiClient<KeycloakAuthDelegatingHandler, KeycloakAuthFailureHandler>(
+                new Uri("https://gqb8jt03-7321.aue.devtunnels.ms"));
 
             builder.Services.AddSingleton<AppShell>(sp =>
                 new AppShell(sp.GetRequiredService<KeycloakAuthService>()));
