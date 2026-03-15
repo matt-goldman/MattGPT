@@ -1,8 +1,6 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using Azure;
-using Azure.Data.AppConfiguration;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,10 +33,10 @@ sealed class SeedingState
 }
 
 /// <summary>
-/// Background service that seeds Azure App Configuration with application-level defaults.
-/// Values to seed are passed by the AppHost as environment variables under the <c>Seed:</c>
-/// configuration prefix (e.g. <c>Seed__LLM__Provider</c>). The service writes them into
-/// the App Configuration store using set-if-not-exists semantics so that any values the
+/// Background service that seeds the Azure App Configuration emulator with
+/// application-level defaults. The AppHost passes a JSON dictionary of key/value
+/// pairs via the <c>Seed__Json</c> environment variable. The service writes them
+/// into the emulator using set-if-not-exists semantics so that any values the
 /// developer has already customised are never overwritten.
 /// </summary>
 sealed class ConfigSeedingService(
@@ -46,49 +44,35 @@ sealed class ConfigSeedingService(
     SeedingState state,
     ILogger<ConfigSeedingService> logger) : BackgroundService
 {
-    /// <summary>App Configuration key names eligible for seeding.</summary>
-    private static readonly string[] SeededKeys =
-    [
-        "Auth:Enabled",
-        "Auth:Provider",
-        "LLM:Provider",
-        "LLM:ModelId",
-        "LLM:EmbeddingModelId",
-        "LLM:Endpoint",
-        "LLM:ApiKey",
-        "LLM:EmbeddingProvider",
-        "LLM:EmbeddingApiKey",
-        "LLM:EmbeddingEndpoint",
-        "RAG:Mode",
-        "DocumentDb:Provider",
-        "VectorStore:Provider",
-        "VectorStore:Endpoint",
-        "VectorStore:ApiKey",
-        "VectorStore:IndexName",
-    ];
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var connectionString = configuration.GetConnectionString("appconfig");
-        if (string.IsNullOrEmpty(connectionString))
-        {
-            logger.LogWarning("No 'appconfig' connection string found. Skipping config seeding.");
-            state.IsComplete = true;
-            return;
-        }
-
         try
         {
-            if (TryGetEmulatorEndpoint(connectionString, out var endpoint))
+            var connectionString = configuration.GetConnectionString("appconfig");
+            if (string.IsNullOrEmpty(connectionString))
             {
-                await SeedViaHttpAsync(endpoint, stoppingToken);
-            }
-            else
-            {
-                await SeedViaClientAsync(connectionString, stoppingToken);
+                logger.LogWarning("No 'appconfig' connection string found. Skipping config seeding.");
+                return;
             }
 
-            logger.LogInformation("App Configuration seeding complete.");
+            var seedJson = configuration["Seed:Json"];
+            if (string.IsNullOrEmpty(seedJson))
+            {
+                logger.LogWarning("No 'Seed:Json' value found. Nothing to seed.");
+                return;
+            }
+
+            var settings = JsonSerializer.Deserialize<Dictionary<string, string>>(seedJson);
+            if (settings is null || settings.Count == 0)
+            {
+                logger.LogWarning("Seed:Json deserialized to empty dictionary. Nothing to seed.");
+                return;
+            }
+
+            var endpoint = GetEndpointFromConnectionString(connectionString);
+            await SeedAsync(endpoint, settings, stoppingToken);
+
+            logger.LogInformation("App Configuration emulator seeding complete ({Count} keys processed).", settings.Count);
         }
         catch (Exception ex)
         {
@@ -100,20 +84,11 @@ sealed class ConfigSeedingService(
         }
     }
 
-    // ------------------------------------------------------------------
-    // Emulator detection
-    // ------------------------------------------------------------------
-
     /// <summary>
-    /// Returns <see langword="true"/> when the connection string contains
-    /// <c>Anonymous=True</c>, indicating the Aspire App Configuration emulator.
+    /// Extracts the Endpoint URI from the emulator connection string.
     /// </summary>
-    private static bool TryGetEmulatorEndpoint(string connectionString, out Uri endpoint)
+    private static Uri GetEndpointFromConnectionString(string connectionString)
     {
-        endpoint = null!;
-        string? endpointValue = null;
-        bool isAnonymous = false;
-
         foreach (var segment in connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
             var eq = segment.IndexOf('=');
@@ -123,37 +98,26 @@ sealed class ConfigSeedingService(
             var val = segment[(eq + 1)..].Trim();
 
             if (key.Equals("Endpoint", StringComparison.OrdinalIgnoreCase))
-                endpointValue = val;
-            else if (key.Equals("Anonymous", StringComparison.OrdinalIgnoreCase)
-                     && val.Equals("True", StringComparison.OrdinalIgnoreCase))
-                isAnonymous = true;
+                return new Uri(val);
         }
 
-        if (isAnonymous && endpointValue is not null)
-        {
-            endpoint = new Uri(endpointValue);
-            return true;
-        }
-
-        return false;
+        throw new InvalidOperationException("Connection string does not contain an 'Endpoint' value.");
     }
-
-    // ------------------------------------------------------------------
-    // Emulator path — anonymous HTTP/1.1
-    // ------------------------------------------------------------------
 
     /// <summary>
     /// Seeds the emulator via anonymous HTTP/1.1 calls to the App Configuration REST API.
     /// The emulator has HMAC-SHA256 disabled and the Azure SDK blocks Bearer over HTTP,
-    /// so raw HTTP is the only viable approach for the emulator.
+    /// so raw HTTP is the only viable approach.
     /// </summary>
-    private async Task SeedViaHttpAsync(Uri endpoint, CancellationToken cancellationToken)
+    private async Task SeedAsync(
+        Uri endpoint,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken)
     {
         using var httpClient = new HttpClient { BaseAddress = endpoint };
 
-        foreach (var key in SeededKeys)
+        foreach (var (key, value) in settings)
         {
-            var value = configuration[$"Seed:{key}"];
             if (string.IsNullOrEmpty(value))
                 continue;
 
@@ -177,37 +141,6 @@ sealed class ConfigSeedingService(
 
             response.EnsureSuccessStatusCode();
             logger.LogDebug("Seeded key '{Key}'.", key);
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Production path — Azure SDK with HMAC-SHA256
-    // ------------------------------------------------------------------
-
-    /// <summary>
-    /// Seeds a real Azure App Configuration store using the SDK (HMAC-SHA256 auth, HTTPS).
-    /// </summary>
-    private async Task SeedViaClientAsync(string connectionString, CancellationToken cancellationToken)
-    {
-        var client = new ConfigurationClient(connectionString);
-
-        foreach (var key in SeededKeys)
-        {
-            var value = configuration[$"Seed:{key}"];
-            if (string.IsNullOrEmpty(value))
-                continue;
-
-            try
-            {
-                await client.AddConfigurationSettingAsync(
-                    new ConfigurationSetting(key, value),
-                    cancellationToken);
-                logger.LogDebug("Seeded key '{Key}'.", key);
-            }
-            catch (RequestFailedException ex) when (ex.Status == 412)
-            {
-                logger.LogDebug("Key '{Key}' already exists; skipping.", key);
-            }
         }
     }
 }

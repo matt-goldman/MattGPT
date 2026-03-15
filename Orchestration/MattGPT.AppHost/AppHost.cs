@@ -48,26 +48,35 @@ if (builder.ExecutionContext.IsRunMode)
 {
     appConfig.RunAsEmulator(emulator => emulator.WithDataVolume());
 
+    // Build a JSON dictionary of the seed-eligible keys and their current values.
+    // This is passed as a single environment variable so the ConfigSeeder doesn't
+    // need to know about individual key names or replicate the AppHost's config
+    // variable list.
+    var seedValues = new Dictionary<string, string>();
+    foreach (var key in new[]
+    {
+        "Auth:Enabled", "Auth:Provider",
+        "LLM:Provider", "LLM:ModelId", "LLM:EmbeddingModelId",
+        "LLM:Endpoint", "LLM:ApiKey",
+        "LLM:EmbeddingProvider", "LLM:EmbeddingApiKey", "LLM:EmbeddingEndpoint",
+        "RAG:Mode",
+        "DocumentDb:Provider",
+        "VectorStore:Provider", "VectorStore:Endpoint",
+        "VectorStore:ApiKey", "VectorStore:IndexName",
+    })
+    {
+        var value = builder.Configuration[key];
+        if (!string.IsNullOrEmpty(value))
+            seedValues[key] = value;
+    }
+
+    var seedJson = System.Text.Json.JsonSerializer.Serialize(seedValues);
+
     configSeeder = builder.AddProject<Projects.MattGPT_ConfigSeeder>("configseeder")
         .WithHttpHealthCheck("/health")
         .WithReference(appConfig)
         .WaitFor(appConfig)
-        .WithEnvironment("Seed__Auth__Enabled", authEnabled)
-        .WithEnvironment("Seed__Auth__Provider", authProvider)
-        .WithEnvironment("Seed__LLM__Provider", provider)
-        .WithEnvironment("Seed__LLM__ModelId", modelId)
-        .WithEnvironment("Seed__LLM__EmbeddingModelId", embeddingModelId)
-        .WithEnvironment("Seed__LLM__Endpoint", endpoint)
-        .WithEnvironment("Seed__LLM__ApiKey", apiKey ?? "")
-        .WithEnvironment("Seed__LLM__EmbeddingProvider", embeddingProvider ?? "")
-        .WithEnvironment("Seed__LLM__EmbeddingApiKey", embeddingApiKey ?? "")
-        .WithEnvironment("Seed__LLM__EmbeddingEndpoint", embeddingEndpoint ?? "")
-        .WithEnvironment("Seed__RAG__Mode", ragMode ?? "")
-        .WithEnvironment("Seed__DocumentDb__Provider", documentDbProvider)
-        .WithEnvironment("Seed__VectorStore__Provider", vectorStoreProvider)
-        .WithEnvironment("Seed__VectorStore__Endpoint", vectorStoreEndpoint ?? "")
-        .WithEnvironment("Seed__VectorStore__ApiKey", vectorStoreApiKey ?? "")
-        .WithEnvironment("Seed__VectorStore__IndexName", vectorStoreIndexName ?? "");
+        .WithEnvironment("Seed__Json", seedJson);
 }
 
 #endregion
