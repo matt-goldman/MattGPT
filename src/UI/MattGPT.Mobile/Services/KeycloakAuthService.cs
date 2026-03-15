@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MattGPT.Mobile.Services;
 
-public class KeycloakAuthService(OidcClient oidcClient, ILogger<KeycloakAuthService> logger)
+public class KeycloakAuthService(OidcClient oidcClient, ILogger<KeycloakAuthService> logger) : IKeycloakAuthService
 {
     private const string AccessTokenKey = "oidc_access_token";
     private const string RefreshTokenKey = "oidc_refresh_token";

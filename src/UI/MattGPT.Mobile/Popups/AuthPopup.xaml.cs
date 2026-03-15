@@ -8,5 +8,6 @@ public partial class AuthPopup : ContentView
 	{
 		InitializeComponent();
 		BindingContext = viewModel;
+		Loaded += async (s, e) => await viewModel.InitializeCommand.ExecuteAsync(null);
 	}
 }
