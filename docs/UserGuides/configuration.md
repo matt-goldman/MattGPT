@@ -2,9 +2,27 @@
 
 ## Overview
 
-Configuration is managed centrally in `Orchestration/MattGPT.AppHost/appsettings.json` when running locally with Aspire. The AppHost cascades settings to the API service and web frontend at startup. You can override specific settings in `src/API/MattGPT.ApiService/appsettings.json` or `src/UI/MattGPT.Web/appsettings.json` if needed, but this is not required for local development.
+MattGPT uses **Azure App Configuration** as the central source of truth for application settings. When running locally with Aspire, the Azure App Configuration emulator runs as a Docker container and is seeded automatically with values from `Orchestration/MattGPT.AppHost/appsettings.json`. Services connect to the store at startup and read their settings from it, falling back to their own `appsettings.json` if the store is unavailable.
 
-In deployed scenarios (non-Aspire), each service reads its own `appsettings.json` independently. For provider-specific setup (examples, prerequisites, and notes), see [Integrations](integrations.md).
+In deployed scenarios, the resource maps to a real Azure App Configuration store provisioned by the Aspire Azure provisioner (`azd`). Populate the store via the Azure portal, the `az appconfig` CLI, or your CI/CD pipeline.
+
+### How configuration flows
+
+```
+AppHost appsettings.json
+    │
+    └─► AppHost seeds Azure App Configuration emulator (set-if-not-exists)
+                │
+                ├─► apiservice reads settings via AddAzureAppConfiguration
+                │       └─► falls back to src/API/MattGPT.ApiService/appsettings.json
+                │
+                └─► webfrontend reads settings via AddAzureAppConfiguration
+                        └─► falls back to src/UI/MattGPT.Web/appsettings.json
+```
+
+> **Set-if-not-exists seeding:** The AppHost only writes a key to the emulator if it does not already exist. This means you can customise values in the Azure App Configuration emulator and they will survive AppHost restarts.
+
+For provider-specific setup (examples, prerequisites, and notes), see [Integrations](integrations.md).
 
 ## LLM Settings
 
@@ -178,7 +196,9 @@ Uses ASP.NET Core Identity with a local database. Login and registration are han
 
 ## Switching Providers at Runtime
 
-Update `appsettings.json` and restart both the API service and the web frontend. No data migration is required — conversations remain in MongoDB and embeddings in the vector store. Both components read `Auth:*` settings at startup, so changes will not take effect until they are restarted.
+**Local development (emulator):** Update the value in the Azure App Configuration emulator directly (via the Aspire dashboard's resource details, the `az appconfig` CLI pointed at `http://localhost:<PORT>`, or by editing `AppHost/appsettings.json` and removing the emulator's data volume so the next start re-seeds it). Then restart the affected service.
+
+**Deployed:** Update the value in the Azure App Configuration store via the Azure portal or `az appconfig kv set`, then restart the affected service (or use App Configuration's push-refresh feature).
 
 > **Important:** If you change the embedding model, existing embeddings become incompatible. Re-embed by calling `POST /conversations/embed` on the API, or re-import your conversations.
 

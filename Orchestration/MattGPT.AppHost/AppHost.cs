@@ -5,6 +5,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 // --- LLM configuration (from appsettings.json, env vars, or user secrets) ---
 // To change the LLM provider or model, edit appsettings.json, set environment variables
 // (e.g. LLM__Provider=AzureOpenAI), or use dotnet user-secrets.
+// These values are used here for infrastructure provisioning decisions AND are seeded
+// into Azure App Configuration so that services can read them directly from the config store.
 var provider = builder.Configuration["LLM:Provider"] ?? "Ollama";
 var modelId = builder.Configuration["LLM:ModelId"] ?? "llama3.2";
 var embeddingModelId = builder.Configuration["LLM:EmbeddingModelId"] ?? modelId;
@@ -27,6 +29,49 @@ var vectorStoreProvider = builder.Configuration["VectorStore:Provider"] ?? "Qdra
 var vectorStoreEndpoint = builder.Configuration["VectorStore:Endpoint"];
 var vectorStoreApiKey = builder.Configuration["VectorStore:ApiKey"];
 var vectorStoreIndexName = builder.Configuration["VectorStore:IndexName"];
+
+// --- Azure App Configuration ---
+// Centralises application-level settings so services read config from the store rather than
+// relying on environment-variable fan-out from AppHost. In run (local dev) mode, the
+// Azure App Configuration emulator runs as a Docker container. The emulator is seeded with
+// the values above the first time it starts (set-if-not-exists semantics so developer
+// customisations survive restarts). In publish mode the resource maps to a real Azure
+// App Configuration store provisioned via Bicep/azd.
+var appConfig = builder.AddAzureAppConfiguration("appconfig");
+if (builder.ExecutionContext.IsRunMode)
+{
+    appConfig.RunAsEmulator(emulator => emulator.WithDataVolume());
+
+    // Seed the emulator with all application-level config once it is ready.
+    // Uses set-if-not-exists semantics so that any values the developer has already
+    // customised in the emulator are never overwritten.
+    appConfig.OnResourceReady(async (resource, _, ct) =>
+    {
+        var connectionString = await ((IResourceWithConnectionString)resource).GetConnectionStringAsync(ct);
+        if (string.IsNullOrEmpty(connectionString))
+            return;
+
+        await AppConfigSeeder.SeedAsync(connectionString, new Dictionary<string, string?>
+        {
+            ["Auth:Enabled"]                = authEnabled,
+            ["Auth:Provider"]               = authProvider,
+            ["LLM:Provider"]                = provider,
+            ["LLM:ModelId"]                 = modelId,
+            ["LLM:EmbeddingModelId"]        = embeddingModelId,
+            ["LLM:Endpoint"]                = endpoint,
+            ["LLM:ApiKey"]                  = apiKey,
+            ["LLM:EmbeddingProvider"]       = embeddingProvider,
+            ["LLM:EmbeddingApiKey"]         = embeddingApiKey,
+            ["LLM:EmbeddingEndpoint"]       = embeddingEndpoint,
+            ["RAG:Mode"]                    = ragMode,
+            ["DocumentDb:Provider"]         = documentDbProvider,
+            ["VectorStore:Provider"]        = vectorStoreProvider,
+            ["VectorStore:Endpoint"]        = vectorStoreEndpoint,
+            ["VectorStore:ApiKey"]          = vectorStoreApiKey,
+            ["VectorStore:IndexName"]       = vectorStoreIndexName,
+        }, ct);
+    });
+}
 
 #endregion
 
@@ -75,15 +120,14 @@ if (isAuthEnabled && isKeycloakProvider)
 
 # region API service and dependencies
 // --- API service ---
+// Application-level settings (LLM, auth, DB/VS providers, RAG, etc.) are supplied via
+// Azure App Configuration. Infrastructure connection strings are still injected by Aspire
+// through WithReference(). The two Aspire-generated Ollama connection names must remain as
+// environment variables because their values are produced at runtime by the resource graph.
 var apiService = builder.AddProject<Projects.MattGPT_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
-    .WithEnvironment("Auth__Enabled", authEnabled)
-    .WithEnvironment("Auth__Provider", authProvider)
-    .WithEnvironment("LLM__Provider", provider)
-    .WithEnvironment("LLM__ModelId", modelId)
-    .WithEnvironment("LLM__EmbeddingModelId", embeddingModelId)
-    .WithEnvironment("DocumentDb__Provider", documentDbProvider)
-    .WithEnvironment("VectorStore__Provider", vectorStoreProvider);
+    .WithReference(appConfig)
+    .WaitFor(appConfig);
 
 bool dbConfigured = false;
 
@@ -121,35 +165,9 @@ if (vectorStoreProvider.Equals("Qdrant", StringComparison.OrdinalIgnoreCase))
         .WaitFor(qdrant);
 }
 
-// --- Vector store configuration passthrough ---
-if (!string.IsNullOrEmpty(vectorStoreEndpoint))
-    apiService.WithEnvironment("VectorStore__Endpoint", vectorStoreEndpoint);
-
-if (!string.IsNullOrEmpty(vectorStoreApiKey))
-    apiService.WithEnvironment("VectorStore__ApiKey", vectorStoreApiKey);
-
-if (!string.IsNullOrEmpty(vectorStoreIndexName))
-    apiService.WithEnvironment("VectorStore__IndexName", vectorStoreIndexName);
-
-// --- LLM configuration passthrough ---
-if (!string.IsNullOrEmpty(endpoint))
-    apiService.WithEnvironment("LLM__Endpoint", endpoint);
-
-if (!string.IsNullOrEmpty(apiKey))
-    apiService.WithEnvironment("LLM__ApiKey", apiKey);
-
-if (!string.IsNullOrEmpty(ragMode))
-    apiService.WithEnvironment("RAG__Mode", ragMode);
-
-// --- Embedding provider fallback passthrough ---
-if (!string.IsNullOrEmpty(embeddingProvider))
-    apiService.WithEnvironment("LLM__EmbeddingProvider", embeddingProvider);
-
-if (!string.IsNullOrEmpty(embeddingApiKey))
-    apiService.WithEnvironment("LLM__EmbeddingApiKey", embeddingApiKey);
-
-if (!string.IsNullOrEmpty(embeddingEndpoint))
-    apiService.WithEnvironment("LLM__EmbeddingEndpoint", embeddingEndpoint);
+// All other application-level config (vector store endpoints/keys, LLM endpoint/key, RAG
+// mode, embedding provider, etc.) is now read by the API service directly from Azure App
+// Configuration. The AppHost seeds those values into the store above in OnResourceReady.
 
 // --- Ollama (only when configured as the provider) ---
 if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
@@ -186,11 +204,13 @@ if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
 #region UI
 
 // --- Web frontend ---
+// Auth settings are read from Azure App Configuration (seeded by AppHost above),
+// so no environment-variable passthrough is required here.
 var webfrontend = builder.AddProject<Projects.MattGPT_Web>("webfrontend")
     .WithExternalHttpEndpoints()
     .WithHttpHealthCheck("/health")
-    .WithEnvironment("Auth__Enabled", authEnabled)
-    .WithEnvironment("Auth__Provider", authProvider)
+    .WithReference(appConfig)
+    .WaitFor(appConfig)
     .WithReference(apiService)
     .WaitFor(apiService);
 
