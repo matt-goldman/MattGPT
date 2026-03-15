@@ -51,25 +51,7 @@ if (builder.ExecutionContext.IsRunMode)
         if (string.IsNullOrEmpty(connectionString))
             return;
 
-        await AppConfigSeeder.SeedAsync(connectionString, new Dictionary<string, string?>
-        {
-            ["Auth:Enabled"]                = authEnabled,
-            ["Auth:Provider"]               = authProvider,
-            ["LLM:Provider"]                = provider,
-            ["LLM:ModelId"]                 = modelId,
-            ["LLM:EmbeddingModelId"]        = embeddingModelId,
-            ["LLM:Endpoint"]                = endpoint,
-            ["LLM:ApiKey"]                  = apiKey,
-            ["LLM:EmbeddingProvider"]       = embeddingProvider,
-            ["LLM:EmbeddingApiKey"]         = embeddingApiKey,
-            ["LLM:EmbeddingEndpoint"]       = embeddingEndpoint,
-            ["RAG:Mode"]                    = ragMode,
-            ["DocumentDb:Provider"]         = documentDbProvider,
-            ["VectorStore:Provider"]        = vectorStoreProvider,
-            ["VectorStore:Endpoint"]        = vectorStoreEndpoint,
-            ["VectorStore:ApiKey"]          = vectorStoreApiKey,
-            ["VectorStore:IndexName"]       = vectorStoreIndexName,
-        }, ct);
+        await AppConfigSeeder.SeedAsync(connectionString, builder.Configuration, ct);
     });
 }
 

@@ -25,7 +25,7 @@ Introduce **Azure App Configuration** as the single source of truth for all appl
 ### Consequences
 
 **Easier:**
-- AppHost no longer fans out config to services via environment variables. Adding a new setting requires touching only `appsettings.json` and the seeder dictionary in `AppHost.cs`.
+- AppHost no longer fans out config to services via environment variables. Adding a new setting requires touching only `appsettings.json` and the `SeededKeys` array in `AppConfigSeeder.cs`.
 - Deployed environments get a clean, centralised config story: populate the Azure App Configuration store via the Azure portal, CLI, or CI/CD pipeline, and all services pick it up automatically.
 - Services fall back to their own `appsettings.json` if the Azure App Config store is unavailable or empty — no hard dependency on the store for startup.
 
@@ -40,4 +40,10 @@ Introduce **Azure App Configuration** as the single source of truth for all appl
 
 2. **Service-level `appsettings.json` only.** Simple but requires developers to maintain separate config files per service, and deployed environments still need per-container configuration. Rejected.
 
-3. **Azure Key Vault for secrets, keep env vars for non-secrets.** Solves the secrets problem but not the general config fan-out. Considered as a complementary future step.
+3. **Azure Key Vault for secrets (API keys, vector store credentials).** Assessed and explicitly deferred. The reasoning:
+
+   - `AppHost.cs` (and therefore the `AppConfigSeeder`) is used only for **local development**. No production deployment story has been built yet.
+   - If a production deployment story is needed in future, Azure App Configuration natively supports **Key Vault references** — the store entry simply points to a Key Vault secret rather than containing the value directly. This is the correct production pattern and requires no changes to the consumer services.
+   - A community Key Vault emulator exists (`azure-keyvault-emulator`) but requires `DisableChallengeResourceVerification = true` in `SecretClientOptions` on the consuming side. This leaks deployment concerns into service code, which is undesirable. The preferred pattern is that services treat the config store as an opaque source and are never aware of whether values come from Key Vault references or plain values.
+   - For local dev, secrets (API keys, credentials) in the App Config emulator are acceptable: the emulator data volume is local-only, not shared, and not subject to the same exposure risks as a real secrets store.
+   - **Decision:** Seed secrets into the App Config emulator for local dev only. When a production deployment story is built, secrets should be stored in Azure Key Vault with Key Vault references in App Configuration, configured via CI/CD pipeline — the emulator seeder is not involved in that path.
