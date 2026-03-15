@@ -79,7 +79,6 @@ public static class MattGptApiClientExtensions
     /// <typeparam name="TAuthFailureHandler">The type of the custom <see cref="IAuthFailureHandler"/>.</typeparam>
     /// <param name="services">The service collection to add services to.</param>
     /// <param name="baseAddress">The base address of the MattGPT API service.</param>
-    /// <param name="authorityAddress">The authority address for authentication.</param>
     /// <returns>The updated service collection.</returns>
     public static IServiceCollection AddApiClient<THandler, TAuthFailureHandler>(this IServiceCollection services, Uri baseAddress)
         where THandler : DelegatingHandler
