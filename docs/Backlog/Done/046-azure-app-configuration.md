@@ -31,8 +31,8 @@ AppHost.cs
   └── Passes WithReference(appConfig) to apiservice + webfrontend
 
 apiservice / webfrontend
-  ├── Receive ConnectionStrings:appconfig from Aspire
-  └── Call builder.Configuration.AddAzureAppConfiguration(…) early in Program.cs
+  ├── Receive an Azure App Configuration resource named "appconfig" from Aspire
+  └── Call builder.AddAzureAppConfiguration("appconfig") early in Program.cs
       → reads LLM, auth, DB, vector store, RAG settings from the config store
       → falls back to own appsettings.json if store is empty or unreachable
 ```
