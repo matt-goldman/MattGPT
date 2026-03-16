@@ -49,10 +49,10 @@ apiservice / webfrontend
 
 ## Acceptance Criteria
 
-- [x] `Aspire.Hosting.Azure.AppConfiguration` added to AppHost and `Azure.Data.AppConfiguration` added for seeding.
+- [x] `Aspire.Hosting.Azure.AppConfiguration` added to AppHost; configuration seeding is handled by the `MattGPT.ConfigSeeder` project (no `Azure.Data.AppConfiguration`-based seeding in AppHost).
 - [x] `Microsoft.Extensions.Configuration.AzureAppConfiguration` added to `MattGPT.ApiService` and `MattGPT.Web`.
 - [x] `AppHost.cs` provisions Azure App Configuration with `RunAsEmulator()` + `WithDataVolume()` in run mode.
-- [x] AppHost seeds the emulator with all application-level config values on resource-ready, using set-if-not-exists semantics (developer customisations are preserved across restarts).
+- [x] The configuration store is seeded with all application-level config values by `MattGPT.ConfigSeeder` over HTTP, using set-if-not-exists semantics (developer customisations are preserved across restarts).
 - [x] `AppHost.cs` wires services to the store via `WithReference(appConfig)` rather than individual `WithEnvironment` calls for app-level settings.
 - [x] Both `Program.cs` files add `AddAzureAppConfiguration` as the first configuration step so that Azure App Config values override local `appsettings.json`.
 - [x] All tests pass (`dotnet test MattGPT.slnx`).
