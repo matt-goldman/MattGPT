@@ -12,9 +12,21 @@ builder.AddServiceDefaults();
 var seedState = new SeedingState();
 builder.Services.AddSingleton(seedState);
 builder.Services.AddHealthChecks()
-    .AddCheck("seeding", () => seedState.IsComplete
-        ? HealthCheckResult.Healthy("Seeding complete.")
-        : HealthCheckResult.Unhealthy("Seeding in progress."));
+    .AddCheck("seeding", () =>
+    {
+        if (seedState.IsFailed)
+        {
+            var message = string.IsNullOrEmpty(seedState.LastErrorMessage)
+                ? "Seeding failed."
+                : $"Seeding failed: {seedState.LastErrorMessage}";
+
+            return HealthCheckResult.Unhealthy(message);
+        }
+
+        return seedState.IsComplete
+            ? HealthCheckResult.Healthy("Seeding complete.")
+            : HealthCheckResult.Unhealthy("Seeding in progress.");
+    });
 
 builder.Services.AddHostedService<ConfigSeedingService>();
 
@@ -30,6 +42,16 @@ await app.RunAsync();
 sealed class SeedingState
 {
     public bool IsComplete { get; set; }
+
+    /// <summary>
+    /// Indicates that seeding has completed with a failure.
+    /// </summary>
+    public bool IsFailed { get; set; }
+
+    /// <summary>
+    /// The last error message observed during seeding, if any.
+    /// </summary>
+    public string? LastErrorMessage { get; set; }
 }
 
 /// <summary>
@@ -77,6 +99,8 @@ sealed class ConfigSeedingService(
         catch (Exception ex)
         {
             logger.LogError(ex, "App Configuration seeding failed.");
+            state.IsFailed = true;
+            state.LastErrorMessage = ex.Message;
         }
         finally
         {
