@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/Orchestration/">
     <Project Path="Orchestration/MattGPT.AppHost/MattGPT.AppHost.csproj" />
+    <Project Path="Orchestration/MattGPT.ConfigSeeder/MattGPT.ConfigSeeder.csproj" />
     <Project Path="Orchestration/MattGPT.MauiServiceDefaults/MattGPT.MauiServiceDefaults.csproj" />
     <Project Path="Orchestration/MattGPT.ServiceDefaults/MattGPT.ServiceDefaults.csproj" />
   </Folder>

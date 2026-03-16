@@ -7,8 +7,13 @@ using MattGPT.Web.Auth.Keycloak;
 using MattGPT.Web.Auth.NetCoreId;
 using MattGPT.Web.Components;
 using Microsoft.AspNetCore.Authentication.Cookies;
-
 var builder = WebApplication.CreateBuilder(args);
+
+// --- Azure App Configuration ---
+// Uses the Aspire client integration which automatically handles emulator connections
+// (anonymous auth) and production connections (DefaultAzureCredential) based on the
+// connection string injected by the AppHost.
+builder.AddAzureAppConfiguration("appconfig");
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();

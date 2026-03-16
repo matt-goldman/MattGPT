@@ -15,6 +15,7 @@
       "src\\Infrastructure\\QdrantModule\\MattGPT.QdrantModule.csproj",
       "src\\Infrastructure\\WeaviateModule\\MattGPT.WeaviateModule.csproj",
       "Orchestration\\MattGPT.ServiceDefaults\\MattGPT.ServiceDefaults.csproj",
+      "Orchestration\\MattGPT.ConfigSeeder\\MattGPT.ConfigSeeder.csproj",
       "src\\UI\\MattGPT.ApiClient\\MattGPT.ApiClient.csproj",
       "src\\UI\\MattGPT.Web\\MattGPT.Web.csproj",
       "tests\\MattGPT.ApiService.Tests\\MattGPT.ApiService.Tests.csproj"

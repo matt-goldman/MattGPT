@@ -31,6 +31,12 @@ builder.WebHost.ConfigureKestrel(options =>
     options.Limits.MaxRequestBodySize = 262_144_000; // 250 MB
 });
 
+// --- Azure App Configuration ---
+// Uses the Aspire client integration which automatically handles emulator connections
+// (anonymous auth) and production connections (DefaultAzureCredential) based on the
+// connection string injected by the AppHost.
+builder.AddAzureAppConfiguration("appconfig");
+
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
