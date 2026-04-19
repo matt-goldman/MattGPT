@@ -600,4 +600,125 @@ public class EmbeddingServiceTests
         Assert.Equal(1, result.Errors);
         Assert.Equal(ConversationProcessingStatus.EmbeddingError, repository.EmbeddingUpdates[0].Status);
     }
+
+    [Fact]
+    public async Task EmbedAsync_TransientError_RetriesAndSucceeds()
+    {
+        var repository = new FakeConversationRepository();
+        repository.Seed([MakeConversation("c1")]);
+
+        int callCount = 0;
+        var generator = new FakeEmbeddingGenerator(_ =>
+        {
+            callCount++;
+            if (callCount <= 2)
+                throw new HttpRequestException("Service temporarily unavailable");
+            return [new Embedding<float>(TestVector)];
+        });
+
+        var qdrant = new FakeVectorStore();
+        var service = new EmbeddingService(repository, generator, qdrant, NullLogger<EmbeddingService>.Instance);
+
+        var result = await service.EmbedAsync();
+
+        Assert.Equal(1, result.Embedded);
+        Assert.Equal(0, result.Errors);
+        Assert.True(callCount > 2, "Expected retries before success.");
+        Assert.Single(qdrant.Upserted);
+    }
+
+    [Fact]
+    public async Task EmbedAsync_TransientErrorExhaustsRetries_MarksAsError()
+    {
+        var repository = new FakeConversationRepository();
+        repository.Seed([MakeConversation("c1")]);
+
+        // Always throws a transient error — retries should be exhausted.
+        var generator = new ThrowingEmbeddingGenerator(new HttpRequestException("Service unavailable"));
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
+
+        var result = await service.EmbedAsync();
+
+        Assert.Equal(0, result.Embedded);
+        Assert.Equal(1, result.Errors);
+        Assert.Equal(ConversationProcessingStatus.EmbeddingError, repository.EmbeddingUpdates[0].Status);
+    }
+
+    [Fact]
+    public async Task EmbedAsync_ContextLengthError_NotRetried_FallsToChunking()
+    {
+        // Context-length errors should NOT be retried — they should immediately
+        // fall through to the chunking path.
+        var repository = new FakeConversationRepository();
+        var longMessages = Enumerable.Range(0, 100)
+            .Select(i => new StoredMessage
+            {
+                Id = $"m{i}",
+                Role = "user",
+                ContentType = "text",
+                Parts = [$"This is message number {i} with enough text."],
+            })
+            .ToList();
+        repository.Seed([new StoredConversation
+        {
+            ConversationId = "c1",
+            Title = "Long",
+            ProcessingStatus = ConversationProcessingStatus.Imported,
+            LinearisedMessages = longMessages,
+        }]);
+
+        int callCount = 0;
+        var generator = new FakeEmbeddingGenerator(values =>
+        {
+            callCount++;
+            var input = values.First();
+            if (input.Length > EmbeddingService.FallbackChunkChars)
+                throw new InvalidOperationException("the input length exceeds the context length");
+            return [new Embedding<float>(TestVector)];
+        });
+
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
+
+        var result = await service.EmbedAsync();
+
+        // Should have succeeded via chunking — the context-length error should NOT
+        // have been retried (only 1 call for the full text, then chunk calls).
+        Assert.Equal(1, result.Embedded);
+        Assert.Equal(0, result.Errors);
+    }
+
+    [Theory]
+    [InlineData(typeof(HttpRequestException), true)]
+    [InlineData(typeof(IOException), true)]
+    [InlineData(typeof(InvalidOperationException), false)]
+    [InlineData(typeof(ArgumentException), false)]
+    public void IsTransientError_ClassifiesCorrectly(Type exceptionType, bool expected)
+    {
+        var ex = (Exception)Activator.CreateInstance(exceptionType, "test error")!;
+        Assert.Equal(expected, EmbeddingService.IsTransientError(ex));
+    }
+
+    [Fact]
+    public void IsTransientError_WrappedHttpRequestException_ReturnsTrue()
+    {
+        var inner = new HttpRequestException("Connection refused");
+        var outer = new InvalidOperationException("Embedding failed", inner);
+        Assert.True(EmbeddingService.IsTransientError(outer));
+    }
+
+    [Fact]
+    public void IsTransientError_TaskCanceledException_WithDefaultToken_ReturnsTrue()
+    {
+        var ex = new TaskCanceledException("The request timed out");
+        Assert.True(EmbeddingService.IsTransientError(ex));
+    }
+
+    [Fact]
+    public void IsTransientError_TaskCanceledException_WithExplicitToken_ReturnsFalse()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var ex = new TaskCanceledException("Cancelled", null, cts.Token);
+        Assert.False(EmbeddingService.IsTransientError(ex));
+    }
 }

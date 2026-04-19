@@ -40,6 +40,12 @@ public class EmbeddingService(
     /// </summary>
     internal const int FallbackChunkChars = 2_000;
 
+    /// <summary>Maximum number of retry attempts for transient embedding failures.</summary>
+    internal const int MaxRetries = 3;
+
+    /// <summary>Base delay (in seconds) for exponential backoff between retries.</summary>
+    internal const int BaseDelaySeconds = 2;
+
     /// <summary>Statuses eligible for embedding — both freshly imported and summarised conversations.</summary>
     private static readonly ConversationProcessingStatus[] EmbeddableStatuses =
         [ConversationProcessingStatus.Imported, ConversationProcessingStatus.Summarised];
@@ -207,14 +213,14 @@ public class EmbeddingService(
     /// first; if the model reports a context-length error, falls back to chunking the text
     /// into <see cref="FallbackChunkChars"/>-sized pieces and averaging the resulting vectors.
     /// This keeps quality high for models with large context windows while still working
-    /// with smaller models.
+    /// with smaller models. Transient failures are retried with exponential backoff.
     /// </summary>
     private async Task<float[]> GenerateChunkedEmbeddingAsync(string text, CancellationToken ct)
     {
         // Fast path — try the full text first.
         try
         {
-            var result = await embeddingGenerator.GenerateAsync([text], cancellationToken: ct);
+            var result = await GenerateWithRetryAsync(text, ct);
             return result[0].Vector.ToArray();
         }
         catch (Exception ex) when (IsContextLengthError(ex))
@@ -234,7 +240,7 @@ public class EmbeddingService(
 
         foreach (var chunk in chunks)
         {
-            var result = await embeddingGenerator.GenerateAsync([chunk], cancellationToken: ct);
+            var result = await GenerateWithRetryAsync(chunk, ct);
             var vec = result[0].Vector.ToArray();
 
             if (averaged is null)
@@ -265,6 +271,60 @@ public class EmbeddingService(
         }
 
         return averaged ?? [];
+    }
+
+    /// <summary>
+    /// Wraps <see cref="IEmbeddingGenerator{TInput,TEmbedding}.GenerateAsync"/> with
+    /// exponential-backoff retry for transient failures (HTTP errors, timeouts).
+    /// Context-length errors are never retried — they are rethrown immediately so the
+    /// caller can fall back to chunking.
+    /// </summary>
+    private async Task<GeneratedEmbeddings<Embedding<float>>> GenerateWithRetryAsync(
+        string text, CancellationToken ct)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await embeddingGenerator.GenerateAsync([text], cancellationToken: ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested
+                                       && !IsContextLengthError(ex)
+                                       && IsTransientError(ex)
+                                       && attempt < MaxRetries)
+            {
+                var delay = TimeSpan.FromSeconds(BaseDelaySeconds * Math.Pow(2, attempt));
+                logger.LogWarning(
+                    ex,
+                    "Transient embedding failure (attempt {Attempt}/{MaxRetries}); retrying in {Delay}s.",
+                    attempt + 1, MaxRetries, delay.TotalSeconds);
+                await Task.Delay(delay, ct);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when the exception (or an inner exception) looks like a
+    /// transient/retryable failure — HTTP errors, I/O errors, or timeouts — as opposed
+    /// to a permanent model-level rejection (context length, bad input, etc.).
+    /// </summary>
+    internal static bool IsTransientError(Exception ex)
+    {
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is HttpRequestException)
+                return true;
+
+            if (current is IOException)
+                return true;
+
+            // TaskCanceledException wraps HttpClient timeouts but should NOT be treated
+            // as transient when it comes from an explicit cancellation token.
+            if (current is TaskCanceledException tce && tce.CancellationToken == default)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
