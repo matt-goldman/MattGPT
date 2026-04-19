@@ -25,6 +25,7 @@ public class EmbeddingService(
     IConversationRepository repository,
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
     IVectorStore vectorStore,
+    TimeProvider timeProvider,
     ILogger<EmbeddingService> logger)
 {
     /// <summary>Number of conversations to load per batch from MongoDB.</summary>
@@ -298,7 +299,7 @@ public class EmbeddingService(
                     ex,
                     "Transient embedding failure (attempt {Attempt}/{MaxRetries}); retrying in {Delay}s.",
                     attempt + 1, MaxRetries, delay.TotalSeconds);
-                await Task.Delay(delay, ct);
+                await Task.Delay(delay, timeProvider, ct);
             }
         }
     }
