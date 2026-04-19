@@ -623,7 +623,7 @@ public class EmbeddingServiceTests
 
         Assert.Equal(1, result.Embedded);
         Assert.Equal(0, result.Errors);
-        Assert.True(callCount > 2, "Expected retries before success.");
+        Assert.Equal(3, callCount); // 2 transient failures + 1 success
         Assert.Single(qdrant.Upserted);
     }
 
