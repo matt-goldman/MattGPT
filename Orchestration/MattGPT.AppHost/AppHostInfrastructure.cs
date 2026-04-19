@@ -37,7 +37,8 @@ internal static class AppHostInfrastructure
         if (!isPostgresDocumentDb)
         {
             mongodb = builder.AddMongoDB("mongodb")
-                .WithDataVolume()
+                .WithLifetime(ContainerLifetime.Persistent)
+                .WithImageTag("7")
                 .AddDatabase("mattgptdb");
         }
 

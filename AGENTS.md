@@ -111,3 +111,53 @@ MattGPT/
 
 - Commit early and often with clear, descriptive messages.
 - One logical change per commit where practical.
+
+## Nuggets
+
+This repo uses a lightweight convention called "nuggets" to capture incidental
+observations during agent runs — things that would otherwise be discarded when
+a run ends or a conversation compacts.
+
+**Before starting a non-trivial task:**
+Read `.nuggets/README.md` for an overview, and scan the relevant thematic files
+under `.nuggets/themes/` for observations related to the task. When about to
+explore a specific file or area, search `.nuggets/` for mentions of it.
+
+**During a run, write a nugget when you observe something that:**
+- is non-obvious (not immediately visible from the code itself),
+- would be useful to a future agent working in this area,
+- but does not warrant an ADR, skill, or AGENTS.md update.
+
+Particularly worth capturing: approaches you tried and ruled out, gotchas,
+non-local side effects, and anything you'd be annoyed to re-derive. If you
+notice something mid-run that you'd regret losing to compaction, write a nugget.
+
+**Especially engage with nuggets when there's a signal this task has been
+touched before:**
+- The user references prior work ("last time," "we already," "is X still,"
+  "has Y been reverted") — explicitly or implicitly.
+- The task is investigative or diagnostic (checking whether something holds,
+  why something is happening).
+- The task touches files or subsystems with existing nugget entries.
+
+In these cases:
+
+- **Check the relevant nuggets first.** If prior runs have left observations
+  about this area, they are most likely to be useful exactly here.
+- **If no relevant nuggets exist, that is itself a signal.** This area is being
+  revisited but has no trail. Capture relevant nuggets during or after this
+  run so the next revisit is not starting from zero. Early in a repo's
+  adoption of nuggets, or in a genuinely new area, absence of entries is
+  expected — it means there's groundwork to lay, not that the system has
+  failed.
+
+**Before writing a nugget, ask:**
+- Is this decision-grade? → ADR
+- Is this a reusable procedure? → Skill
+- Is this a standing instruction? → AGENTS.md
+- Otherwise → Nugget
+
+**When you encounter a stale nugget** (code has changed, pointer is wrong,
+observation no longer holds), update or remove it.
+
+**Format and conventions:** see `.nuggets/README.md`.

@@ -22,7 +22,10 @@ public static class Module
 
         var openaiClient = new OpenAIClient(
             new ApiKeyCredential(llmOptions.ApiKey
-                ?? throw new InvalidOperationException("LLM:ApiKey is required for OpenAI provider.")));
+                ?? throw new InvalidOperationException("LLM:ApiKey is required for OpenAI provider.")),options: new OpenAIClientOptions
+                {
+                    Endpoint = new Uri(llmOptions.Endpoint)
+                });
 
         var chatBuilder = builder.Services.AddChatClient(
             openaiClient.GetChatClient(llmOptions.ModelId).AsIChatClient());
