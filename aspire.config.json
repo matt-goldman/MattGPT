@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "Orchestration/MattGPT.AppHost/MattGPT.AppHost.csproj"
+  }
+}

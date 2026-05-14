@@ -7290,10 +7290,10 @@ html[dir='rtl'], [data-sonner-toaster][dir='rtl'] {
 }
 @layer base {
   html {
-    &:has(*:is([open], :popover-open, :open)) {
+    &:has(*:is(dialog[open])) {
       overflow: hidden;
     }
-    &:has(*:is([open], :popover-open, :open)) {
+    &:has(*:is(dialog[open])) {
       scrollbar-gutter: stable;
     }
   }
