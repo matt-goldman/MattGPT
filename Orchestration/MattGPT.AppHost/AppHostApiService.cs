@@ -49,8 +49,9 @@ internal static class AppHostApiService
             apiService.WithReference(qdrant).WaitFor(qdrant);
         }
 
-        // --- Ollama (only when configured as the LLM provider) ---
+        // --- LLM provider container resources ---
         var provider = builder.Configuration["LLM:Provider"] ?? "Ollama";
+
         if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
         {
             var modelId = builder.Configuration["LLM:ModelId"] ?? "llama3.2";
@@ -80,6 +81,47 @@ internal static class AppHostApiService
             else
             {
                 apiService.WithEnvironment("LLM__EmbeddingConnectionName", chatModel.Resource.Name);
+            }
+        }
+        else if (provider.Equals("FoundryLocal", StringComparison.OrdinalIgnoreCase))
+        {
+            var modelId = builder.Configuration["LLM:ModelId"]
+                ?? throw new InvalidOperationException(
+                    "LLM:ModelId is required when LLM:Provider is 'FoundryLocal'.");
+            var embeddingModelId = builder.Configuration["LLM:EmbeddingModelId"] ?? modelId;
+
+            // Use Aspire's Azure AI Foundry resource in local mode. RunAsFoundryLocal()
+            // switches the resource from a provisioned Azure deployment to a local
+            // Foundry runtime — no Azure subscription required.
+            var foundry = builder.AddAzureAIFoundry("foundry").RunAsFoundryLocal();
+
+            var chatDeployment = foundry.AddDeployment(
+                name: "chat",
+                modelName: modelId,
+                modelVersion: "1",
+                format: "Microsoft");
+
+            apiService
+                .WithReference(chatDeployment)
+                .WaitFor(chatDeployment)
+                .WithEnvironment("LLM__ChatConnectionName", chatDeployment.Resource.Name);
+
+            if (!string.Equals(embeddingModelId, modelId, StringComparison.OrdinalIgnoreCase))
+            {
+                var embeddingDeployment = foundry.AddDeployment(
+                    name: "embedding",
+                    modelName: embeddingModelId,
+                    modelVersion: "1",
+                    format: "Microsoft");
+
+                apiService
+                    .WithReference(embeddingDeployment)
+                    .WaitFor(embeddingDeployment)
+                    .WithEnvironment("LLM__EmbeddingConnectionName", embeddingDeployment.Resource.Name);
+            }
+            else
+            {
+                apiService.WithEnvironment("LLM__EmbeddingConnectionName", chatDeployment.Resource.Name);
             }
         }
 

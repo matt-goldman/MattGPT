@@ -67,9 +67,12 @@ public class ConversationRepository : IConversationRepository
 
     /// <inheritdoc/>
     public async Task<List<StoredConversation>> GetByStatusesAsync(
-        IEnumerable<ConversationProcessingStatus> statuses, int maxCount, CancellationToken ct = default)
+        IEnumerable<ConversationProcessingStatus> statuses, int maxCount, IReadOnlyCollection<string>? excludeIds = null, CancellationToken ct = default)
     {
         var filter = Builders<StoredConversation>.Filter.In(x => x.ProcessingStatus, statuses);
+        if (excludeIds is { Count: > 0 })
+            filter &= Builders<StoredConversation>.Filter.Nin(x => x.ConversationId, excludeIds);
+
         return await _collection
             .Find(filter)
             .Limit(maxCount)

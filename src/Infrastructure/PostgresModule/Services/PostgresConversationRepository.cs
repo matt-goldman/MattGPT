@@ -103,20 +103,24 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
 
     /// <inheritdoc/>
     public async Task<List<StoredConversation>> GetByStatusesAsync(
-        IEnumerable<ConversationProcessingStatus> statuses, int maxCount, CancellationToken ct = default)
+        IEnumerable<ConversationProcessingStatus> statuses, int maxCount, IReadOnlyCollection<string>? excludeIds = null, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
 
         var statusStrings = statuses.Select(s => s.ToString()).ToArray();
+        var hasExclusions = excludeIds is { Count: > 0 };
 
         await using var cmd = dataSource.CreateCommand(
             $"""
             SELECT data FROM {TableName}
             WHERE processing_status = ANY($1)
+            {(hasExclusions ? "AND conversation_id != ALL($3)" : string.Empty)}
             LIMIT $2
             """);
         cmd.Parameters.AddWithValue(statusStrings);
         cmd.Parameters.AddWithValue(maxCount);
+        if (hasExclusions)
+            cmd.Parameters.AddWithValue(excludeIds!.ToArray());
 
         return await ReadConversationsAsync(cmd, excludeEmbedding: false, ct);
     }

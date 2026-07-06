@@ -149,4 +149,69 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
         }
         response.EnsureSuccessStatusCode();
     }
+
+    /// <inheritdoc/>
+    public async Task<EmbedJobResponse?> RunEmbeddingsAsync(CancellationToken cancellationToken = default)
+    {
+        var client = CreateClient();
+
+        using var response = await client.PostAsync("/conversations/embed", null, cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.PostAsync("/conversations/embed", null, cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<EmbedJobResponse>(JsonOptions, cancellationToken);
+            }
+            return default;
+        }
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<EmbedJobResponse>(JsonOptions, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<JobStatusResponse?> GetLatestEmbedJobAsync(CancellationToken cancellationToken = default)
+    {
+        var client = CreateClient();
+        using var response = await client.GetAsync("/conversations/embed/latest", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync("/conversations/embed/latest", cancellationToken);
+                if (retryResponse.StatusCode == System.Net.HttpStatusCode.NoContent) return null;
+                if (!retryResponse.IsSuccessStatusCode) return null;
+                return await retryResponse.Content.ReadFromJsonAsync<JobStatusResponse>(JsonOptions, cancellationToken);
+            }
+            return null;
+        }
+        // 204 No Content means no embed run has happened yet.
+        if (response.StatusCode == System.Net.HttpStatusCode.NoContent) return null;
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<JobStatusResponse>(JsonOptions, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<FailedEmbeddingItem>> GetFailedEmbeddingsAsync(CancellationToken cancellationToken = default)
+    {
+        var client = CreateClient();
+        using var response = await client.GetAsync("/conversations/embeddings/failed", cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.GetAsync("/conversations/embeddings/failed", cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<List<FailedEmbeddingItem>>(JsonOptions, cancellationToken)
+                    ?? [];
+            }
+            return [];
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<FailedEmbeddingItem>>(JsonOptions, cancellationToken)
+            ?? [];
+    }
 }

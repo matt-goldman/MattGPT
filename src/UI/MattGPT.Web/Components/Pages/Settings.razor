@@ -1,6 +1,7 @@
 @page "/settings"
 @rendermode InteractiveServer
 @inject ISettingsService SettingsService
+@inject IConversationService ConversationService
 
 <PageTitle>Settings</PageTitle>
 
@@ -15,72 +16,159 @@
     }
     else
     {
-        @* System Prompt *@
-        <section class="mb-8">
-            <div class="flex items-center justify-between mb-2">
-                <h2 class="text-lg font-semibold">System Prompt</h2>
-                <button class="text-xs text-default-400 hover:text-primary underline"
-                        @onclick="ResetSystemPrompt"
-                        title="Reset to default">
-                    Reset to default
-                </button>
-            </div>
-            <p class="text-sm text-default-400 mb-3">
-                The system prompt is sent to the LLM on every chat request. It sets the assistant's persona and instructions.
-            </p>
-            <textarea @bind="_systemPrompt"
-                      rows="8"
-                      class="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary font-mono"
-                      placeholder="Enter system prompt..."></textarea>
-            @if (_isDefault)
-            {
-                <p class="text-xs text-default-400 mt-1">Using the default system prompt.</p>
-            }
-        </section>
+        <LumexTabs>
+            <LumexTab Title="Prompt">
+                @* System Prompt *@
+                <section class="mb-8">
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="text-lg font-semibold">System Prompt</h2>
+                        <button class="text-xs text-default-400 hover:text-primary underline"
+                                @onclick="ResetSystemPrompt"
+                                title="Reset to default">
+                            Reset to default
+                        </button>
+                    </div>
+                    <p class="text-sm text-default-400 mb-3">
+                        The system prompt is sent to the LLM on every chat request. It sets the assistant's persona and instructions.
+                    </p>
+                    <textarea @bind="_systemPrompt"
+                            rows="8"
+                            class="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary font-mono"
+                            placeholder="Enter system prompt..."></textarea>
+                    @if (_isDefault)
+                    {
+                        <p class="text-xs text-default-400 mt-1">Using the default system prompt.</p>
+                    }
+                </section>
 
-        @* User Profile *@
-        <section class="mb-8">
-            <h2 class="text-lg font-semibold mb-2">User Profile</h2>
-            <p class="text-sm text-default-400 mb-3">
-                User profile information is imported from ChatGPT custom instructions and injected into every chat request as user context.
-                You can edit these fields to personalise how the assistant responds.
-            </p>
+                @* User Profile *@
+                <section class="mb-8">
+                    <h2 class="text-lg font-semibold mb-2">User Profile</h2>
+                    <p class="text-sm text-default-400 mb-3">
+                        User profile information is imported from ChatGPT custom instructions and injected into every chat request as user context.
+                        You can edit these fields to personalise how the assistant responds.
+                    </p>
 
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-default-700 mb-1">About me</label>
-                    <textarea @bind="_userProfileText"
-                              rows="4"
-                              class="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary"
-                              placeholder="e.g. I'm a software developer working with .NET and Azure..."></textarea>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-default-700 mb-1">About me</label>
+                            <textarea @bind="_userProfileText"
+                                    rows="4"
+                                    class="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                                    placeholder="e.g. I'm a software developer working with .NET and Azure..."></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-default-700 mb-1">How should the assistant respond?</label>
+                            <textarea @bind="_userInstructions"
+                                    rows="4"
+                                    class="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                                    placeholder="e.g. Be concise and technical. Prefer code examples over prose explanations."></textarea>
+                        </div>
+                    </div>
+                </section>
+
+                @* Save button *@
+                <div class="flex items-center gap-3">
+                    <LumexButton Color="@ThemeColor.Primary"
+                                IsDisabled="@_isSaving"
+                                OnClick="SaveAll">
+                        @(_isSaving ? "Saving..." : "Save Changes")
+                    </LumexButton>
+
+                    @if (!string.IsNullOrEmpty(_successMessage))
+                    {
+                        <span class="text-sm text-success-600">@_successMessage</span>
+                    }
+                    @if (!string.IsNullOrEmpty(_errorMessage))
+                    {
+                        <span class="text-sm text-danger-600">@_errorMessage</span>
+                    }
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-default-700 mb-1">How should the assistant respond?</label>
-                    <textarea @bind="_userInstructions"
-                              rows="4"
-                              class="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary"
-                              placeholder="e.g. Be concise and technical. Prefer code examples over prose explanations."></textarea>
-                </div>
-            </div>
-        </section>
+            </LumexTab>
+            <LumexTab Title="Conversations">
+                @* Embeddings *@
+                <section class="mb-8">
+                    <h2 class="text-lg font-semibold mb-2">Embeddings</h2>
+                    <p class="text-sm text-default-400 mb-3">
+                        Re-run embeddings across imported conversations. This regenerates vector embeddings
+                        for conversations that have been summarised but not yet embedded.
+                    </p>
 
-        @* Save button *@
-        <div class="flex items-center gap-3">
-            <LumexButton Color="@ThemeColor.Primary"
-                         IsDisabled="@_isSaving"
-                         OnClick="SaveAll">
-                @(_isSaving ? "Saving..." : "Save Changes")
-            </LumexButton>
+                    @if (_embedStatus == EmbedStatus.Running)
+                    {
+                        <div class="border border-default-200 rounded-lg p-4 space-y-1">
+                            <div class="flex items-center gap-2">
+                                <LumexSpinner Size="@Size.Small" Color="@ThemeColor.Secondary" />
+                                <span class="text-sm text-default-500">
+                                    Embedding… @_embedded embedded@(_embeddingSkipped > 0 ? $", {_embeddingSkipped} skipped" : string.Empty)@(_embeddingErrors > 0 ? $", {_embeddingErrors} error(s)" : string.Empty)
+                                </span>
+                            </div>
+                            <p class="text-xs text-default-400">You can leave this page — the run continues in the background.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <LumexModal>
+                            <LumexModalTrigger Variant="@Variant.Flat">Run embeddings</LumexModalTrigger>
+                            <LumexModalContent>
+                                <LumexModalHeader Class="flex-col gap-3">
+                                    <div class="size-10 flex items-center justify-center bg-default-100 rounded-full">
+                                        <RocketIcon Size="20" />
+                                    </div>
+                                    Embeddings
+                                </LumexModalHeader>
+                                <LumexModalBody>
+                                    <p>
+                                        Re-run embeddings across imported conversations. Conversations that
+                                        previously failed to embed will be retried.
+                                    </p>
+                                </LumexModalBody>
+                                <LumexModalFooter>
+                                    <LumexButton FullWidth="@true"
+                                                Color="@ThemeColor.Primary"
+                                                Radius="@Radius.Full"
+                                                OnClick="@(() => ConfirmRunEmbeddings(context))">
+                                        Continue
+                                    </LumexButton>
+                                </LumexModalFooter>
+                            </LumexModalContent>
+                        </LumexModal>
+                    }
 
-            @if (!string.IsNullOrEmpty(_successMessage))
-            {
-                <span class="text-sm text-success-600">@_successMessage</span>
-            }
-            @if (!string.IsNullOrEmpty(_errorMessage))
-            {
-                <span class="text-sm text-danger-600">@_errorMessage</span>
-            }
-        </div>
+                    @if (_embedStatus == EmbedStatus.Complete)
+                    {
+                        <LumexAlert Color="@ThemeColor.Success" Title="Embeddings complete" Class="mt-4">
+                            @_embedded embedded, @_embeddingSkipped skipped@(_embeddingErrors > 0 ? $", {_embeddingErrors} error(s)" : string.Empty).
+                        </LumexAlert>
+                    }
+                    @if (_embedStatus == EmbedStatus.Failed)
+                    {
+                        <LumexAlert Color="@ThemeColor.Danger" Title="Embeddings failed" Class="mt-4">
+                            @_embedErrorMessage
+                        </LumexAlert>
+                    }
+
+                    @* Conversations that failed to embed — retried on the next run. *@
+                    @if (_failedEmbeddings.Count > 0)
+                    {
+                        <div class="mt-4 border border-warning-200 rounded-lg p-4">
+                            <p class="text-sm font-medium text-warning-600 mb-2">
+                                @_failedEmbeddings.Count conversation(s) failed to embed
+                            </p>
+                            <p class="text-xs text-default-400 mb-2">
+                                These are retried automatically the next time you run embeddings.
+                            </p>
+                            <ul class="list-disc list-inside space-y-0.5 text-sm text-default-600">
+                                @foreach (var item in _failedEmbeddings)
+                                {
+                                    <li class="truncate" title="@item.Title">@(string.IsNullOrWhiteSpace(item.Title) ? item.ConversationId : item.Title)</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </section>
+            </LumexTab>
+        </LumexTabs>
     }
 </div>
 
@@ -94,9 +182,21 @@
     private string _successMessage = string.Empty;
     private string _errorMessage = string.Empty;
 
+    // — Embeddings re-run —
+    private enum EmbedStatus { Idle, Running, Complete, Failed }
+    private EmbedStatus _embedStatus = EmbedStatus.Idle;
+    private int _embedded;
+    private int _embeddingErrors;
+    private int _embeddingSkipped;
+    private string? _embedJobId;
+    private bool _isPolling;
+    private string _embedErrorMessage = string.Empty;
+    private IReadOnlyList<FailedEmbeddingItem> _failedEmbeddings = [];
+
     protected override async Task OnInitializedAsync()
     {
         await LoadSettings();
+        await ResumeEmbedStateAsync();
     }
 
     private async Task LoadSettings()
@@ -158,6 +258,142 @@
         finally
         {
             _isSaving = false;
+        }
+    }
+
+    /// <summary>
+    /// On page load, reflect any embedding run that is in progress or recently finished so the
+    /// user sees live status after navigating back, and show any conversations still failing.
+    /// </summary>
+    private async Task ResumeEmbedStateAsync()
+    {
+        try
+        {
+            var job = await ConversationService.GetLatestEmbedJobAsync();
+            if (job is not null)
+            {
+                ApplyEmbedJob(job);
+                if (job.EmbeddingStatus is "InProgress" or "NotStarted")
+                {
+                    _embedJobId = job.JobId;
+                    _ = PollEmbedJobAsync(job.JobId);
+                }
+            }
+
+            await RefreshFailedEmbeddingsAsync();
+        }
+        catch
+        {
+            // Resuming status is best-effort; failures here shouldn't break the settings page.
+        }
+    }
+
+    private async Task ConfirmRunEmbeddings(LumexModal modal)
+    {
+        await modal.CloseAsync();
+        await StartEmbeddingRun();
+    }
+
+    private async Task StartEmbeddingRun()
+    {
+        _embedStatus = EmbedStatus.Running;
+        _embedded = _embeddingErrors = _embeddingSkipped = 0;
+        _embedErrorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var response = await ConversationService.RunEmbeddingsAsync();
+            if (response?.JobId is null)
+            {
+                _embedStatus = EmbedStatus.Failed;
+                _embedErrorMessage = "Failed to start embeddings: no job id returned from server.";
+                return;
+            }
+
+            _embedJobId = response.JobId;
+            await PollEmbedJobAsync(response.JobId);
+        }
+        catch (Exception ex)
+        {
+            _embedStatus = EmbedStatus.Failed;
+            _embedErrorMessage = $"Error starting embeddings: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Polls the embed job until its embedding phase reaches a terminal state, updating the live
+    /// counts as it goes. The server keeps running even if the user navigates away.
+    /// </summary>
+    private async Task PollEmbedJobAsync(string jobId)
+    {
+        if (_isPolling) return;
+        _isPolling = true;
+
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(2000);
+
+                JobStatusResponse? job;
+                try
+                {
+                    job = await ConversationService.GetJobStatusAsync(jobId);
+                }
+                catch
+                {
+                    // Transient polling error — retry on the next cycle.
+                    continue;
+                }
+
+                if (job is null) continue;
+
+                ApplyEmbedJob(job);
+                StateHasChanged();
+
+                if (job.EmbeddingStatus is "Complete" or "Failed")
+                {
+                    await RefreshFailedEmbeddingsAsync();
+                    StateHasChanged();
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            _isPolling = false;
+        }
+    }
+
+    /// <summary>Maps a polled job's embedding phase onto the page's status and counters.</summary>
+    private void ApplyEmbedJob(JobStatusResponse job)
+    {
+        _embedded = job.EmbeddedConversations;
+        _embeddingErrors = job.EmbeddingErrors;
+        _embeddingSkipped = job.EmbeddingSkipped;
+
+        _embedStatus = job.EmbeddingStatus switch
+        {
+            "InProgress" or "NotStarted" => EmbedStatus.Running,
+            "Failed" => EmbedStatus.Failed,
+            "Complete" => EmbedStatus.Complete,
+            _ => _embedStatus,
+        };
+
+        if (job.EmbeddingStatus == "Failed")
+            _embedErrorMessage = job.EmbeddingErrorMessage ?? "Embedding failed.";
+    }
+
+    private async Task RefreshFailedEmbeddingsAsync()
+    {
+        try
+        {
+            _failedEmbeddings = await ConversationService.GetFailedEmbeddingsAsync();
+        }
+        catch
+        {
+            // Non-fatal: leave the previously loaded list in place.
         }
     }
 

@@ -3,6 +3,12 @@ namespace MattGPT.ApiClient.Models;
 /// <summary>Response from the file upload endpoint.</summary>
 public record UploadResponse(string JobId);
 
+/// <summary>Response from the embeddings endpoint identifying the queued background run.</summary>
+public record EmbedJobResponse(string JobId);
+
+/// <summary>A conversation whose embedding failed and will be retried on the next run.</summary>
+public record FailedEmbeddingItem(string ConversationId, string? Title);
+
 /// <summary>Status of a background import/embedding job.</summary>
 public record JobStatusResponse(
     string JobId,

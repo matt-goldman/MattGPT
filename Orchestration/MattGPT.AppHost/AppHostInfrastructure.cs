@@ -13,8 +13,8 @@ internal static class AppHostInfrastructure
 {
     internal static InfraResources AddInfrastructure(this IDistributedApplicationBuilder builder)
     {
-        var documentDbProvider = builder.Configuration["DocumentDb:Provider"] ?? "MongoDB";
-        var vectorStoreProvider = builder.Configuration["VectorStore:Provider"] ?? "Qdrant";
+        var documentDbProvider = builder.Configuration.GetValueOrDefault("DocumentDb:Provider", "MongoDB");
+        var vectorStoreProvider = builder.Configuration.GetValueOrDefault("VectorStore:Provider", "Qdrant");
 
         // --- Postgres (when used for document DB, vector store, or both) ---
         var isPostgresDocumentDb = documentDbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase);
@@ -44,8 +44,8 @@ internal static class AppHostInfrastructure
 
         // --- Keycloak (when auth is enabled and provider is Keycloak) ---
         IResourceBuilder<KeycloakResource>? keycloak = null;
-        var authEnabled = builder.Configuration["Auth:Enabled"] ?? "false";
-        var authProvider = builder.Configuration["Auth:Provider"] ?? "Keycloak";
+        var authEnabled = builder.Configuration.GetValueOrDefault("Auth:Enabled", "false");
+        var authProvider = builder.Configuration.GetValueOrDefault("Auth:Provider", "Keycloak");
         var isAuthEnabled = bool.TryParse(authEnabled, out var authEnabledBool) && authEnabledBool;
 
         if (isAuthEnabled && authProvider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase))

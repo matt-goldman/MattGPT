@@ -40,9 +40,19 @@ public class EmbeddingService(
     /// </summary>
     internal const int FallbackChunkChars = 2_000;
 
-    /// <summary>Statuses eligible for embedding — both freshly imported and summarised conversations.</summary>
+    /// <summary>
+    /// Statuses eligible for embedding: freshly imported and summarised conversations, plus
+    /// conversations whose embedding previously failed (<see cref="ConversationProcessingStatus.EmbeddingError"/>)
+    /// so a re-run retries them. Note that failures are re-marked <c>EmbeddingError</c>, so within a
+    /// single run each conversation is attempted at most once (see the <c>attempted</c> set in
+    /// <see cref="EmbedAsync"/>) to avoid re-fetching a persistently-failing conversation forever.
+    /// </summary>
     private static readonly ConversationProcessingStatus[] EmbeddableStatuses =
-        [ConversationProcessingStatus.Imported, ConversationProcessingStatus.Summarised];
+    [
+        ConversationProcessingStatus.Imported,
+        ConversationProcessingStatus.Summarised,
+        ConversationProcessingStatus.EmbeddingError,
+    ];
 
     /// <summary>
     /// Processes all conversations with <see cref="ConversationProcessingStatus.Imported"/> or
@@ -58,12 +68,22 @@ public class EmbeddingService(
         int errors = 0;
         int skipped = 0;
 
+        // Failed embeddings are re-marked EmbeddingError, which keeps them in the eligible set.
+        // Track the conversations we've already attempted this run and exclude them from the next
+        // fetch, so each conversation is attempted at most once — otherwise a persistent failure
+        // would be re-fetched batch after batch and spin this loop forever.
+        var attempted = new HashSet<string>();
+
         while (!ct.IsCancellationRequested)
         {
-            var batch = await repository.GetByStatusesAsync(EmbeddableStatuses, BatchSize, ct);
+            var batch = await repository.GetByStatusesAsync(EmbeddableStatuses, BatchSize, attempted, ct);
 
             if (batch.Count == 0)
+            {
+                if (attempted.Count == 0)
+                    logger.LogInformation("No embeddable conversations found in repository.");
                 break;
+            }
 
             logger.LogInformation("Embedding batch: {Count} conversations to process.", batch.Count);
 
@@ -71,6 +91,8 @@ public class EmbeddingService(
             {
                 if (ct.IsCancellationRequested)
                     break;
+
+                attempted.Add(conversation.ConversationId);
 
                 var outcome = await EmbedConversationAsync(conversation, ct);
                 switch (outcome)
@@ -82,6 +104,11 @@ public class EmbeddingService(
 
                 progress?.Report(new EmbeddingProgress(embedded, errors, skipped));
             }
+        }
+
+        if (ct.IsCancellationRequested)
+        {
+            logger.LogInformation("Embedding cancelled");
         }
 
         logger.LogInformation(

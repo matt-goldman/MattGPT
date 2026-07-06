@@ -43,11 +43,12 @@ internal sealed class FakeConversationRepository : IConversationRepository{
         return Task.FromResult(items);
     }
 
-    public Task<List<StoredConversation>> GetByStatusesAsync(IEnumerable<ConversationProcessingStatus> statuses, int maxCount, CancellationToken ct = default)
+    public Task<List<StoredConversation>> GetByStatusesAsync(IEnumerable<ConversationProcessingStatus> statuses, int maxCount, IReadOnlyCollection<string>? excludeIds = null, CancellationToken ct = default)
     {
         var statusSet = statuses.ToHashSet();
+        var exclude = excludeIds is null ? null : new HashSet<string>(excludeIds);
         var items = _conversations
-            .Where(c => statusSet.Contains(c.ProcessingStatus))
+            .Where(c => statusSet.Contains(c.ProcessingStatus) && (exclude is null || !exclude.Contains(c.ConversationId)))
             .Take(maxCount)
             .ToList();
         return Task.FromResult(items);

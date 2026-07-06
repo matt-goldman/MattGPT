@@ -16,8 +16,13 @@ public interface IConversationRepository
     /// <summary>Return up to <paramref name="maxCount"/> conversations with the given processing status.</summary>
     Task<List<StoredConversation>> GetByStatusAsync(ConversationProcessingStatus status, int maxCount, CancellationToken ct = default);
 
-    /// <summary>Return up to <paramref name="maxCount"/> conversations matching any of the given processing statuses.</summary>
-    Task<List<StoredConversation>> GetByStatusesAsync(IEnumerable<ConversationProcessingStatus> statuses, int maxCount, CancellationToken ct = default);
+    /// <summary>
+    /// Return up to <paramref name="maxCount"/> conversations matching any of the given processing
+    /// statuses, optionally excluding conversations whose id is in <paramref name="excludeIds"/>.
+    /// The exclusion lets callers page past conversations they have already handled when processed
+    /// items can remain in the matching set (e.g. embedding retries re-mark failures).
+    /// </summary>
+    Task<List<StoredConversation>> GetByStatusesAsync(IEnumerable<ConversationProcessingStatus> statuses, int maxCount, IReadOnlyCollection<string>? excludeIds = null, CancellationToken ct = default);
 
     /// <summary>Update the summary text and processing status of a single conversation.</summary>
     Task UpdateSummaryAsync(string conversationId, string? summary, ConversationProcessingStatus status, CancellationToken ct = default);

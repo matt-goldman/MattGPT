@@ -166,6 +166,49 @@ public class EmbeddingServiceTests
     }
 
     [Fact]
+    public async Task EmbedAsync_PreviouslyFailedConversation_IsRetried()
+    {
+        // Regression: conversations that failed to embed on import are left as EmbeddingError.
+        // A re-run must pick them up and retry them, otherwise failures are never recovered.
+        var repository = new FakeConversationRepository();
+        repository.Seed([MakeConversation("c1", status: ConversationProcessingStatus.EmbeddingError)]);
+
+        var generator = new FakeEmbeddingGenerator(TestVector);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
+
+        var result = await service.EmbedAsync();
+
+        Assert.Equal(1, result.Embedded);
+        Assert.Single(repository.EmbeddingUpdates);
+        Assert.Equal(ConversationProcessingStatus.Embedded, repository.EmbeddingUpdates[0].Status);
+    }
+
+    [Fact]
+    public async Task EmbedAsync_PersistentErrors_AttemptEachOnceAndTerminate()
+    {
+        // Regression: failures are re-marked EmbeddingError, which is itself an embeddable status.
+        // Each conversation must be attempted exactly once per run so a persistent failure doesn't
+        // get re-fetched forever (which previously spun EmbedAsync into an infinite loop). The count
+        // spans several internal batches to prove already-attempted conversations don't crowd out
+        // not-yet-attempted ones (starvation) — every conversation must be reached.
+        const int count = 120;
+        var repository = new FakeConversationRepository();
+        repository.Seed(Enumerable.Range(0, count).Select(i => MakeConversation($"c{i}")));
+
+        var generator = new ThrowingEmbeddingGenerator(new InvalidOperationException("Model unavailable"));
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
+
+        var result = await service.EmbedAsync();
+
+        Assert.Equal(0, result.Embedded);
+        Assert.Equal(count, result.Errors);
+        // Exactly one update per conversation — proof each was attempted once and the loop ended.
+        Assert.Equal(count, repository.EmbeddingUpdates.Count);
+        Assert.Equal(count, repository.EmbeddingUpdates.Select(u => u.Id).Distinct().Count());
+        Assert.All(repository.EmbeddingUpdates, u => Assert.Equal(ConversationProcessingStatus.EmbeddingError, u.Status));
+    }
+
+    [Fact]
     public async Task EmbedAsync_NoContentAtAll_MarksAsEmbeddedSkipped()
     {
         // A conversation with no title, no summary, and no messages has nothing to embed.

@@ -428,3 +428,5 @@ FodyWeavers.xsd
 
 # local only temp files
 /scratch/*
+
+.vscode/

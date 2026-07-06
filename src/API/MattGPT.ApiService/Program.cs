@@ -166,6 +166,12 @@ builder.Services.AddSingleton(Channel.CreateBounded<ImportJobRequest>(new Bounde
     SingleReader = true,
 }));
 builder.Services.AddHostedService<ImportProcessingService>();
+builder.Services.AddSingleton(Channel.CreateBounded<EmbedJobRequest>(new BoundedChannelOptions(50)
+{
+    FullMode = BoundedChannelFullMode.Wait,
+    SingleReader = true,
+}));
+builder.Services.AddHostedService<EmbedProcessingService>();
 builder.Services.AddScoped<SummarisationService>();
 builder.Services.AddScoped<EmbeddingService>();
 builder.Services.Configure<VectorStoreOptions>(builder.Configuration.GetSection(VectorStoreOptions.SectionName));
