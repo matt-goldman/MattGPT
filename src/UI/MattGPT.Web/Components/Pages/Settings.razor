@@ -137,8 +137,8 @@
 
                     @if (_embedStatus == EmbedStatus.Complete)
                     {
-                        <LumexAlert Color="@ThemeColor.Success" Title="Embeddings complete" Class="mt-4">
-                            @_embedded embedded, @_embeddingSkipped skipped@(_embeddingErrors > 0 ? $", {_embeddingErrors} error(s)" : string.Empty).
+                        <LumexAlert Color="@EmbedResultColor" Title="@EmbedResultTitle" Class="mt-4">
+                            @_embedded embedded, @_embeddingSkipped skipped, @_embeddingErrors failed.
                         </LumexAlert>
                     }
                     @if (_embedStatus == EmbedStatus.Failed)
@@ -192,6 +192,16 @@
     private bool _isPolling;
     private string _embedErrorMessage = string.Empty;
     private IReadOnlyList<FailedEmbeddingItem> _failedEmbeddings = [];
+
+    // A finished run is only a success when nothing failed. Partial failures are a warning; a run
+    // where everything failed (nothing embedded or skipped) is a failure, not a completion.
+    private bool _embedHadSuccess => _embedded > 0 || _embeddingSkipped > 0;
+    private ThemeColor EmbedResultColor => _embeddingErrors == 0
+        ? ThemeColor.Success
+        : _embedHadSuccess ? ThemeColor.Warning : ThemeColor.Danger;
+    private string EmbedResultTitle => _embeddingErrors == 0
+        ? "Embeddings complete"
+        : _embedHadSuccess ? "Embeddings completed with failures" : "Embeddings failed";
 
     protected override async Task OnInitializedAsync()
     {
