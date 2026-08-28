@@ -50,7 +50,7 @@ internal static class AppHostInfrastructure
 
         if (isAuthEnabled && authProvider.Equals("Keycloak", StringComparison.OrdinalIgnoreCase))
         {
-            keycloak = builder.AddKeycloak("keycloak")
+            keycloak = builder.AddKeycloak("keycloak",1875)
                 .WithEnvironment("KC_PROXY_HEADERS", "xforwarded")
                 .WithDataVolume()
                 .WithRealmImport(Path.Combine(AppContext.BaseDirectory, "keycloak", "mattgpt-realm.json"));

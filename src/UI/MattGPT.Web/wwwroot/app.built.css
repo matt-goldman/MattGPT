@@ -956,9 +956,6 @@
     width: calc(var(--spacing) * 12);
     height: calc(var(--spacing) * 12);
   }
-  .h-1 {
-    height: calc(var(--spacing) * 1);
-  }
   .h-1\.5 {
     height: calc(var(--spacing) * 1.5);
   }
@@ -1307,9 +1304,6 @@
   .origin-center {
     transform-origin: center;
   }
-  .origin-left {
-    transform-origin: 0;
-  }
   .origin-right {
     transform-origin: 100%;
   }
@@ -1411,9 +1405,6 @@
   }
   .cursor-default {
     cursor: default;
-  }
-  .cursor-not-allowed {
-    cursor: not-allowed;
   }
   .cursor-pointer {
     cursor: pointer;
@@ -1937,12 +1928,6 @@
   }
   .bg-default-200 {
     background-color: var(--lumex-default-200);
-  }
-  .bg-default-300\/50 {
-    background-color: var(--lumex-default-300);
-    @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--lumex-default-300) 50%, transparent);
-    }
   }
   .bg-default-300\/80 {
     background-color: var(--lumex-default-300);
@@ -5930,11 +5915,6 @@
       --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);
       --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);
       translate: var(--tw-translate-x) var(--tw-translate-y);
-    }
-  }
-  .rtl\:rotate-180 {
-    &:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
-      rotate: 180deg;
     }
   }
   .rtl\:space-x-reverse {
