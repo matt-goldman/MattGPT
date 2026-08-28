@@ -26,9 +26,9 @@ internal static class AppHostApiService
         // --- Document database ---
         bool dbConfigured = false;
 
-        if (infra.MongoDB is not null)
+        if (infra.MongoDb is not null)
         {
-            apiService.WithReference(infra.MongoDB).WaitFor(infra.MongoDB);
+            apiService.WithReference(infra.MongoDb).WaitFor(infra.MongoDb);
             dbConfigured = true;
         }
 

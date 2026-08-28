@@ -13,6 +13,14 @@ namespace MattGPT.ApiService.Services;
 /// to search past conversation history. This enables tool-calling RAG where
 /// the LLM decides when and how to search rather than always injecting context.
 /// </summary>
+/// <remarks>
+/// This is a semantic (vector similarity) search, not a keyword or full-text search:
+/// the query is embedded and compared against one embedding per stored conversation,
+/// built from its title, summary, and message content. The tool and parameter
+/// descriptions below are deliberately explicit about that, because models default to
+/// writing keyword-style queries ("keycloak auth AND blazor error") which embed poorly;
+/// a plain natural-language description of the subject retrieves far better.
+/// </remarks>
 public class SearchMemoriesTool(
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
     IVectorStore vectorStore,
@@ -38,10 +46,16 @@ public class SearchMemoriesTool(
         return AIFunctionFactory.Create(
             SearchMemoriesAsync,
             name: "search_memories",
-            description: "Search the user's past conversation history by topic or keyword. " +
+            description: "Semantic (vector similarity) search over the user's past conversations. " +
+                "The query is turned into an embedding and matched against whole conversations by MEANING, not by keyword. " +
+                "Write the query as a short natural-language description of the subject, phrased the way it would be said in conversation " +
+                "(e.g. \"setting up Keycloak authentication in the Blazor app\"), " +
+                "NOT as keywords, boolean operators, quoted phrases, wildcards, or field filters - those retrieve worse, not better. " +
+                "Paraphrases and synonyms match well; exact strings, rare identifiers, error codes, and dates do not match reliably. " +
                 "ALWAYS call this tool when the user asks about past conversations, references something they may have discussed before, " +
                 "mentions a project, person, topic, or event that could be in their history, " +
                 "or when you are uncertain whether you have relevant context. " +
+                "If nothing useful comes back, retry once with the same topic described differently or more broadly - do not retry with keywords. " +
                 "The search results contain actual conversation excerpts you should use to answer the user's question. " +
                 "After calling this tool, incorporate the returned information directly into your response.");
     }
@@ -59,16 +73,21 @@ public class SearchMemoriesTool(
     public Action<string>? OnCompleted { get; set; }
 
     /// <summary>
-    /// Searches past conversation history by embedding the query and retrieving
-    /// similar conversations from the vector store. Returns formatted excerpts
-    /// that the LLM can use to formulate its response.
+    /// Searches past conversation history by embedding the query and retrieving the
+    /// nearest conversation embeddings from the vector store. Matching is semantic, so
+    /// the query only needs to describe the subject - it does not need to share wording
+    /// with the stored conversations. Returns formatted excerpts that the LLM can use to
+    /// formulate its response.
     /// </summary>
-    /// <param name="query">The search query describing what to look for in past conversations.</param>
+    /// <param name="query">Natural-language description of the topic to find; embedded and matched by meaning.</param>
     /// <param name="maxResults">Maximum number of conversations to return (1–10). Pass 0 to use the default from config.</param>
-    [Description("Search the user's past conversation history by topic or query.")]
+    [Description("Semantic (vector similarity) search over the user's past conversations. Matches on meaning, not keywords.")]
     public async Task<string> SearchMemoriesAsync(
-        [Description("The search query describing what to look for in past conversations.")] string query,
-        [Description("Maximum number of conversations to return (1-10). Defaults to 5 if omitted or 0.")] int maxResults = 0)
+        [Description("Natural-language description of the topic to find, written as prose - a sentence or descriptive phrase. " +
+            "It is embedded and compared to past conversations by meaning, so describe the subject rather than listing keywords. " +
+            "Do not use boolean operators, quoted exact phrases, wildcards, or field filters; they only make the match worse.")] string query,
+        [Description("Maximum number of conversations to return (1-10). Defaults to 5 if omitted or 0. " +
+            "Results are ranked by similarity and weak matches are dropped, so a larger value may still return fewer.")] int maxResults = 0)
     {
         var limit = Math.Clamp(maxResults > 0 ? maxResults : _options.ToolMaxResults, 1, 10);
 
@@ -80,11 +99,11 @@ public class SearchMemoriesTool(
 
         try
         {
-            // 1. Embed the tool query.
+            // 1. Embed the query with the same model used to embed the stored conversations.
             var embeddings = await embeddingGenerator.GenerateAsync([query]);
             var queryVector = embeddings[0].Vector.ToArray();
 
-            // 2. Search vector store.
+            // 2. Nearest-neighbour search over conversation embeddings, ranked by similarity.
             var searchResults = await vectorStore.SearchAsync(queryVector, limit, currentUser.UserId);
 
             // 3. Apply minimum score threshold using MinScore (same threshold as WithPrompt mode).
@@ -99,7 +118,9 @@ public class SearchMemoriesTool(
             if (relevant.Count == 0)
             {
                 LastSources = [];
-                return "No relevant past conversations found for this query.";
+                return "No past conversations were semantically similar enough to this query. "
+                    + "If you expected a match, search again describing the same topic in different or broader terms "
+                    + "rather than adding keywords.";
             }
 
             // 4. Fetch full conversations from MongoDB.
@@ -108,12 +129,12 @@ public class SearchMemoriesTool(
 
             // 5. Build formatted results.
             var result = new StringBuilder();
-            result.AppendLine($"Found {relevant.Count} relevant past conversation(s):");
+            result.AppendLine($"Found {relevant.Count} past conversation(s) semantically similar to the query, most similar first:");
             result.AppendLine();
 
             foreach (var r in relevant)
             {
-                result.AppendLine($"--- {r.Title ?? "Untitled"} (relevance: {r.Score:F2}) ---");
+                result.AppendLine($"--- {r.Title ?? "Untitled"} (similarity: {r.Score:F2}) ---");
 
                 if (!string.IsNullOrWhiteSpace(r.Summary))
                     result.AppendLine($"Summary: {r.Summary}");

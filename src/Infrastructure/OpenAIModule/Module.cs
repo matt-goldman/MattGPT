@@ -19,12 +19,14 @@ public static class Module
         var ragOptions = builder.Configuration.GetSection(RagOptions.SectionName).Get<RagOptions>() ?? new RagOptions();
         var embeddingModelId = llmOptions.EmbeddingModelId ?? llmOptions.ModelId;
         var useFunctionInvocation = ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly;
+        
+        var uri = llmOptions.Endpoint.EndsWith("/v1") ? llmOptions.Endpoint : $"{llmOptions.Endpoint}/v1/";
 
         var openaiClient = new OpenAIClient(
             new ApiKeyCredential(llmOptions.ApiKey
                 ?? throw new InvalidOperationException("LLM:ApiKey is required for OpenAI provider.")),options: new OpenAIClientOptions
                 {
-                    Endpoint = new Uri(llmOptions.Endpoint)
+                    Endpoint = new Uri(uri)
                 });
 
         var chatBuilder = builder.Services.AddChatClient(

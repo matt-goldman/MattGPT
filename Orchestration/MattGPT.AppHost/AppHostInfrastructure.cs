@@ -3,7 +3,7 @@ namespace MattGPT.AppHost;
 /// <summary>Resources created by <see cref="AppHostInfrastructure.AddInfrastructure"/>.</summary>
 internal record InfraResources(
     IResourceBuilder<IResourceWithConnectionString>? PostgresDb,
-    IResourceBuilder<IResourceWithConnectionString>? MongoDB,
+    IResourceBuilder<IResourceWithConnectionString>? MongoDb,
     IResourceBuilder<KeycloakResource>? Keycloak);
 
 /// <summary>
@@ -52,6 +52,8 @@ internal static class AppHostInfrastructure
         {
             keycloak = builder.AddKeycloak("keycloak",1875)
                 .WithEnvironment("KC_PROXY_HEADERS", "xforwarded")
+                .WithEnvironment("KC_QUARKUS_HTTP_LIMITS_MAX_HEADER_SIZE","49152")
+                .WithEnvironment("KC_QUARKUS_HTTP_LIMITS_MAX_HEADER_LIST_SIZE", "49152")
                 .WithDataVolume()
                 .WithRealmImport(Path.Combine(AppContext.BaseDirectory, "keycloak", "mattgpt-realm.json"));
         }

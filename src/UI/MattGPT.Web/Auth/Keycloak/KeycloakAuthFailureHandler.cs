@@ -10,6 +10,7 @@ public sealed class KeycloakAuthFailureHandler(NavigationManager navigation) : I
 {
     public Task<bool> HandleAsync(CancellationToken cancellationToken = default)
     {
+        Console.WriteLine("Auth failed, redirecting to login");
         navigation.NavigateTo("/auth/login-oidc?returnUrl=" + Uri.EscapeDataString(navigation.Uri), forceLoad: true);
         return Task.FromResult(false);
     }
