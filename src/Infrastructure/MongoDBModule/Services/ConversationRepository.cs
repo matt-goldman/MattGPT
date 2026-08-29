@@ -1,5 +1,8 @@
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
+using Microsoft.Extensions.Logging;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 
 namespace MattGPT.MongoDBModule.Services;
@@ -10,10 +13,18 @@ namespace MattGPT.MongoDBModule.Services;
 /// </summary>
 public class ConversationRepository : IConversationRepository
 {
-    private readonly IMongoCollection<StoredConversation> _collection;
+    /// <summary>Name of the compound text index backing <see cref="SearchTextAsync"/>.</summary>
+    private const string TextIndexName = "conversation_text_idx";
 
-    public ConversationRepository(IMongoClient mongoClient)
+    /// <summary>Projection field holding the per-document relevance rank from a $text query.</summary>
+    private const string TextScoreField = "textScore";
+
+    private readonly IMongoCollection<StoredConversation> _collection;
+    private readonly ILogger<ConversationRepository> _logger;
+
+    public ConversationRepository(IMongoClient mongoClient, ILogger<ConversationRepository> logger)
     {
+        _logger = logger;
         var db = mongoClient.GetDatabase("mattgptdb");
         _collection = db.GetCollection<StoredConversation>("conversations");
         CreateIndexes();
@@ -30,6 +41,49 @@ public class ConversationRepository : IConversationRepository
             new CreateIndexModel<StoredConversation>(keys.Ascending(x => x.GizmoType)),
             new CreateIndexModel<StoredConversation>(keys.Ascending(x => x.UserId)),
         ]);
+
+        CreateTextIndex();
+    }
+
+    /// <summary>
+    /// Creates the text index used for keyword search, weighted so a hit in the title or
+    /// summary outranks a passing mention in the message body.
+    /// </summary>
+    /// <remarks>
+    /// Created separately from the other indexes, and failure-tolerant, for two reasons:
+    /// a collection may only have ONE text index, so an index left over from a different
+    /// field set makes creation fail with IndexOptionsConflict; and this index covers every
+    /// message of every conversation, so the initial build on a large collection is the
+    /// slowest part of startup. Neither should take the whole repository down - keyword
+    /// search degrades to returning nothing while the rest of the app keeps working.
+    /// </remarks>
+    private void CreateTextIndex()
+    {
+        try
+        {
+            _collection.Indexes.CreateOne(new CreateIndexModel<StoredConversation>(
+                Builders<StoredConversation>.IndexKeys
+                    .Text(x => x.Title)
+                    .Text(x => x.Summary)
+                    .Text("LinearisedMessages.Parts"),
+                new CreateIndexOptions
+                {
+                    Name = TextIndexName,
+                    Weights = new BsonDocument
+                    {
+                        { "Title", 10 },
+                        { "Summary", 5 },
+                        { "LinearisedMessages.Parts", 1 },
+                    },
+                }));
+        }
+        catch (MongoCommandException ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not create the {IndexName} text index; keyword search will return no results. "
+                + "Drop any pre-existing text index on the conversations collection and restart to fix this.",
+                TextIndexName);
+        }
     }
 
     /// <inheritdoc/>
@@ -116,6 +170,60 @@ public class ConversationRepository : IConversationRepository
     {
         var filter = Builders<StoredConversation>.Filter.In(x => x.ConversationId, conversationIds);
         return await _collection.Find(filter).ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<ConversationTextSearchResult>> SearchTextAsync(
+        string query, int maxResults, string? userId = null, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(query) || maxResults <= 0)
+            return [];
+
+        var filter = Builders<StoredConversation>.Filter.And(
+            Builders<StoredConversation>.Filter.Text(query),
+            Builders<StoredConversation>.Filter.Eq(x => x.UserId, userId));
+
+        // A projection containing only $meta returns the whole document plus the computed
+        // score, so the document still deserialises normally once the score is removed.
+        var projection = Builders<StoredConversation>.Projection.MetaTextScore(TextScoreField);
+        var sort = Builders<StoredConversation>.Sort.MetaTextScore(TextScoreField);
+
+        List<BsonDocument> rows;
+        try
+        {
+            rows = await _collection
+                .Find(filter)
+                .Project<BsonDocument>(projection)
+                .Sort(sort)
+                .Limit(maxResults)
+                .ToListAsync(ct);
+        }
+        catch (MongoCommandException ex)
+        {
+            // Most likely the text index is missing (see CreateTextIndex). Callers treat
+            // keyword search as best-effort, so degrade to "no matches" rather than throwing.
+            _logger.LogWarning(ex, "Text search failed for query {Query}.", query);
+            return [];
+        }
+
+        var results = new List<ConversationTextSearchResult>(rows.Count);
+
+        foreach (var row in rows)
+        {
+            var score = row.TryGetValue(TextScoreField, out var scoreValue) ? scoreValue.ToDouble() : 0d;
+            row.Remove(TextScoreField);
+
+            var conversation = BsonSerializer.Deserialize<StoredConversation>(row);
+
+            results.Add(new ConversationTextSearchResult(
+                conversation.ConversationId,
+                score,
+                conversation.Title,
+                conversation.Summary,
+                ConversationTextSnippets.Build(conversation, query)));
+        }
+
+        return results;
     }
 
     /// <inheritdoc/>

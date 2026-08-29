@@ -20,6 +20,8 @@ namespace MattGPT.ApiService.Services;
 /// descriptions below are deliberately explicit about that, because models default to
 /// writing keyword-style queries ("keycloak auth AND blazor error") which embed poorly;
 /// a plain natural-language description of the subject retrieves far better.
+/// Keyword-shaped queries belong in <see cref="KeywordSearchMemoriesTool"/>, which both this
+/// description and its own point the model towards - keep the two descriptions in sync.
 /// </remarks>
 public class SearchMemoriesTool(
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
@@ -51,11 +53,13 @@ public class SearchMemoriesTool(
                 "Write the query as a short natural-language description of the subject, phrased the way it would be said in conversation " +
                 "(e.g. \"setting up Keycloak authentication in the Blazor app\"), " +
                 "NOT as keywords, boolean operators, quoted phrases, wildcards, or field filters - those retrieve worse, not better. " +
-                "Paraphrases and synonyms match well; exact strings, rare identifiers, error codes, and dates do not match reliably. " +
+                "Paraphrases and synonyms match well; exact strings, rare identifiers, error codes, and dates do not match reliably - " +
+                "use search_memories_keyword for those, it searches the same conversations by literal word. " +
                 "ALWAYS call this tool when the user asks about past conversations, references something they may have discussed before, " +
                 "mentions a project, person, topic, or event that could be in their history, " +
                 "or when you are uncertain whether you have relevant context. " +
-                "If nothing useful comes back, retry once with the same topic described differently or more broadly - do not retry with keywords. " +
+                "If nothing useful comes back, retry once with the same topic described differently or more broadly - " +
+                "do not retry with keywords here, switch to search_memories_keyword instead. " +
                 "The search results contain actual conversation excerpts you should use to answer the user's question. " +
                 "After calling this tool, incorporate the returned information directly into your response.");
     }

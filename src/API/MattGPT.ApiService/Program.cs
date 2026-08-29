@@ -216,10 +216,13 @@ builder.Services.AddScoped<RagService>();
 builder.Services.Configure<RagOptions>(builder.Configuration.GetSection(RagOptions.SectionName));
 var ragOptions = builder.Configuration.GetSection(RagOptions.SectionName).Get<RagOptions>() ?? new RagOptions();
 
-// Register the search_memories tool when RAG mode supports tool calling (Auto or ToolsOnly).
+// Register the retrieval tools when RAG mode supports tool calling (Auto or ToolsOnly).
+// search_memories searches by meaning, search_memories_keyword by literal words; the LLM
+// picks whichever fits the question.
 if (ragOptions.Mode is RagMode.Auto or RagMode.ToolsOnly)
 {
     builder.Services.AddScoped<SearchMemoriesTool>();
+    builder.Services.AddScoped<KeywordSearchMemoriesTool>();
 }
 
 builder.Services.AddScoped<ChatSessionService>();

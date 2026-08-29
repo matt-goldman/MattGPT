@@ -9,12 +9,12 @@
 <div class="max-w-3xl mx-auto px-4 py-8">
     <h1 class="text-2xl font-bold mb-6">Search Conversations</h1>
 
-    <div class="flex gap-2 mb-6">
+    <div class="flex gap-2 mb-3">
         <input type="text"
                @bind="_query"
                @bind:event="oninput"
                @bind:after="OnQueryChanged"
-               placeholder="Search your conversation history..."
+               placeholder="@Placeholder"
                class="flex-1 rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:outline-none focus:border-primary"
                @onkeydown="HandleKeyDown" />
         <LumexButton Color="@ThemeColor.Primary"
@@ -22,6 +22,16 @@
                      OnClick="RunSearch">
             Search
         </LumexButton>
+    </div>
+
+    <div class="flex items-center gap-3 mb-6">
+        <LumexSwitch Value="_isKeywordSearch"
+                     ValueChanged="OnSearchModeChanged"
+                     Color="@ThemeColor.Primary"
+                     Size="@Size.Small">
+            Keyword search
+        </LumexSwitch>
+        <span class="text-xs text-default-400">@ModeHint</span>
     </div>
 
     @if (_isSearching)
@@ -34,7 +44,14 @@
     {
         <div class="text-center text-default-400 py-8">
             <p>No conversations found for "@_lastQuery".</p>
-            <p class="text-xs mt-1">Try a different query or make sure your conversations have been imported and embedded.</p>
+            @if (_lastSearchWasKeyword)
+            {
+                <p class="text-xs mt-1">Keyword search only matches the words you typed. Try fewer or different words, or switch it off to search by meaning.</p>
+            }
+            else
+            {
+                <p class="text-xs mt-1">Try a different query, switch on keyword search to look for an exact word, or make sure your conversations have been imported and embedded.</p>
+            }
         </div>
     }
     else if (_results.Count > 0)
@@ -52,10 +69,24 @@
                             {
                                 <p class="text-xs text-default-500 mt-1 line-clamp-2">@result.Summary</p>
                             }
+                            @if (result.Snippets is { Count: > 0 })
+                            {
+                                <div class="mt-2 space-y-1">
+                                    @foreach (var snippet in result.Snippets)
+                                    {
+                                        <p class="text-xs text-default-500 border-l-2 border-default-200 pl-2">@snippet</p>
+                                    }
+                                </div>
+                            }
                         </div>
-                        <span class="text-xs text-default-400 shrink-0 mt-0.5">
-                            relevance: @result.Score.ToString("P0")
-                        </span>
+                        @if (!_lastSearchWasKeyword)
+                        {
+                            @* Keyword ranks are relative to the top hit, not a similarity, so
+                               showing them as a percentage would invite a false comparison. *@
+                            <span class="text-xs text-default-400 shrink-0 mt-0.5">
+                                relevance: @result.Score.ToString("P0")
+                            </span>
+                        }
                     </div>
                 </button>
             }
@@ -75,9 +106,40 @@
     private string _lastQuery = string.Empty;
     private bool _isSearching;
     private bool _hasSearched;
+    private bool _isKeywordSearch;
+
+    /// <summary>
+    /// Mode the displayed results came from. Tracked separately from <c>_isKeywordSearch</c>
+    /// so that flipping the toggle doesn't relabel results that are still on screen from the
+    /// previous mode before the new search returns.
+    /// </summary>
+    private bool _lastSearchWasKeyword;
     private string _errorMessage = string.Empty;
     private readonly List<SearchResult> _results = [];
     private System.Threading.Timer? _debounceTimer;
+
+    private string Placeholder => _isKeywordSearch
+        ? "Words that must appear, e.g. NoClassDefFoundError"
+        : "Search your conversation history...";
+
+    private string ModeHint => _isKeywordSearch
+        ? "Matching the exact words you type."
+        : "Matching by meaning, not exact words.";
+
+    /// <summary>
+    /// Switches mode and immediately re-runs the current query, so the toggle reads as
+    /// "show me these results the other way" rather than as a setting to apply by hand.
+    /// </summary>
+    private async Task OnSearchModeChanged(bool isKeywordSearch)
+    {
+        _isKeywordSearch = isKeywordSearch;
+
+        if (!string.IsNullOrWhiteSpace(_query))
+        {
+            _debounceTimer?.Dispose();
+            await RunSearch();
+        }
+    }
 
     private void OnQueryChanged()
     {
@@ -108,9 +170,11 @@
 
         try
         {
-            var searchResults = await SearchService.SearchAsync(q, limit: 20);
+            var mode = _isKeywordSearch ? SearchMode.Keyword : SearchMode.Semantic;
+            var searchResults = await SearchService.SearchAsync(q, limit: 20, mode);
             _results.AddRange(searchResults);
             _lastQuery = q;
+            _lastSearchWasKeyword = _isKeywordSearch;
             _hasSearched = true;
         }
         catch (Exception ex)

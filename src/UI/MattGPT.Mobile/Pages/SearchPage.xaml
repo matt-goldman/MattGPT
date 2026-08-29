@@ -12,7 +12,7 @@
         <toolkit:IsStringNotNullOrEmptyConverter x:Key="StringToBoolConverter" />
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="Auto, Auto, *" Padding="16">
+    <Grid RowDefinitions="Auto, Auto, Auto, *" Padding="16">
 
         <!-- Search input -->
         <Grid Grid.Row="0"
@@ -29,8 +29,21 @@
                     Command="{Binding SearchCommand}" />
         </Grid>
 
+        <!-- Search mode toggle -->
+        <HorizontalStackLayout Grid.Row="1" Spacing="8" Margin="0,0,0,8" VerticalOptions="Center">
+            <Switch IsToggled="{Binding IsKeywordSearch}"
+                    IsEnabled="{Binding IsSearching, Converter={StaticResource InverseBoolConverter}}" />
+            <Label Text="Keyword search"
+                   FontSize="13"
+                   VerticalOptions="Center" />
+            <Label Text="{Binding SearchModeHint}"
+                   FontSize="11"
+                   TextColor="Gray"
+                   VerticalOptions="Center" />
+        </HorizontalStackLayout>
+
         <!-- Error message -->
-        <Label Grid.Row="1"
+        <Label Grid.Row="2"
                Text="{Binding ErrorMessage}"
                IsVisible="{Binding ErrorMessage, Converter={StaticResource StringToBoolConverter}}"
                TextColor="Red"
@@ -38,7 +51,7 @@
                Margin="0,0,0,8" />
 
         <!-- Loading indicator -->
-        <ActivityIndicator Grid.Row="2"
+        <ActivityIndicator Grid.Row="3"
                            IsRunning="{Binding IsSearching}"
                            IsVisible="{Binding IsSearching}"
                            HorizontalOptions="Center"
@@ -46,7 +59,7 @@
                            Margin="0,16,0,0" />
 
         <!-- Results list -->
-        <CollectionView Grid.Row="2"
+        <CollectionView Grid.Row="3"
                         ItemsSource="{Binding Results}"
                         IsVisible="{Binding IsSearching, Converter={StaticResource InverseBoolConverter}}">
             <CollectionView.ItemTemplate>
@@ -64,7 +77,16 @@
                                    TextColor="Gray"
                                    MaxLines="2"
                                    LineBreakMode="TailTruncation" />
+                            <!-- Keyword hits show where the words appear; the score in that
+                                 mode is a rank relative to the top hit, not a similarity. -->
+                            <Label Text="{Binding TopSnippet}"
+                                   IsVisible="{Binding TopSnippet, Converter={StaticResource StringToBoolConverter}}"
+                                   FontSize="11"
+                                   TextColor="Gray"
+                                   MaxLines="3"
+                                   LineBreakMode="TailTruncation" />
                             <Label Text="{Binding Score, StringFormat='Relevance: {0:P0}'}"
+                                   IsVisible="{Binding IsSemanticSearch, Source={RelativeSource AncestorType={x:Type vm:SearchViewModel}}}"
                                    FontSize="11"
                                    TextColor="Gray"
                                    HorizontalOptions="End" />

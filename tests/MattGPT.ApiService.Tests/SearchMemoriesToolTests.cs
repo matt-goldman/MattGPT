@@ -49,7 +49,7 @@ public class SearchMemoriesToolTests
 
         var result = await tool.SearchMemoriesAsync("anything");
 
-        Assert.Contains("No relevant past conversations found", result);
+        Assert.Contains("No past conversations were semantically similar enough", result);
         Assert.Empty(tool.LastSources);
     }
 
@@ -67,7 +67,7 @@ public class SearchMemoriesToolTests
 
         var result = await tool.SearchMemoriesAsync("python decorators");
 
-        Assert.Contains("Found 1 relevant past conversation", result);
+        Assert.Contains("Found 1 past conversation(s) semantically similar", result);
         Assert.Contains("Python Help", result);
         Assert.Contains("Helped with decorators", result);
         Assert.Single(tool.LastSources);
@@ -89,7 +89,7 @@ public class SearchMemoriesToolTests
 
         var result = await tool.SearchMemoriesAsync("query");
 
-        Assert.Contains("Found 1 relevant past conversation", result);
+        Assert.Contains("Found 1 past conversation(s) semantically similar", result);
         Assert.Contains("High Score", result);
         Assert.DoesNotContain("Low Score", result);
         Assert.Single(tool.LastSources);
@@ -118,7 +118,7 @@ public class SearchMemoriesToolTests
 
         var result = await tool.SearchMemoriesAsync("query", maxResults: 2);
 
-        Assert.Contains("relevant past conversation", result);
+        Assert.Contains("past conversation(s) semantically similar", result);
     }
 
     [Fact]
@@ -143,7 +143,12 @@ public class SearchMemoriesToolTests
 
         Assert.NotNull(aiFunction);
         Assert.Equal("search_memories", aiFunction.Name);
-        Assert.Contains("Search", aiFunction.Description);
+
+        // The description has to tell the model this is semantic search and where to go for
+        // literal matching - keyword-shaped queries embed badly and retrieve poorly.
+        Assert.Contains("Semantic", aiFunction.Description);
+        Assert.Contains("not by keyword", aiFunction.Description);
+        Assert.Contains("search_memories_keyword", aiFunction.Description);
     }
 
     [Fact]

@@ -15,6 +15,15 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
     : IConversationRepository
 {
     private const string TableName = "conversations";
+
+    /// <summary>
+    /// The tsvector expression backing keyword search. Built over every string value in the
+    /// JSONB document (titles, summaries, and message parts; the numeric embedding is skipped
+    /// because of the <c>["string"]</c> filter). The regconfig cast is what makes the
+    /// expression IMMUTABLE, which is what lets it be indexed - keep the query and the index
+    /// definition character-for-character identical or Postgres will not use the index.
+    /// </summary>
+    private const string TextVectorExpression = "jsonb_to_tsvector('english'::regconfig, data, '[\"string\"]')";
     private volatile bool _schemaEnsured;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
@@ -193,6 +202,50 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
         cmd.Parameters.AddWithValue(ids);
 
         return await ReadConversationsAsync(cmd, excludeEmbedding: false, ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<ConversationTextSearchResult>> SearchTextAsync(
+        string query, int maxResults, string? userId = null, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(query) || maxResults <= 0)
+            return [];
+
+        await EnsureSchemaAsync(ct);
+
+        // websearch_to_tsquery accepts the syntax users already know from search engines:
+        // bare words (all required), "quoted phrases", -exclusions, and OR. Unlike to_tsquery
+        // it never errors on malformed input, so LLM-authored queries are safe to pass through.
+        await using var cmd = dataSource.CreateCommand(
+            $"""
+            SELECT data, ts_rank_cd({TextVectorExpression}, q)::double precision AS rank
+            FROM {TableName}, websearch_to_tsquery('english', $1) AS q
+            WHERE user_id IS NOT DISTINCT FROM $2
+              AND {TextVectorExpression} @@ q
+            ORDER BY rank DESC
+            LIMIT $3
+            """);
+        cmd.Parameters.AddWithValue(query);
+        cmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue(maxResults);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var results = new List<ConversationTextSearchResult>();
+
+        while (await reader.ReadAsync(ct))
+        {
+            var conversation = JsonSerializer.Deserialize<StoredConversation>(reader.GetString(0), SerializerOptions);
+            if (conversation is null) continue;
+
+            results.Add(new ConversationTextSearchResult(
+                conversation.ConversationId,
+                reader.GetDouble(1),
+                conversation.Title,
+                conversation.Summary,
+                ConversationTextSnippets.Build(conversation, query)));
+        }
+
+        return results;
     }
 
     /// <inheritdoc/>
@@ -404,6 +457,9 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
 
                 CREATE INDEX IF NOT EXISTS {TableName}_user_id_idx
                     ON {TableName} (user_id);
+
+                CREATE INDEX IF NOT EXISTS {TableName}_fts_idx
+                    ON {TableName} USING GIN ({TextVectorExpression});
                 """);
 
             await cmd.ExecuteNonQueryAsync(ct);

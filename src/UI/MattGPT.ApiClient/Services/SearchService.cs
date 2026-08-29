@@ -12,15 +12,21 @@ public sealed class SearchService(IHttpClientFactory factory, IAuthFailureHandle
     private HttpClient CreateClient() => factory.CreateClient(MattGptApiClientDefaults.ClientName);
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit = 20, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<SearchResult>> SearchAsync(
+        string query,
+        int limit = 20,
+        SearchMode mode = SearchMode.Semantic,
+        CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        using var response = await client.GetAsync($"/search?q={Uri.EscapeDataString(query)}&limit={limit}", cancellationToken);
+        var url = BuildUrl(query, limit, mode);
+
+        using var response = await client.GetAsync(url, cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             if (await authFailureHandler.HandleAsync(cancellationToken))
             {
-                using var retryResponse = await client.GetAsync($"/search?q={Uri.EscapeDataString(query)}&limit={limit}", cancellationToken);
+                using var retryResponse = await client.GetAsync(url, cancellationToken);
                 retryResponse.EnsureSuccessStatusCode();
                 return await retryResponse.Content.ReadFromJsonAsync<List<SearchResult>>(JsonOptions, cancellationToken)
                     ?? [];
@@ -30,5 +36,15 @@ public sealed class SearchService(IHttpClientFactory factory, IAuthFailureHandle
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<List<SearchResult>>(JsonOptions, cancellationToken)
             ?? [];
+    }
+
+    /// <summary>
+    /// Builds the request URL. The mode parameter is only sent for keyword search, so the
+    /// request stays identical to the pre-toggle one when searching semantically.
+    /// </summary>
+    private static string BuildUrl(string query, int limit, SearchMode mode)
+    {
+        var url = $"/search?q={Uri.EscapeDataString(query)}&limit={limit}";
+        return mode == SearchMode.Keyword ? $"{url}&mode=keyword" : url;
     }
 }

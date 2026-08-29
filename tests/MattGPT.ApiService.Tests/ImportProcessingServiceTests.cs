@@ -109,6 +109,37 @@ internal sealed class FakeConversationRepository : IConversationRepository{
     public Task<(List<StoredConversation> Items, long Total)> GetNonProjectConversationsAsync(
         int page, int pageSize, string? userId = null, CancellationToken ct = default)
         => Task.FromResult((_conversations.ToList(), (long)_conversations.Count));
+
+    /// <summary>
+    /// Stand-in for the backends' full-text search: case-insensitive substring matching on
+    /// any query word, ranked by how many words matched. Deliberately cruder than MongoDB or
+    /// Postgres (no stemming, no phrase or exclusion syntax) - enough to exercise callers.
+    /// </summary>
+    public Task<IReadOnlyList<ConversationTextSearchResult>> SearchTextAsync(
+        string query, int maxResults, string? userId = null, CancellationToken ct = default)
+    {
+        var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        var hits = _conversations
+            .Select(c => (Conversation: c, Score: (double)terms.Count(
+                t => SearchableText(c).Contains(t, StringComparison.OrdinalIgnoreCase))))
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .Take(maxResults)
+            .Select(x => new ConversationTextSearchResult(
+                x.Conversation.ConversationId,
+                x.Score,
+                x.Conversation.Title,
+                x.Conversation.Summary,
+                ConversationTextSnippets.Build(x.Conversation, query)))
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<ConversationTextSearchResult>>(hits);
+    }
+
+    private static string SearchableText(StoredConversation conversation)
+        => string.Join(" ", new[] { conversation.Title, conversation.Summary }
+            .Concat(conversation.LinearisedMessages.SelectMany(m => m.Parts)));
 }
 
 /// <summary>In-memory user profile repository for unit tests.</summary>
