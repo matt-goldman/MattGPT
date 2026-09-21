@@ -46,7 +46,7 @@ internal sealed class ThrowingEmbeddingGenerator(Exception exception) : IEmbeddi
 /// </summary>
 internal sealed class FakeVectorStore : IVectorStore
 {
-    public List<(StoredConversation Conversation, float[] Vector)> Upserted { get; } = new();
+    public List<(StoredConversation Conversation, float[] Vector)> Upserted { get; } = [];
 
     public Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
     {
