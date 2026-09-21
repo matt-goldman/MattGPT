@@ -139,7 +139,7 @@ public class EmbeddingServiceTests
 
         var generator = new FakeEmbeddingGenerator(TestVector);
         var qdrant = new FakeVectorStore();
-        var service = new EmbeddingService(repository, generator, qdrant, TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, qdrant, ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -162,7 +162,7 @@ public class EmbeddingServiceTests
 
         var generator = new FakeEmbeddingGenerator(TestVector);
         var qdrant = new FakeVectorStore();
-        var service = new EmbeddingService(repository, generator, qdrant, TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, qdrant, ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -177,7 +177,7 @@ public class EmbeddingServiceTests
         repository.Seed([MakeConversation("c1")]);
 
         var generator = new ThrowingEmbeddingGenerator(new InvalidOperationException("Model unavailable"));
-        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -196,7 +196,7 @@ public class EmbeddingServiceTests
         repository.Seed([MakeConversation("c1", status: ConversationProcessingStatus.EmbeddingError)]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -218,7 +218,7 @@ public class EmbeddingServiceTests
         repository.Seed(Enumerable.Range(0, count).Select(i => MakeConversation($"c{i}")));
 
         var generator = new ThrowingEmbeddingGenerator(new InvalidOperationException("Model unavailable"));
-        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -238,7 +238,7 @@ public class EmbeddingServiceTests
         repository.Seed([MakeConversation("c1", title: null, summary: null, messageCount: 0)]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -259,7 +259,7 @@ public class EmbeddingServiceTests
 
         var generator = new FakeEmbeddingGenerator(TestVector);
         var qdrant = new FakeVectorStore();
-        var service = new EmbeddingService(repository, generator, qdrant, TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, qdrant, ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -284,7 +284,7 @@ public class EmbeddingServiceTests
             callCount++;
             return [new Embedding<float>(TestVector)];
         });
-        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -303,7 +303,7 @@ public class EmbeddingServiceTests
         ]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -329,7 +329,7 @@ public class EmbeddingServiceTests
                 throw new InvalidOperationException("Embedding error on second call");
             return [new Embedding<float>(TestVector)];
         });
-        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -344,7 +344,7 @@ public class EmbeddingServiceTests
     {
         var repository = new FakeConversationRepository();
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -361,7 +361,7 @@ public class EmbeddingServiceTests
 
         var qdrant = new FakeVectorStore();
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var service = new EmbeddingService(repository, generator, qdrant, TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, qdrant, ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         await service.EmbedAsync();
 
@@ -377,7 +377,7 @@ public class EmbeddingServiceTests
         repository.Seed([MakeConversation("c1")]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var service = new EmbeddingService(repository, generator, new ThrowingVectorStore(), TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new ThrowingVectorStore(), ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -396,7 +396,7 @@ public class EmbeddingServiceTests
 
         var qdrant = new FakeVectorStore();
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var service = new EmbeddingService(repository, generator, qdrant, TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, qdrant, ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         await service.EmbedAsync();
 
@@ -638,7 +638,7 @@ public class EmbeddingServiceTests
         });
 
         var qdrant = new FakeVectorStore();
-        var service = new EmbeddingService(repository, generator, qdrant, TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, qdrant, ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -657,7 +657,7 @@ public class EmbeddingServiceTests
         repository.Seed([MakeConversation("c1")]);
 
         var generator = new ThrowingEmbeddingGenerator(new InvalidOperationException("Some other model error"));
-        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), TimeProvider.System, NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), ZeroDelayTimeProvider.Instance, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
