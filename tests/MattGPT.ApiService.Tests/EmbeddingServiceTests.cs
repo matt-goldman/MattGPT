@@ -196,7 +196,7 @@ public class EmbeddingServiceTests
         repository.Seed([MakeConversation("c1", status: ConversationProcessingStatus.EmbeddingError)]);
 
         var generator = new FakeEmbeddingGenerator(TestVector);
-        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), TimeProvider.System, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -218,7 +218,7 @@ public class EmbeddingServiceTests
         repository.Seed(Enumerable.Range(0, count).Select(i => MakeConversation($"c{i}")));
 
         var generator = new ThrowingEmbeddingGenerator(new InvalidOperationException("Model unavailable"));
-        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), NullLogger<EmbeddingService>.Instance);
+        var service = new EmbeddingService(repository, generator, new FakeVectorStore(), TimeProvider.System, NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
