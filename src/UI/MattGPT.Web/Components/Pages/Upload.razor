@@ -60,7 +60,7 @@
                         <div class="border border-default-200 rounded-lg p-4">
                             <div class="flex items-center justify-between mb-2">
                                 <span class="font-medium text-sm truncate max-w-[70%]" title="@tracker.FileName">@tracker.FileName</span>
-                                <span class="text-xs px-2 py-0.5 rounded-full @GetStatusBadgeClass(tracker.Status)">@GetStatusLabel(tracker.Status)</span>
+                                <span class="text-xs px-2 py-0.5 rounded-full @GetStatusBadgeClass(tracker)">@GetStatusLabel(tracker)</span>
                             </div>
 
                             @switch (tracker.Status)
@@ -109,11 +109,15 @@
                                     break;
 
                                 case FileStatus.Complete:
-                                    <p class="text-xs text-success">
+                                    <p class="text-xs @(tracker.EmbeddingErrors > 0 ? "text-warning" : "text-success")">
                                         @tracker.ProcessedConversations conversation(s) imported, @tracker.EmbeddedConversations embedded.
+                                        @if (tracker.EmbeddingErrors > 0)
+                                        {
+                                            <span class="text-warning"> @tracker.EmbeddingErrors failed to embed.</span>
+                                        }
                                         @if (tracker.ErrorCount > 0)
                                         {
-                                            <span class="text-warning"> @tracker.ErrorCount error(s).</span>
+                                            <span class="text-warning"> @tracker.ErrorCount parse error(s).</span>
                                         }
                                     </p>
                                     break;
@@ -138,8 +142,6 @@
             {
                 @* Summary *@
                 <div class="flex flex-col items-center py-8 space-y-4">
-                    <div class="w-16 h-16 rounded-full bg-success-100 flex items-center justify-center text-3xl">✓</div>
-
                     @{
                         var totalProcessed = _fileTrackers.Sum(t => t.ProcessedConversations);
                         var totalEmbedded = _fileTrackers.Sum(t => t.EmbeddedConversations);
@@ -147,10 +149,23 @@
                         var totalEmbeddingErrors = _fileTrackers.Sum(t => t.EmbeddingErrors);
                         var failedFiles = _fileTrackers.Count(t => t.Status is FileStatus.UploadFailed or FileStatus.ProcessingFailed);
                         var embeddingFailedFiles = _fileTrackers.Count(t => t.Status == FileStatus.EmbeddingFailed);
+                        var hasEmbeddingProblems = embeddingFailedFiles > 0 || totalEmbeddingErrors > 0;
+
+                        // Icon reflects the worst outcome: failed files are an error, embedding/parse
+                        // problems a warning, otherwise a clean success. A green tick shouldn't imply
+                        // success when embeddings actually failed.
+                        var (iconClasses, icon) = failedFiles > 0
+                            ? ("bg-danger-100 text-danger", "✕")
+                            : hasEmbeddingProblems || totalErrors > 0
+                                ? ("bg-warning-100 text-warning", "!")
+                                : ("bg-success-100 text-success", "✓");
                     }
 
-                    <LumexAlert Color="@ThemeColor.Success" Title="Import complete">
-                        Processed @_fileTrackers.Count file(s): @totalProcessed conversation(s) imported, @totalEmbedded embedded.
+                    <div class="w-16 h-16 rounded-full @iconClasses flex items-center justify-center text-3xl">@icon</div>
+
+                    <LumexAlert Color="@(hasEmbeddingProblems ? ThemeColor.Warning : ThemeColor.Success)"
+                                Title="@(hasEmbeddingProblems ? "Import complete — embeddings incomplete" : "Import complete")">
+                        Processed @_fileTrackers.Count file(s): @totalProcessed conversation(s) imported, @totalEmbedded embedded@(totalEmbeddingErrors > 0 ? $", {totalEmbeddingErrors} failed to embed" : string.Empty).
                     </LumexAlert>
 
                     @if (failedFiles > 0)
@@ -178,7 +193,7 @@
                             {
                                 <span>@totalEmbeddingErrors conversation(s) failed to embed. </span>
                             }
-                            <span>You can retry via POST /conversations/embed.</span>
+                            <span>Retry from <a href="/settings" class="underline">Settings → Conversations → Run embeddings</a>.</span>
                         </LumexAlert>
                     }
 
@@ -429,28 +444,37 @@
         return $"{bytes / 1_048_576.0:F1} MB";
     }
 
-    private static string GetStatusBadgeClass(FileStatus status) => status switch
-    {
-        FileStatus.Pending => "bg-default-100 text-default-500",
-        FileStatus.Uploading => "bg-primary-100 text-primary",
-        FileStatus.Processing => "bg-primary-100 text-primary",
-        FileStatus.Embedding => "bg-secondary-100 text-secondary",
-        FileStatus.Complete => "bg-success-100 text-success",
-        FileStatus.UploadFailed or FileStatus.ProcessingFailed => "bg-danger-100 text-danger",
-        FileStatus.EmbeddingFailed => "bg-warning-100 text-warning",
-        _ => "bg-default-100 text-default-500",
-    };
+    // A file that finished the embedding phase but had per-conversation embedding failures is a
+    // partial success, not a clean "Complete" — reflect that in the badge.
+    private static bool IsPartialComplete(FileTracker tracker)
+        => tracker.Status == FileStatus.Complete && tracker.EmbeddingErrors > 0;
 
-    private static string GetStatusLabel(FileStatus status) => status switch
-    {
-        FileStatus.Pending => "Queued",
-        FileStatus.Uploading => "Uploading",
-        FileStatus.Processing => "Processing",
-        FileStatus.Embedding => "Embedding",
-        FileStatus.Complete => "Complete",
-        FileStatus.UploadFailed => "Upload Failed",
-        FileStatus.ProcessingFailed => "Failed",
-        FileStatus.EmbeddingFailed => "Partial",
-        _ => "Unknown",
-    };
+    private static string GetStatusBadgeClass(FileTracker tracker) => IsPartialComplete(tracker)
+        ? "bg-warning-100 text-warning"
+        : tracker.Status switch
+        {
+            FileStatus.Pending => "bg-default-100 text-default-500",
+            FileStatus.Uploading => "bg-primary-100 text-primary",
+            FileStatus.Processing => "bg-primary-100 text-primary",
+            FileStatus.Embedding => "bg-secondary-100 text-secondary",
+            FileStatus.Complete => "bg-success-100 text-success",
+            FileStatus.UploadFailed or FileStatus.ProcessingFailed => "bg-danger-100 text-danger",
+            FileStatus.EmbeddingFailed => "bg-warning-100 text-warning",
+            _ => "bg-default-100 text-default-500",
+        };
+
+    private static string GetStatusLabel(FileTracker tracker) => IsPartialComplete(tracker)
+        ? "Partial"
+        : tracker.Status switch
+        {
+            FileStatus.Pending => "Queued",
+            FileStatus.Uploading => "Uploading",
+            FileStatus.Processing => "Processing",
+            FileStatus.Embedding => "Embedding",
+            FileStatus.Complete => "Complete",
+            FileStatus.UploadFailed => "Upload Failed",
+            FileStatus.ProcessingFailed => "Failed",
+            FileStatus.EmbeddingFailed => "Partial",
+            _ => "Unknown",
+        };
 }

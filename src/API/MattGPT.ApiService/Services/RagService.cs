@@ -37,9 +37,12 @@ public record RagStreamChunk(
 /// Supports three modes configured via <see cref="RagOptions.Mode"/>:
 /// <list type="bullet">
 /// <item><see cref="RagMode.WithPrompt"/> — full automatic RAG injection on every message (no tools).</item>
-/// <item><see cref="RagMode.Auto"/> — light auto-RAG plus a <c>search_memories</c> tool for deeper retrieval.</item>
-/// <item><see cref="RagMode.ToolsOnly"/> — no auto-RAG; the LLM must use the <c>search_memories</c> tool explicitly.</item>
+/// <item><see cref="RagMode.Auto"/> — light auto-RAG plus the search tools for deeper retrieval.</item>
+/// <item><see cref="RagMode.ToolsOnly"/> — no auto-RAG; the LLM must use the search tools explicitly.</item>
 /// </list>
+/// Two retrieval tools are offered when tools are enabled: <c>search_memories</c> (semantic,
+/// vector similarity) and <c>search_memories_keyword</c> (lexical, database full-text). They cover
+/// each other's blind spots — meaning vs. exact terms — so the LLM is given both and chooses.
 /// </summary>
 public class RagService(
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
@@ -52,7 +55,8 @@ public class RagService(
     ICurrentUserService currentUser,
     SearchMemoriesTool? searchMemoriesTool = null,
     IUserProfileRepository? userProfileRepository = null,
-    ISystemConfigRepository? systemConfigRepository = null)
+    ISystemConfigRepository? systemConfigRepository = null,
+    KeywordSearchMemoriesTool? keywordSearchMemoriesTool = null)
 {
     /// <summary>
     /// Maximum number of message characters to include per conversation in the context window.
@@ -69,6 +73,7 @@ public class RagService(
         "Draw on these memories naturally to give informed, contextual answers. Reference specific details, decisions, or preferences the user expressed in those conversations.\n" +
         "If the memories contain code, technical decisions, or project context, use that knowledge as if you were the assistant in those original conversations.\n" +
         "When the user asks about past conversations, topics, or things they may have discussed before, proactively use the search_memories tool to find relevant context.\n" +
+        "Use search_memories_keyword instead when you need to find a specific literal term — a name, identifier, error message, or exact phrase — rather than a topic.\n" +
         "If no relevant memories are found, answer from general knowledge but let the user know you don't have any relevant memories on that topic.";
 
     /// <summary>
@@ -86,7 +91,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
 === END DIAGNOSTIC MODE ===
 """;
 
-    private static readonly JsonSerializerOptions _diagnosticJsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private static readonly JsonSerializerOptions DiagnosticJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private readonly RagOptions _options = options.Value;
     private readonly ChatSessionOptions _chatOptions = chatOptions.Value;
@@ -117,12 +122,25 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
     /// </summary>
     internal ChatOptions? BuildToolChatOptions()
     {
-        if (_options.Mode == RagMode.WithPrompt || searchMemoriesTool is null)
+        if (_options.Mode == RagMode.WithPrompt)
+            return null;
+
+        // Each tool is registered independently: a deployment whose repository cannot do
+        // full-text search can leave the keyword tool unregistered without losing the other.
+        List<AITool> tools = [];
+
+        if (searchMemoriesTool is not null)
+            tools.Add(searchMemoriesTool.CreateAiFunction());
+
+        if (keywordSearchMemoriesTool is not null)
+            tools.Add(keywordSearchMemoriesTool.CreateAIFunction());
+
+        if (tools.Count == 0)
             return null;
 
         return new ChatOptions
         {
-            Tools = [searchMemoriesTool.CreateAIFunction()],
+            Tools = tools,
             ToolMode = ChatToolMode.Auto,
         };
     }
@@ -151,13 +169,13 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         if (_options.DiagnosticMode)
             AppendDiagnosticInstruction(messages);
 
-        var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
+        var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text.Length ?? 0;
         logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
 
         // 4. Call the LLM (with tools if mode supports it).
         var chatOptions = BuildToolChatOptions();
         var response = await chatClient.GetResponseAsync(messages, chatOptions, ct);
-        var rawText = response.Text ?? string.Empty;
+        var rawText = response.Text;
 
         logger.LogDebug("LLM response length: {ResponseLength} chars.", rawText.Length);
 
@@ -212,7 +230,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         if (_options.DiagnosticMode)
             AppendDiagnosticInstruction(messages);
 
-        var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
+        var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text.Length ?? 0;
         logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
 
         // 4. Stream from the LLM (with tools if mode supports it).
@@ -226,12 +244,21 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         var channel = Channel.CreateUnbounded<RagStreamChunk>(
             new UnboundedChannelOptions { SingleReader = true });
 
+        void OnToolStarted(string name) =>
+            channel.Writer.TryWrite(new RagStreamChunk(null, ToolName: name, ToolStart: true));
+        void OnToolCompleted(string name) =>
+            channel.Writer.TryWrite(new RagStreamChunk(null, ToolName: name, ToolEnd: true));
+
         if (searchMemoriesTool is not null)
         {
-            searchMemoriesTool.OnStarted = name =>
-                channel.Writer.TryWrite(new RagStreamChunk(null, ToolName: name, ToolStart: true));
-            searchMemoriesTool.OnCompleted = name =>
-                channel.Writer.TryWrite(new RagStreamChunk(null, ToolName: name, ToolEnd: true));
+            searchMemoriesTool.OnStarted = OnToolStarted;
+            searchMemoriesTool.OnCompleted = OnToolCompleted;
+        }
+
+        if (keywordSearchMemoriesTool is not null)
+        {
+            keywordSearchMemoriesTool.OnStarted = OnToolStarted;
+            keywordSearchMemoriesTool.OnCompleted = OnToolCompleted;
         }
 
         // Fire-and-forget producer: streams LLM tokens (and tool events via callbacks)
@@ -394,15 +421,18 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
             sourcesDict[r.ConversationId] = new ChatSource(r.ConversationId, r.Title, r.Summary, r.Score);
         }
 
-        // Tool-retrieved sources (may overlap with auto-retrieved).
-        if (searchMemoriesTool is not null)
+        // Tool-retrieved sources (may overlap with auto-retrieved, and with each other).
+        IEnumerable<ChatSource> toolSources =
+        [
+            .. searchMemoriesTool?.LastSources ?? [],
+            .. keywordSearchMemoriesTool?.LastSources ?? [],
+        ];
+
+        foreach (var s in toolSources)
         {
-            foreach (var s in searchMemoriesTool.LastSources)
+            if (!sourcesDict.TryGetValue(s.ConversationId, out var existing) || s.Score > existing.Score)
             {
-                if (!sourcesDict.TryGetValue(s.ConversationId, out var existing) || s.Score > existing.Score)
-                {
-                    sourcesDict[s.ConversationId] = s;
-                }
+                sourcesDict[s.ConversationId] = s;
             }
         }
 
@@ -418,7 +448,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         var idx = messages.FindIndex(m => m.Role == ChatRole.System);
         if (idx >= 0)
         {
-            var existing = messages[idx].Text ?? string.Empty;
+            var existing = messages[idx].Text;
             messages[idx] = new AIChatMessage(ChatRole.System, existing + DiagnosticInstruction);
         }
         else
@@ -444,7 +474,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         {
             try
             {
-                var doc = JsonSerializer.Deserialize<DiagnosticLlmResponse>(candidate, _diagnosticJsonOptions);
+                var doc = JsonSerializer.Deserialize<DiagnosticLlmResponse>(candidate, DiagnosticJsonOptions);
                 if (doc is not null && !string.IsNullOrWhiteSpace(doc.Response))
                 {
                     logger.LogInformation(

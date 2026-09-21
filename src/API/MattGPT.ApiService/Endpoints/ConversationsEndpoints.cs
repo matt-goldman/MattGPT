@@ -44,10 +44,10 @@ public static class ConversationsEndpoints
 
             return Results.Accepted($"/conversations/status/{job.JobId}", new
             {
-                jobId = job.JobId,
-                message = "File received. Processing has been queued.",
-                fileName = file.FileName,
-                sizeBytes = file.Length,
+                jobId       = job.JobId,
+                message     = "File received. Processing has been queued.",
+                fileName    = file.FileName,
+                sizeBytes   = file.Length,
             });
         })
         .WithName("UploadConversations")
@@ -60,22 +60,7 @@ public static class ConversationsEndpoints
             if (job is null)
                 return Results.NotFound(new { message = $"Job '{jobId}' not found." });
 
-            return Results.Ok(new
-            {
-                jobId = job.JobId,
-                fileName = job.FileName,
-                status = job.Status.ToString(),
-                processedConversations = job.ProcessedConversations,
-                errorCount = job.ErrorCount,
-                errorMessage = job.ErrorMessage,
-                createdAt = job.CreatedAt,
-                completedAt = job.CompletedAt,
-                embeddingStatus = job.EmbeddingStatus.ToString(),
-                embeddedConversations = job.EmbeddedConversations,
-                embeddingErrors = job.EmbeddingErrors,
-                embeddingSkipped = job.EmbeddingSkipped,
-                embeddingErrorMessage = job.EmbeddingErrorMessage,
-            });
+            return Results.Ok(ToJobStatusResponse(job));
         })
         .WithName("GetConversationImportStatus");
 
@@ -93,14 +78,14 @@ public static class ConversationsEndpoints
                 total,
                 items = items.Select(c => new
                 {
-                    conversationId = c.ConversationId,
-                    title = c.Title,
-                    createTime = c.CreateTime,
-                    updateTime = c.UpdateTime,
-                    defaultModelSlug = c.DefaultModelSlug,
-                    messageCount = c.LinearisedMessages.Count,
-                    importTimestamp = c.ImportTimestamp,
-                    processingStatus = c.ProcessingStatus.ToString(),
+                    conversationId      = c.ConversationId,
+                    title               = c.Title,
+                    createTime          = c.CreateTime,
+                    updateTime          = c.UpdateTime,
+                    defaultModelSlug    = c.DefaultModelSlug,
+                    messageCount        = c.LinearisedMessages.Count,
+                    importTimestamp     = c.ImportTimestamp,
+                    processingStatus    = c.ProcessingStatus.ToString(),
                 }),
             });
         })
@@ -112,25 +97,49 @@ public static class ConversationsEndpoints
             var result = await summariser.SummariseAsync(ct);
             return Results.Ok(new
             {
-                summarised = result.Summarised,
-                errors = result.Errors,
-                skipped = result.Skipped,
+                summarised  = result.Summarised,
+                errors      = result.Errors,
+                skipped     = result.Skipped,
             });
         })
         .WithName("SummariseConversations");
 
-        // Trigger embedding generation for all summarised conversations.
-        app.MapPost("/conversations/embed", async (EmbeddingService embedder, CancellationToken ct) =>
+        // Queue a standalone embedding run in the background and return the job id to poll.
+        // Embedding a large library can take minutes, so this returns immediately rather than
+        // blocking the request; progress is polled via /conversations/status/{jobId}.
+        app.MapPost("/conversations/embed", async (ImportJobStore jobStore, Channel<EmbedJobRequest> channel) =>
         {
-            var result = await embedder.EmbedAsync(ct);
-            return Results.Ok(new
-            {
-                embedded = result.Embedded,
-                errors = result.Errors,
-                skipped = result.Skipped,
-            });
+            var job = jobStore.CreateEmbedJob();
+            await channel.Writer.WriteAsync(new EmbedJobRequest(job.JobId));
+
+            return Results.Accepted($"/conversations/status/{job.JobId}", new { jobId = job.JobId });
         })
         .WithName("EmbedConversations");
+
+        // Returns the status of the most recent embedding run, or 204 if none has run this session.
+        // Lets the UI resume showing progress after a page reload.
+        app.MapGet("/conversations/embed/latest", (ImportJobStore jobStore) =>
+        {
+            var job = jobStore.GetLatestEmbedJob();
+            return job is null
+                ? Results.NoContent()
+                : Results.Ok(ToJobStatusResponse(job));
+        })
+        .WithName("GetLatestEmbedJob");
+
+        // Returns conversations whose embedding failed (status EmbeddingError) so the UI can list
+        // them. These are exactly the conversations a subsequent embed run will retry.
+        app.MapGet("/conversations/embeddings/failed", async (IConversationRepository repository, CancellationToken ct) =>
+        {
+            const int maxFailed = 200;
+            var failed = await repository.GetByStatusesAsync([ConversationProcessingStatus.EmbeddingError], maxFailed, ct: ct);
+            return Results.Ok(failed.Select(c => new
+            {
+                conversationId  = c.ConversationId,
+                title           = c.Title,
+            }));
+        })
+        .WithName("GetFailedEmbeddings");
 
         // Get a single imported conversation with full message history.
         // Hidden/scaffolding messages (e.g. user profile prompts) are excluded by default.
@@ -149,13 +158,13 @@ public static class ConversationsEndpoints
 
             return Results.Ok(new
             {
-                conversationId = conversation.ConversationId,
-                title = conversation.Title,
-                createTime = conversation.CreateTime,
-                updateTime = conversation.UpdateTime,
-                defaultModelSlug = conversation.DefaultModelSlug,
-                processingStatus = conversation.ProcessingStatus.ToString(),
-                messages = messages.Select(m => new
+                conversationId      = conversation.ConversationId,
+                title               = conversation.Title,
+                createTime          = conversation.CreateTime,
+                updateTime          = conversation.UpdateTime,
+                defaultModelSlug    = conversation.DefaultModelSlug,
+                processingStatus    = conversation.ProcessingStatus.ToString(),
+                messages            = messages.Select(m => new
                 {
                     role = m.Role,
                     content = string.Join("\n", m.Parts),
@@ -178,12 +187,12 @@ public static class ConversationsEndpoints
 
             return Results.Ok(projects.Select(p => new
             {
-                templateId = p.TemplateId,
-                conversationCount = p.ConversationCount,
-                mostRecentTitle = p.MostRecentTitle,
-                latestUpdateTime = p.LatestUpdateTime,
-                earliestCreateTime = p.EarliestCreateTime,
-                userName = names.GetValueOrDefault(p.TemplateId),
+                templateId          = p.TemplateId,
+                conversationCount   = p.ConversationCount,
+                mostRecentTitle     = p.MostRecentTitle,
+                latestUpdateTime    = p.LatestUpdateTime,
+                earliestCreateTime  = p.EarliestCreateTime,
+                userName            = names.GetValueOrDefault(p.TemplateId),
             }));
         })
         .WithName("GetProjects");
@@ -215,11 +224,11 @@ public static class ConversationsEndpoints
                 total,
                 items = items.Select(c => new
                 {
-                    conversationId = c.ConversationId,
-                    title = c.Title,
-                    createTime = c.CreateTime,
-                    updateTime = c.UpdateTime,
-                    messageCount = c.LinearisedMessages.Count,
+                    conversationId  = c.ConversationId,
+                    title           = c.Title,
+                    createTime      = c.CreateTime,
+                    updateTime      = c.UpdateTime,
+                    messageCount    = c.LinearisedMessages.Count,
                 }),
             });
         })
@@ -240,11 +249,11 @@ public static class ConversationsEndpoints
                 total,
                 items = items.Select(c => new
                 {
-                    conversationId = c.ConversationId,
-                    title = c.Title,
-                    createTime = c.CreateTime,
-                    updateTime = c.UpdateTime,
-                    messageCount = c.LinearisedMessages.Count,
+                    conversationId  = c.ConversationId,
+                    title           = c.Title,
+                    createTime      = c.CreateTime,
+                    updateTime      = c.UpdateTime,
+                    messageCount    = c.LinearisedMessages.Count,
                 }),
             });
         })
@@ -252,6 +261,24 @@ public static class ConversationsEndpoints
 
         return app;
     }
+
+    /// <summary>Shapes an <see cref="ImportJob"/> for the status/latest-embed polling endpoints.</summary>
+    private static object ToJobStatusResponse(ImportJob job) => new
+    {
+        jobId                   = job.JobId,
+        fileName                = job.FileName,
+        status                  = job.Status.ToString(),
+        processedConversations  = job.ProcessedConversations,
+        errorCount              = job.ErrorCount,
+        errorMessage            = job.ErrorMessage,
+        createdAt               = job.CreatedAt,
+        completedAt             = job.CompletedAt,
+        embeddingStatus         = job.EmbeddingStatus.ToString(),
+        embeddedConversations   = job.EmbeddedConversations,
+        embeddingErrors         = job.EmbeddingErrors,
+        embeddingSkipped        = job.EmbeddingSkipped,
+        embeddingErrorMessage   = job.EmbeddingErrorMessage,
+    };
 }
 
 /// <summary>Request body for setting a project display name.</summary>

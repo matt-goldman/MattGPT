@@ -41,15 +41,25 @@ public class EmbeddingService(
     /// </summary>
     internal const int FallbackChunkChars = 2_000;
 
-    /// <summary>Maximum number of retry attempts for transient embedding failures.</summary>
-    internal const int MaxRetries = 3;
+    /// <summary>
+    /// Statuses eligible for embedding: freshly imported and summarised conversations, plus
+    /// conversations whose embedding previously failed (<see cref="ConversationProcessingStatus.EmbeddingError"/>)
+    /// so a re-run retries them. Note that failures are re-marked <c>EmbeddingError</c>, so within a
+    /// single run each conversation is attempted at most once (see the <c>attempted</c> set in
+    /// <see cref="EmbedAsync"/>) to avoid re-fetching a persistently-failing conversation forever.
+    /// </summary>
+    private const int MaxRetries = 3;
 
     /// <summary>Base delay (in seconds) for exponential backoff between retries.</summary>
-    internal const int BaseDelaySeconds = 2;
+    private const int BaseDelaySeconds = 2;
 
     /// <summary>Statuses eligible for embedding — both freshly imported and summarised conversations.</summary>
     private static readonly ConversationProcessingStatus[] EmbeddableStatuses =
-        [ConversationProcessingStatus.Imported, ConversationProcessingStatus.Summarised];
+    [
+        ConversationProcessingStatus.Imported,
+        ConversationProcessingStatus.Summarised,
+        ConversationProcessingStatus.EmbeddingError,
+    ];
 
     /// <summary>
     /// Processes all conversations with <see cref="ConversationProcessingStatus.Imported"/> or
@@ -61,16 +71,26 @@ public class EmbeddingService(
     /// <returns>An <see cref="EmbeddingResult"/> with counts of successes and errors.</returns>
     public async Task<EmbeddingResult> EmbedAsync(CancellationToken ct = default, IProgress<EmbeddingProgress>? progress = null)
     {
-        int embedded = 0;
-        int errors = 0;
-        int skipped = 0;
+        var embedded = 0;
+        var errors = 0;
+        var skipped = 0;
+
+        // Failed embeddings are re-marked EmbeddingError, which keeps them in the eligible set.
+        // Track the conversations we've already attempted this run and exclude them from the next
+        // fetch, so each conversation is attempted at most once — otherwise a persistent failure
+        // would be re-fetched batch after batch and spin this loop forever.
+        var attempted = new HashSet<string>();
 
         while (!ct.IsCancellationRequested)
         {
-            var batch = await repository.GetByStatusesAsync(EmbeddableStatuses, BatchSize, ct);
+            var batch = await repository.GetByStatusesAsync(EmbeddableStatuses, BatchSize, attempted, ct);
 
             if (batch.Count == 0)
+            {
+                if (attempted.Count == 0)
+                    logger.LogInformation("No embeddable conversations found in repository.");
                 break;
+            }
 
             logger.LogInformation("Embedding batch: {Count} conversations to process.", batch.Count);
 
@@ -78,6 +98,8 @@ public class EmbeddingService(
             {
                 if (ct.IsCancellationRequested)
                     break;
+
+                attempted.Add(conversation.ConversationId);
 
                 var outcome = await EmbedConversationAsync(conversation, ct);
                 switch (outcome)
@@ -89,6 +111,11 @@ public class EmbeddingService(
 
                 progress?.Report(new EmbeddingProgress(embedded, errors, skipped));
             }
+        }
+
+        if (ct.IsCancellationRequested)
+        {
+            logger.LogInformation("Embedding cancelled");
         }
 
         logger.LogInformation(
@@ -244,34 +271,30 @@ public class EmbeddingService(
             var result = await GenerateWithRetryAsync(chunk, ct);
             var vec = result[0].Vector.ToArray();
 
-            if (averaged is null)
-            {
-                averaged = new float[vec.Length];
-            }
+            averaged ??= new float[vec.Length];
 
-            for (int i = 0; i < vec.Length; i++)
+            for (var i = 0; i < vec.Length; i++)
                 averaged[i] += vec[i];
         }
 
         // Average and L2-normalise so similarity searches behave consistently.
-        if (averaged is not null)
+        if (averaged is null) return averaged ?? [];
         {
-            float norm = 0f;
-            for (int i = 0; i < averaged.Length; i++)
+            var norm = 0f;
+            for (var i = 0; i < averaged.Length; i++)
             {
                 averaged[i] /= chunks.Count;
                 norm += averaged[i] * averaged[i];
             }
 
             norm = MathF.Sqrt(norm);
-            if (norm > 0f)
-            {
-                for (int i = 0; i < averaged.Length; i++)
-                    averaged[i] /= norm;
-            }
+            if (!(norm > 0f)) return averaged;
+            
+            for (var i = 0; i < averaged.Length; i++)
+                averaged[i] /= norm;
         }
 
-        return averaged ?? [];
+        return averaged;
     }
 
     /// <summary>
@@ -283,7 +306,7 @@ public class EmbeddingService(
     private async Task<GeneratedEmbeddings<Embedding<float>>> GenerateWithRetryAsync(
         string text, CancellationToken ct)
     {
-        for (int attempt = 0; ; attempt++)
+        for (var attempt = 0; ; attempt++)
         {
             try
             {
@@ -321,7 +344,7 @@ public class EmbeddingService(
 
             // TaskCanceledException wraps HttpClient timeouts but should NOT be treated
             // as transient when it comes from an explicit cancellation token.
-            if (current is TaskCanceledException tce && tce.CancellationToken == default)
+            if (current is TaskCanceledException tce && tce.CancellationToken == CancellationToken.None)
                 return true;
         }
 
@@ -364,16 +387,16 @@ public class EmbeddingService(
     internal static List<string> ChunkText(string text, int maxChars)
     {
         var chunks = new List<string>();
-        int start = 0;
+        var start = 0;
 
         while (start < text.Length)
         {
-            int end = Math.Min(start + maxChars, text.Length);
+            var end = Math.Min(start + maxChars, text.Length);
 
             // Try to break on a newline boundary to avoid splitting mid-sentence.
             if (end < text.Length)
             {
-                int newline = text.LastIndexOf('\n', end - 1, end - start);
+                var newline = text.LastIndexOf('\n', end - 1, end - start);
                 if (newline > start)
                     end = newline + 1; // include the newline in this chunk
             }

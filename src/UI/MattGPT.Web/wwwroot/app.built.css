@@ -2531,6 +2531,9 @@
   .text-warning-500 {
     color: var(--lumex-warning-500);
   }
+  .text-warning-600 {
+    color: var(--lumex-warning-600);
+  }
   .text-warning-700 {
     color: var(--lumex-warning-700);
   }
@@ -2886,6 +2889,9 @@
   }
   .\[animation-timing-function\:ease\] {
     animation-timing-function: ease;
+  }
+  .running {
+    animation-play-state: running;
   }
   .\*\:absolute {
     :is(& > *) {
@@ -7290,10 +7296,10 @@ html[dir='rtl'], [data-sonner-toaster][dir='rtl'] {
 }
 @layer base {
   html {
-    &:has(*:is([open], :popover-open, :open)) {
+    &:has(*:is(dialog[open])) {
       overflow: hidden;
     }
-    &:has(*:is([open], :popover-open, :open)) {
+    &:has(*:is(dialog[open])) {
       scrollbar-gutter: stable;
     }
   }

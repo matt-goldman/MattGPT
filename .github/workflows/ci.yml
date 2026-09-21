@@ -17,9 +17,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.x'
+          dotnet-version: '11.x'
+          # .NET 11 is now in stable RC, so is safe to use. When it goes GA this can be removed.
+          dotnet-quality: 'preview'
 
       - name: Install npm dependencies (Tailwind CSS)
         run: npm install

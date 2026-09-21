@@ -15,13 +15,10 @@ public class NetCoreIdAuthDelegatingHandler(
         CancellationToken cancellationToken)
     {
         var httpContext = httpContextAccessor.HttpContext;
-        if (httpContext is not null)
+        var userId = httpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId != null)
         {
-            var userId = httpContext.User?.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (userId is not null)
-            {
-                request.Headers.TryAddWithoutValidation("X-User-Id", userId);
-            }
+            request.Headers.TryAddWithoutValidation("X-User-Id", userId);
         }
 
         return await base.SendAsync(request, cancellationToken);

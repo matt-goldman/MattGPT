@@ -25,4 +25,13 @@ public interface IConversationService
 
     /// <summary>Sets a user-friendly display name for a project.</summary>
     Task RenameProjectAsync(string templateId, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>Queues a background embedding run and returns its job id for polling.</summary>
+    Task<EmbedJobResponse?> RunEmbeddingsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the status of the most recent embedding run, or null if none has run.</summary>
+    Task<JobStatusResponse?> GetLatestEmbedJobAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Returns conversations whose embedding failed and will be retried on the next run.</summary>
+    Task<IReadOnlyList<FailedEmbeddingItem>> GetFailedEmbeddingsAsync(CancellationToken cancellationToken = default);
 }
