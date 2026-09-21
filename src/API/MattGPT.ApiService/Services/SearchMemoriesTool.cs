@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Text;
 using MattGPT.Contracts;
-using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -43,7 +42,7 @@ public class SearchMemoriesTool(
     /// Creates an <see cref="AIFunction"/> wrapping <see cref="SearchMemoriesAsync"/>
     /// that can be passed to <see cref="ChatOptions.Tools"/>.
     /// </summary>
-    public AIFunction CreateAIFunction()
+    public AIFunction CreateAiFunction()
     {
         return AIFunctionFactory.Create(
             SearchMemoriesAsync,
@@ -110,7 +109,7 @@ public class SearchMemoriesTool(
             // 2. Nearest-neighbour search over conversation embeddings, ranked by similarity.
             var searchResults = await vectorStore.SearchAsync(queryVector, limit, currentUser.UserId);
 
-            // 3. Apply minimum score threshold using MinScore (same threshold as WithPrompt mode).
+            // 3. Apply the minimum score threshold using MinScore (the same threshold as WithPrompt mode).
             var relevant = searchResults
                 .Where(r => r.Score >= _options.MinScore)
                 .ToList();

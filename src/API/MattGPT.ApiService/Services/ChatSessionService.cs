@@ -107,7 +107,7 @@ public class ChatSessionService(
     /// Checks whether the conversation history exceeds the token budget and,
     /// if so, generates or updates the rolling summary by compressing older messages.
     /// </summary>
-    internal async Task MaybeUpdateRollingSummaryAsync(ChatSession session, CancellationToken ct)
+    private async Task MaybeUpdateRollingSummaryAsync(ChatSession session, CancellationToken ct)
     {
         // Calculate total token cost of all messages.
         var totalTokens = session.Messages.Sum(m => EstimateTokens(m.Content));
@@ -153,7 +153,7 @@ public class ChatSessionService(
     /// Generates a rolling summary by asking the LLM to compress the prior summary
     /// (if any) plus the older messages into a concise summary.
     /// </summary>
-    internal async Task<string> GenerateRollingSummaryAsync(
+    private async Task<string> GenerateRollingSummaryAsync(
         string? priorSummary,
         IReadOnlyList<ChatSessionMessage> messagesToSummarise,
         CancellationToken ct)
@@ -187,6 +187,6 @@ public class ChatSessionService(
         };
 
         var response = await chatClient.GetResponseAsync(messages, cancellationToken: ct);
-        return response.Text ?? string.Empty;
+        return response.Text;
     }
 }

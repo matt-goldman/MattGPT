@@ -91,7 +91,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
 === END DIAGNOSTIC MODE ===
 """;
 
-    private static readonly JsonSerializerOptions _diagnosticJsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private static readonly JsonSerializerOptions DiagnosticJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private readonly RagOptions _options = options.Value;
     private readonly ChatSessionOptions _chatOptions = chatOptions.Value;
@@ -130,7 +130,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         List<AITool> tools = [];
 
         if (searchMemoriesTool is not null)
-            tools.Add(searchMemoriesTool.CreateAIFunction());
+            tools.Add(searchMemoriesTool.CreateAiFunction());
 
         if (keywordSearchMemoriesTool is not null)
             tools.Add(keywordSearchMemoriesTool.CreateAIFunction());
@@ -169,13 +169,13 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         if (_options.DiagnosticMode)
             AppendDiagnosticInstruction(messages);
 
-        var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
+        var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text.Length ?? 0;
         logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
 
         // 4. Call the LLM (with tools if mode supports it).
         var chatOptions = BuildToolChatOptions();
         var response = await chatClient.GetResponseAsync(messages, chatOptions, ct);
-        var rawText = response.Text ?? string.Empty;
+        var rawText = response.Text;
 
         logger.LogDebug("LLM response length: {ResponseLength} chars.", rawText.Length);
 
@@ -230,7 +230,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         if (_options.DiagnosticMode)
             AppendDiagnosticInstruction(messages);
 
-        var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text?.Length ?? 0;
+        var systemLen = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text.Length ?? 0;
         logger.LogDebug("Built prompt with {MessageCount} messages. System message: {SystemChars} chars.", messages.Count, systemLen);
 
         // 4. Stream from the LLM (with tools if mode supports it).
@@ -448,7 +448,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         var idx = messages.FindIndex(m => m.Role == ChatRole.System);
         if (idx >= 0)
         {
-            var existing = messages[idx].Text ?? string.Empty;
+            var existing = messages[idx].Text;
             messages[idx] = new AIChatMessage(ChatRole.System, existing + DiagnosticInstruction);
         }
         else
@@ -474,7 +474,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         {
             try
             {
-                var doc = JsonSerializer.Deserialize<DiagnosticLlmResponse>(candidate, _diagnosticJsonOptions);
+                var doc = JsonSerializer.Deserialize<DiagnosticLlmResponse>(candidate, DiagnosticJsonOptions);
                 if (doc is not null && !string.IsNullOrWhiteSpace(doc.Response))
                 {
                     logger.LogInformation(

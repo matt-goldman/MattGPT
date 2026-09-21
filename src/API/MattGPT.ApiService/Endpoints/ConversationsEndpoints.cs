@@ -44,10 +44,10 @@ public static class ConversationsEndpoints
 
             return Results.Accepted($"/conversations/status/{job.JobId}", new
             {
-                jobId = job.JobId,
-                message = "File received. Processing has been queued.",
-                fileName = file.FileName,
-                sizeBytes = file.Length,
+                jobId       = job.JobId,
+                message     = "File received. Processing has been queued.",
+                fileName    = file.FileName,
+                sizeBytes   = file.Length,
             });
         })
         .WithName("UploadConversations")
@@ -78,14 +78,14 @@ public static class ConversationsEndpoints
                 total,
                 items = items.Select(c => new
                 {
-                    conversationId = c.ConversationId,
-                    title = c.Title,
-                    createTime = c.CreateTime,
-                    updateTime = c.UpdateTime,
-                    defaultModelSlug = c.DefaultModelSlug,
-                    messageCount = c.LinearisedMessages.Count,
-                    importTimestamp = c.ImportTimestamp,
-                    processingStatus = c.ProcessingStatus.ToString(),
+                    conversationId      = c.ConversationId,
+                    title               = c.Title,
+                    createTime          = c.CreateTime,
+                    updateTime          = c.UpdateTime,
+                    defaultModelSlug    = c.DefaultModelSlug,
+                    messageCount        = c.LinearisedMessages.Count,
+                    importTimestamp     = c.ImportTimestamp,
+                    processingStatus    = c.ProcessingStatus.ToString(),
                 }),
             });
         })
@@ -97,9 +97,9 @@ public static class ConversationsEndpoints
             var result = await summariser.SummariseAsync(ct);
             return Results.Ok(new
             {
-                summarised = result.Summarised,
-                errors = result.Errors,
-                skipped = result.Skipped,
+                summarised  = result.Summarised,
+                errors      = result.Errors,
+                skipped     = result.Skipped,
             });
         })
         .WithName("SummariseConversations");
@@ -135,8 +135,8 @@ public static class ConversationsEndpoints
             var failed = await repository.GetByStatusesAsync([ConversationProcessingStatus.EmbeddingError], maxFailed, ct: ct);
             return Results.Ok(failed.Select(c => new
             {
-                conversationId = c.ConversationId,
-                title = c.Title,
+                conversationId  = c.ConversationId,
+                title           = c.Title,
             }));
         })
         .WithName("GetFailedEmbeddings");
@@ -158,13 +158,13 @@ public static class ConversationsEndpoints
 
             return Results.Ok(new
             {
-                conversationId = conversation.ConversationId,
-                title = conversation.Title,
-                createTime = conversation.CreateTime,
-                updateTime = conversation.UpdateTime,
-                defaultModelSlug = conversation.DefaultModelSlug,
-                processingStatus = conversation.ProcessingStatus.ToString(),
-                messages = messages.Select(m => new
+                conversationId      = conversation.ConversationId,
+                title               = conversation.Title,
+                createTime          = conversation.CreateTime,
+                updateTime          = conversation.UpdateTime,
+                defaultModelSlug    = conversation.DefaultModelSlug,
+                processingStatus    = conversation.ProcessingStatus.ToString(),
+                messages            = messages.Select(m => new
                 {
                     role = m.Role,
                     content = string.Join("\n", m.Parts),
@@ -187,12 +187,12 @@ public static class ConversationsEndpoints
 
             return Results.Ok(projects.Select(p => new
             {
-                templateId = p.TemplateId,
-                conversationCount = p.ConversationCount,
-                mostRecentTitle = p.MostRecentTitle,
-                latestUpdateTime = p.LatestUpdateTime,
-                earliestCreateTime = p.EarliestCreateTime,
-                userName = names.GetValueOrDefault(p.TemplateId),
+                templateId          = p.TemplateId,
+                conversationCount   = p.ConversationCount,
+                mostRecentTitle     = p.MostRecentTitle,
+                latestUpdateTime    = p.LatestUpdateTime,
+                earliestCreateTime  = p.EarliestCreateTime,
+                userName            = names.GetValueOrDefault(p.TemplateId),
             }));
         })
         .WithName("GetProjects");
@@ -224,11 +224,11 @@ public static class ConversationsEndpoints
                 total,
                 items = items.Select(c => new
                 {
-                    conversationId = c.ConversationId,
-                    title = c.Title,
-                    createTime = c.CreateTime,
-                    updateTime = c.UpdateTime,
-                    messageCount = c.LinearisedMessages.Count,
+                    conversationId  = c.ConversationId,
+                    title           = c.Title,
+                    createTime      = c.CreateTime,
+                    updateTime      = c.UpdateTime,
+                    messageCount    = c.LinearisedMessages.Count,
                 }),
             });
         })
@@ -249,11 +249,11 @@ public static class ConversationsEndpoints
                 total,
                 items = items.Select(c => new
                 {
-                    conversationId = c.ConversationId,
-                    title = c.Title,
-                    createTime = c.CreateTime,
-                    updateTime = c.UpdateTime,
-                    messageCount = c.LinearisedMessages.Count,
+                    conversationId  = c.ConversationId,
+                    title           = c.Title,
+                    createTime      = c.CreateTime,
+                    updateTime      = c.UpdateTime,
+                    messageCount    = c.LinearisedMessages.Count,
                 }),
             });
         })
@@ -265,19 +265,19 @@ public static class ConversationsEndpoints
     /// <summary>Shapes an <see cref="ImportJob"/> for the status/latest-embed polling endpoints.</summary>
     private static object ToJobStatusResponse(ImportJob job) => new
     {
-        jobId = job.JobId,
-        fileName = job.FileName,
-        status = job.Status.ToString(),
-        processedConversations = job.ProcessedConversations,
-        errorCount = job.ErrorCount,
-        errorMessage = job.ErrorMessage,
-        createdAt = job.CreatedAt,
-        completedAt = job.CompletedAt,
-        embeddingStatus = job.EmbeddingStatus.ToString(),
-        embeddedConversations = job.EmbeddedConversations,
-        embeddingErrors = job.EmbeddingErrors,
-        embeddingSkipped = job.EmbeddingSkipped,
-        embeddingErrorMessage = job.EmbeddingErrorMessage,
+        jobId                   = job.JobId,
+        fileName                = job.FileName,
+        status                  = job.Status.ToString(),
+        processedConversations  = job.ProcessedConversations,
+        errorCount              = job.ErrorCount,
+        errorMessage            = job.ErrorMessage,
+        createdAt               = job.CreatedAt,
+        completedAt             = job.CompletedAt,
+        embeddingStatus         = job.EmbeddingStatus.ToString(),
+        embeddedConversations   = job.EmbeddedConversations,
+        embeddingErrors         = job.EmbeddingErrors,
+        embeddingSkipped        = job.EmbeddingSkipped,
+        embeddingErrorMessage   = job.EmbeddingErrorMessage,
     };
 }
 

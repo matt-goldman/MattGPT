@@ -1,7 +1,6 @@
 using MattGPT.Contracts;
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
-using MattGPT.ApiService.Services;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 

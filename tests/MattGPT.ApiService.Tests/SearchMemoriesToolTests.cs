@@ -139,7 +139,7 @@ public class SearchMemoriesToolTests
     {
         var tool = CreateTool();
 
-        var aiFunction = tool.CreateAIFunction();
+        var aiFunction = tool.CreateAiFunction();
 
         Assert.NotNull(aiFunction);
         Assert.Equal("search_memories", aiFunction.Name);
