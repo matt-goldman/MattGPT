@@ -173,6 +173,7 @@ builder.Services.AddSingleton(Channel.CreateBounded<EmbedJobRequest>(new Bounded
 }));
 builder.Services.AddHostedService<EmbedProcessingService>();
 builder.Services.AddScoped<SummarisationService>();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<EmbeddingService>();
 builder.Services.Configure<VectorStoreOptions>(builder.Configuration.GetSection(VectorStoreOptions.SectionName));
 var vectorStoreOptions = builder.Configuration.GetSection(VectorStoreOptions.SectionName).Get<VectorStoreOptions>() ?? new VectorStoreOptions();
