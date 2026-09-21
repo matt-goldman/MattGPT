@@ -149,12 +149,14 @@ public static class AuthExtensions
             authGroup.MapGet("/me", (HttpContext context) =>
             {
                 var user = context.User;
-                if (user?.Identity?.IsAuthenticated != true)
+                
+                if (user.Identity?.IsAuthenticated != true)
                     return Results.Unauthorized();
+                
                 return Results.Ok(new
                 {
-                    id = user.FindFirstValue(ClaimTypes.NameIdentifier),
-                    email = user.FindFirstValue(ClaimTypes.Email),
+                    id      = user.FindFirstValue(ClaimTypes.NameIdentifier),
+                    email   = user.FindFirstValue(ClaimTypes.Email),
                 });
             }).RequireAuthorization();
 
