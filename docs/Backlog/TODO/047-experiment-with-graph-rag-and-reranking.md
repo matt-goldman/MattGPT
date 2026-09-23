@@ -8,7 +8,6 @@ Experiment with Graph RAG and reranking models to improve the quality and releva
 
 ## Acceptance Criteria
 
-- [ ] Quick test: evaluate optional wait for summaries before embedding (decision in ADR003; not relevant for GPU or cloud embeddings)
 - [ ] Research and evaluate Graph RAG approaches
 - [ ] Implement a Graph RAG prototype
 - [ ] Evaluate performance improvements over current RAG approach
@@ -25,7 +24,10 @@ Experiment with Graph RAG and reranking models to improve the quality and releva
 
 ## Notes
 
-This experiment should focus on improving search result relevance and connections between related concepts across conversations. Graph RAG could help in connecting ideas that are semantically similar but not directly mentioned in the same conversation, while reranking can improve the ordering of results.
+This experiment should focus on improving search result relevance and connections between related concepts across conversations. Graph RAG could help in connecting ideas that are semantically similar but not directly mentioned in the same conversation, while reranking can improve the ordering of results. A couple of other things worth potentially considering:
+
+- Quick test: evaluate optional wait for summaries before embedding (decision in ADR003; not relevant for GPU or cloud embeddings)
+- Provide the model with context about the search/index in use and the embeddings model, to help it craft queries
 
 ## Related ADRs
 
