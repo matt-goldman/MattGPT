@@ -78,6 +78,7 @@ This document is the **system of record** for project planning and issue trackin
 | 44 | 044-plugin-extensibility-system.md | Plugin system for tool-calling extensibility | TODO | TODO/ | Depends on 020. Drop-in DLL plugins via Plugins/ directory; reflection-based loader; ToolPlugin contract in separate abstractions package. |
 | 45 | 045-separate-auth-from-conversation-db.md | Separate auth backing store from document DB provider | In Progress | TODO/ | Depends on 040. Independent auth DB config; UseDocumentDbForAuth option; Keycloak external provider via Aspire. |
 | 46 | 046-azure-app-configuration.md | Switch to Azure App Configuration Service | Done | Done/ | No hard dependencies. Removes config fan-out from AppHost; emulator for local dev, real Azure service for deployed. |
+| 47 | 047-experiment-with-graph-rag-and-reranking.md | Experiment with Graph RAG and reranking models | TODO | TODO/ | |
 
 ---
 
