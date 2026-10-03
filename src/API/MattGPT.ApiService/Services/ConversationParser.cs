@@ -37,18 +37,18 @@ public class ConversationParser
 
             yield return new ParsedConversation
             {
-                Id = conversation.Id,
-                Title = conversation.Title,
-                CreateTime = conversation.CreateTime,
-                UpdateTime = conversation.UpdateTime,
-                DefaultModelSlug = conversation.DefaultModelSlug,
-                GizmoId = conversation.GizmoId,
-                GizmoType = conversation.GizmoType,
-                ConversationTemplateId = conversation.ConversationTemplateId,
-                IsDoNotRemember = conversation.IsDoNotRemember,
-                MemoryScope = conversation.MemoryScope,
-                IsArchived = conversation.IsArchived,
-                Messages = Linearise(conversation),
+                Id                      = conversation.Id,
+                Title                   = conversation.Title,
+                CreateTime              = conversation.CreateTime,
+                UpdateTime              = conversation.UpdateTime,
+                DefaultModelSlug        = conversation.DefaultModelSlug,
+                GizmoId                 = conversation.GizmoId,
+                GizmoType               = conversation.GizmoType,
+                ConversationTemplateId  = conversation.ConversationTemplateId,
+                IsDoNotRemember         = conversation.IsDoNotRemember,
+                MemoryScope             = conversation.MemoryScope,
+                IsArchived              = conversation.IsArchived,
+                Messages                = Linearise(conversation),
             };
         }
     }

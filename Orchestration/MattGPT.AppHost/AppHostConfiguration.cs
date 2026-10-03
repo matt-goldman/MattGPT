@@ -28,7 +28,10 @@ internal static class AppHostConfiguration
         IResourceBuilder<ProjectResource>? configSeeder = null;
         if (builder.ExecutionContext.IsRunMode)
         {
-            appConfig.RunAsEmulator(emulator => emulator.WithDataVolume());
+            appConfig.RunAsEmulator(emulator => {
+                emulator.WithDataVolume();
+                emulator.WithImageTag("1.0.0-preview");
+                });
 
             // Collect seed-eligible values into a single JSON dictionary so the
             // ConfigSeeder project doesn't need its own copy of the key list.
