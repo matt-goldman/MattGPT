@@ -29,42 +29,42 @@ internal static class AppHostUI
             webfrontend.WithReference(infra.Keycloak).WaitFor(infra.Keycloak);
         }
 
-        // --- Dev tunnel for secure external access to the API ---
-        var tunnel = builder.AddDevTunnel("tunnel")
-            .WaitFor(apiService)
-            .WithAnonymousAccess()
-            .WithReference(apiService.GetEndpoint("https"));
+        // // --- Dev tunnel for secure external access to the API ---
+        // var tunnel = builder.AddDevTunnel("tunnel")
+        //     .WaitFor(apiService)
+        //     .WithAnonymousAccess()
+        //     .WithReference(apiService.GetEndpoint("https"));
 
-        // --- MAUI mobile app ---
-        var mauiapp = builder.AddMauiProject("mauiapp", @"../../src/UI/MattGPT.Mobile/MattGPT.Mobile.csproj");
+        // // --- MAUI mobile app ---
+        // var mauiapp = builder.AddMauiProject("mauiapp", @"../../src/UI/MattGPT.Mobile/MattGPT.Mobile.csproj");
 
-        mauiapp.AddWindowsDevice()
-            .WaitFor(apiService)
-            .WithReference(apiService);
+        // mauiapp.AddWindowsDevice()
+        //     .WaitFor(apiService)
+        //     .WithReference(apiService);
 
-        mauiapp.AddMacCatalystDevice()
-            .WaitFor(apiService)
-            .WithReference(apiService);
+        // mauiapp.AddMacCatalystDevice()
+        //     .WaitFor(apiService)
+        //     .WithReference(apiService);
 
-        var ios = mauiapp.AddiOSSimulator()
-            .WaitFor(apiService)
-            .WithOtlpDevTunnel()
-            .WithReference(apiService, tunnel);
+        // var ios = mauiapp.AddiOSSimulator()
+        //     .WaitFor(apiService)
+        //     .WithOtlpDevTunnel()
+        //     .WithReference(apiService, tunnel);
 
-        var android = mauiapp.AddAndroidEmulator()
-            .WaitFor(apiService)
-            .WithOtlpDevTunnel()
-            .WithReference(apiService, tunnel);
+        // var android = mauiapp.AddAndroidEmulator()
+        //     .WaitFor(apiService)
+        //     .WithOtlpDevTunnel()
+        //     .WithReference(apiService, tunnel);
 
-        // --- Keycloak tunnel for mobile devices ---
-        if (infra.Keycloak is not null)
-        {
-            var kcTunnel = builder.AddDevTunnel("kcTunnel")
-                .WithAnonymousAccess()
-                .WithReference(infra.Keycloak);
+        // // --- Keycloak tunnel for mobile devices ---
+        // if (infra.Keycloak is not null)
+        // {
+        //     var kcTunnel = builder.AddDevTunnel("kcTunnel")
+        //         .WithAnonymousAccess()
+        //         .WithReference(infra.Keycloak);
 
-            ios.WithReference(infra.Keycloak, kcTunnel);
-            android.WithReference(infra.Keycloak, kcTunnel);
-        }
+        //     ios.WithReference(infra.Keycloak, kcTunnel);
+        //     android.WithReference(infra.Keycloak, kcTunnel);
+        // }
     }
 }
