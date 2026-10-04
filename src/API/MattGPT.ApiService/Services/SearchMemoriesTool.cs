@@ -23,11 +23,8 @@ namespace MattGPT.ApiService.Services;
 /// description and its own point the model towards - keep the two descriptions in sync.
 /// </remarks>
 public class SearchMemoriesTool(
-    IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
-    IVectorStore vectorStore,
-    IConversationRepository repository,
+    MemoryRetriever retriever,
     IOptions<RagOptions> options,
-    ICurrentUserService currentUser,
     ILogger<SearchMemoriesTool> logger)
 {
     private readonly RagOptions _options = options.Value;
@@ -90,7 +87,8 @@ public class SearchMemoriesTool(
             "It is embedded and compared to past conversations by meaning, so describe the subject rather than listing keywords. " +
             "Do not use boolean operators, quoted exact phrases, wildcards, or field filters; they only make the match worse.")] string query,
         [Description("Maximum number of conversations to return (1-10). Defaults to 5 if omitted or 0. " +
-            "Results are ranked by similarity and weak matches are dropped, so a larger value may still return fewer.")] int maxResults = 0)
+            "Results are ranked by similarity and weak matches are dropped, so a larger value may still return fewer.")] int maxResults = 0,
+        CancellationToken cancellationToken = default)
     {
         var limit = Math.Clamp(maxResults > 0 ? maxResults : _options.ToolMaxResults, 1, 10);
 
@@ -102,21 +100,9 @@ public class SearchMemoriesTool(
 
         try
         {
-            // 1. Embed the query with the same model used to embed the stored conversations.
-            var embeddings = await embeddingGenerator.GenerateAsync([query]);
-            var queryVector = embeddings[0].Vector.ToArray();
-
-            // 2. Nearest-neighbour search over conversation embeddings, ranked by similarity.
-            var searchResults = await vectorStore.SearchAsync(queryVector, limit, currentUser.UserId);
-
-            // 3. Apply the minimum score threshold using MinScore (the same threshold as WithPrompt mode).
-            var relevant = searchResults
-                .Where(r => r.Score >= _options.MinScore)
-                .ToList();
-
-            logger.LogInformation(
-                "search_memories: {Total} results from vector store, {Relevant} above MinScore {MinScore:F2}.",
-                searchResults.Count, relevant.Count, _options.MinScore);
+            // Semantic retrieval, using MinScore (the same threshold as WithPrompt mode).
+            var (relevant, conversationLookup) = await retriever.RetrieveAsync(
+                query, limit, _options.MinScore, cancellationToken);
 
             if (relevant.Count == 0)
             {
@@ -126,11 +112,7 @@ public class SearchMemoriesTool(
                     + "rather than adding keywords.";
             }
 
-            // 4. Fetch full conversations from MongoDB.
-            var fullConversations = await repository.GetByIdsAsync(relevant.Select(r => r.ConversationId));
-            var conversationLookup = fullConversations.ToDictionary(c => c.ConversationId);
-
-            // 5. Build formatted results.
+            // Build formatted results.
             var result = new StringBuilder();
             result.AppendLine($"Found {relevant.Count} past conversation(s) semantically similar to the query, most similar first:");
             result.AppendLine();
@@ -159,7 +141,7 @@ public class SearchMemoriesTool(
 
             return result.ToString();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogError(ex, "search_memories tool failed.");
             LastSources = [];

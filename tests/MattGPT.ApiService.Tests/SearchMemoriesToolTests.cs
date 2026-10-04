@@ -34,11 +34,8 @@ public class SearchMemoriesToolTests
         RagOptions? options = null)
     {
         return new SearchMemoriesTool(
-            new FakeEmbeddingGenerator(TestVector),
-            new FakeSearchVectorStore(searchResults ?? []),
-            repository ?? new FakeConversationRepository(),
+            TestRetriever.Create(new FakeSearchVectorStore(searchResults ?? []), repository ?? new FakeConversationRepository()),
             Options.Create(options ?? new RagOptions()),
-            new NullCurrentUserService(),
             NullLogger<SearchMemoriesTool>.Instance);
     }
 
@@ -156,11 +153,8 @@ public class SearchMemoriesToolTests
     {
         // Use a throwing Qdrant service to simulate failure.
         var tool = new SearchMemoriesTool(
-            new FakeEmbeddingGenerator(TestVector),
-            new ThrowingSearchVectorStore(),
-            new FakeConversationRepository(),
+            TestRetriever.Create(new ThrowingSearchVectorStore(), new FakeConversationRepository()),
             Options.Create(new RagOptions()),
-            new NullCurrentUserService(),
             NullLogger<SearchMemoriesTool>.Instance);
 
         var result = await tool.SearchMemoriesAsync("query");

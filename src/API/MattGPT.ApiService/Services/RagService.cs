@@ -45,14 +45,11 @@ public record RagStreamChunk(
 /// each other's blind spots — meaning vs. exact terms — so the LLM is given both and chooses.
 /// </summary>
 public class RagService(
-    IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
-    IVectorStore vectorStore,
-    IConversationRepository repository,
+    MemoryRetriever retriever,
     IChatClient chatClient,
     IOptions<RagOptions> options,
     IOptions<ChatSessionOptions> chatOptions,
     ILogger<RagService> logger,
-    ICurrentUserService currentUser,
     SearchMemoriesTool? searchMemoriesTool = null,
     IUserProfileRepository? userProfileRepository = null,
     ISystemConfigRepository? systemConfigRepository = null,
@@ -331,7 +328,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
     }
 
     /// <summary>
-    /// Performs the automatic retrieval pass: embed → Qdrant search → MongoDB fetch.
+    /// Performs the automatic retrieval pass via <see cref="MemoryRetriever"/>.
     /// In <see cref="RagMode.ToolsOnly"/> mode, skips retrieval entirely.
     /// In <see cref="RagMode.Auto"/> mode, uses lighter parameters (fewer results, higher threshold).
     /// </summary>
@@ -346,64 +343,10 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
             return ([], new Dictionary<string, StoredConversation>());
         }
 
-        // 1. Embed the query.
-        var embeddings = await embeddingGenerator.GenerateAsync([query], cancellationToken: ct);
-        var queryVector = embeddings[0].Vector.ToArray();
-        logger.LogDebug("Generated query embedding with {Dimensions} dimensions.", queryVector.Length);
+        logger.LogDebug("RAG auto-retrieval (Mode={Mode}): TopK={TopK}, MinScore={MinScore:F2}.",
+            _options.Mode, topK, EffectiveMinScore);
 
-        // 2. Retrieve top-K candidates from Qdrant.
-        var searchResults = await vectorStore.SearchAsync(queryVector, topK, currentUser.UserId, ct);
-
-        if (searchResults.Count == 0)
-        {
-            logger.LogWarning(
-                "Qdrant returned 0 results for query. Check that embeddings have been generated " +
-                "(POST /conversations/embed) and that the Qdrant collection is populated.");
-        }
-        else
-        {
-            foreach (var r in searchResults)
-            {
-                logger.LogDebug(
-                    "Qdrant result: ConversationId={ConversationId}, Score={Score:F4}, Title={Title}",
-                    r.ConversationId, r.Score, r.Title);
-            }
-        }
-
-        // 3. Apply minimum similarity threshold.
-        var minScore = EffectiveMinScore;
-        var relevant = searchResults
-            .Where(r => r.Score >= minScore)
-            .ToList();
-
-        logger.LogInformation(
-            "RAG auto-retrieval (Mode={Mode}): {Total} results from Qdrant; {Relevant} meet MinScore threshold of {Threshold:F2}.",
-            _options.Mode, searchResults.Count, relevant.Count, minScore);
-
-        if (searchResults.Count > 0 && relevant.Count == 0)
-        {
-            logger.LogWarning(
-                "All {Total} Qdrant results were below MinScore={MinScore:F2}. " +
-                "Highest score was {MaxScore:F4}. Consider lowering RAG:MinScore in configuration.",
-                searchResults.Count, minScore, searchResults.Max(r => r.Score));
-        }
-
-        // 4. Fetch full conversations from MongoDB to enrich context.
-        IReadOnlyDictionary<string, StoredConversation> conversationLookup;
-        if (relevant.Count > 0)
-        {
-            var fullConversations = await repository.GetByIdsAsync(relevant.Select(r => r.ConversationId), ct);
-            conversationLookup = fullConversations.ToDictionary(c => c.ConversationId);
-
-            logger.LogInformation(
-                "Fetched {Found}/{Requested} full conversations from MongoDB for context enrichment.",
-                fullConversations.Count, relevant.Count);
-        }
-        else
-        {
-            conversationLookup = new Dictionary<string, StoredConversation>();
-        }
-
+        var (relevant, conversationLookup) = await retriever.RetrieveAsync(query, topK, EffectiveMinScore, ct);
         return (relevant, conversationLookup);
     }
 

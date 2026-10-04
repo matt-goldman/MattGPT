@@ -62,14 +62,11 @@ public class RagServiceTests
         var options = Options.Create(ragOptions ?? new RagOptions { TopK = 5, MinScore = 0.5f });
         var chatOpts = Options.Create(chatOptions ?? new ChatSessionOptions());
         return new RagService(
-            new FakeEmbeddingGenerator(TestVector),
-            new FakeSearchVectorStore(searchResults),
-            repository ?? new FakeConversationRepository(),
+            TestRetriever.Create(new FakeSearchVectorStore(searchResults), repository),
             new FakeChatClient(llmResponse),
             options,
             chatOpts,
             NullLogger<RagService>.Instance,
-            new NullCurrentUserService(),
             searchMemoriesTool);
     }
 
@@ -561,11 +558,8 @@ public class RagServiceTests
         FakeConversationRepository? repository = null)
     {
         return new SearchMemoriesTool(
-            new FakeEmbeddingGenerator(TestVector),
-            new FakeSearchVectorStore(results ?? []),
-            repository ?? new FakeConversationRepository(),
+            TestRetriever.Create(new FakeSearchVectorStore(results ?? []), repository ?? new FakeConversationRepository()),
             Options.Create(new RagOptions()),
-            new NullCurrentUserService(),
             NullLogger<SearchMemoriesTool>.Instance);
     }
 

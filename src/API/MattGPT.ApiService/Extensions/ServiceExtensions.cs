@@ -44,6 +44,7 @@ public static class ServiceExtensions
 
             builder.AddVectorStorage();
 
+            builder.Services.AddScoped<MemoryRetriever>();
             builder.Services.AddScoped<RagService>();
             builder.Services.Configure<RagOptions>(builder.Configuration.GetSection(RagOptions.SectionName));
             var ragOptions = builder.Configuration.GetSection(RagOptions.SectionName).Get<RagOptions>() ?? new RagOptions();
