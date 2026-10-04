@@ -64,4 +64,20 @@ public class RagOptions
     /// Default is <c>false</c>.
     /// </summary>
     public bool DiagnosticMode { get; set; } = false;
+
+    /// <summary>
+    /// When true, uses a reranking strategy, which uses longer context when embedding, returns a longer
+    /// list of results, and uses a reranking model to select the top 10. Must have a model configured
+    /// in <see cref="LlmOptions"/>
+    /// </summary>
+    public bool UseReranking { get; set; } = true;
+
+    /// <summary>
+    /// Maximum characters of conversation content (title, summary and messages) sent to the embedding
+    /// model per conversation. When not set, defaults to 32,000 (sized for a long-context embedding
+    /// model, ~8k tokens) if <see cref="UseReranking"/> is true, or 8,000 otherwise. If the model rejects
+    /// text longer than 8,000 characters as exceeding its context window, the embedding is retried with
+    /// the text trimmed to 8,000 characters before falling back to chunking.
+    /// </summary>
+    public int? MaxEmbeddingChars { get; set; }
 }

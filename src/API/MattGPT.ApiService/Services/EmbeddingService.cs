@@ -1,8 +1,10 @@
 using System.Net;
 using System.Text;
+using MattGPT.Contracts;
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
 
 namespace MattGPT.ApiService.Services;
 
@@ -27,6 +29,7 @@ public class EmbeddingService(
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
     IVectorStore vectorStore,
     TimeProvider timeProvider,
+    IOptions<RagOptions> ragOptions,
     ILogger<EmbeddingService> logger)
 {
     /// <summary>
@@ -47,8 +50,26 @@ public class EmbeddingService(
     /// </summary>
     private const int MaxServerErrorChars = 2_000;
 
-    /// <summary>Maximum characters of conversation content to include for embedding.</summary>
+    /// <summary>
+    /// Standard maximum characters of conversation content to include for embedding. Also the size the
+    /// text is trimmed to when a longer text is rejected for exceeding the model's context window.
+    /// </summary>
     internal const int MaxEmbeddingTextChars = 8_000;
+
+    /// <summary>
+    /// Default maximum characters of conversation content to include for embedding when
+    /// <see cref="RagOptions.UseReranking"/> is enabled, which is paired with a long-context
+    /// embedding model (~8k tokens).
+    /// </summary>
+    internal const int LongContextMaxEmbeddingTextChars = 32_000;
+
+    /// <summary>
+    /// Effective maximum embedding text length: <see cref="RagOptions.MaxEmbeddingChars"/> when set,
+    /// otherwise <see cref="LongContextMaxEmbeddingTextChars"/> with reranking or
+    /// <see cref="MaxEmbeddingTextChars"/> without.
+    /// </summary>
+    private readonly int maxEmbeddingChars = ragOptions.Value.MaxEmbeddingChars
+        ?? (ragOptions.Value.UseReranking ? LongContextMaxEmbeddingTextChars : MaxEmbeddingTextChars);
 
     /// <summary>
     /// Fallback chunk size (in characters) used when the embedding model rejects the full
@@ -146,7 +167,7 @@ public class EmbeddingService(
     private async Task<EmbedOutcome> EmbedConversationAsync(
         StoredConversation conversation, CancellationToken ct)
     {
-        var embeddingText = BuildEmbeddingText(conversation);
+        var embeddingText = BuildEmbeddingText(conversation, maxEmbeddingChars);
 
         if (string.IsNullOrWhiteSpace(embeddingText))
         {
@@ -164,7 +185,7 @@ public class EmbeddingService(
 
         try
         {
-            var vector = await GenerateChunkedEmbeddingAsync(embeddingText, ct);
+            var vector = await GenerateChunkedEmbeddingAsync(conversation, embeddingText, ct);
 
             await repository.UpdateEmbeddingAsync(
                 conversation.ConversationId,
@@ -192,9 +213,10 @@ public class EmbeddingService(
     /// <summary>
     /// Builds the text that will be embedded. Uses the summary if available (higher quality),
     /// but always includes the title and message content so that freshly imported conversations
-    /// can be embedded without waiting for LLM summarisation.
+    /// can be embedded without waiting for LLM summarisation. Message content is included up to
+    /// <paramref name="maxChars"/> characters.
     /// </summary>
-    internal static string BuildEmbeddingText(StoredConversation conversation)
+    internal static string BuildEmbeddingText(StoredConversation conversation, int maxChars = MaxEmbeddingTextChars)
     {
         var sb = new StringBuilder();
 
@@ -218,10 +240,10 @@ public class EmbeddingService(
 
             var line = $"{msg.Role}: {content}\n";
 
-            if (sb.Length + line.Length > MaxEmbeddingTextChars)
+            if (sb.Length + line.Length > maxChars)
             {
                 // Fit as much as we can.
-                var remaining = MaxEmbeddingTextChars - sb.Length;
+                var remaining = maxChars - sb.Length;
                 if (remaining > 20)
                     sb.Append(line.AsSpan(0, remaining));
                 break;
@@ -239,7 +261,7 @@ public class EmbeddingService(
                     if (citName is not null)
                     {
                         var citLine = $"[Cited: {citName}]\n";
-                        if (sb.Length + citLine.Length <= MaxEmbeddingTextChars)
+                        if (sb.Length + citLine.Length <= maxChars)
                             sb.Append(citLine);
                     }
                 }
@@ -250,13 +272,17 @@ public class EmbeddingService(
     }
 
     /// <summary>
-    /// Generates an embedding for <paramref name="text"/>. Tries to embed the full text
-    /// first; if the model reports a context-length error, falls back to chunking the text
-    /// into <see cref="FallbackChunkChars"/>-sized pieces and averaging the resulting vectors.
+    /// Generates an embedding for <paramref name="text"/> (built from <paramref name="conversation"/>).
+    /// Tries to embed the full text first; if the model reports a context-length error and the text
+    /// is longer than <see cref="MaxEmbeddingTextChars"/>, retries with the conversation rebuilt to
+    /// that length. If that is still too long, falls back to chunking the (trimmed) text into
+    /// <see cref="FallbackChunkChars"/>-sized pieces and averaging the resulting vectors.
     /// This keeps quality high for models with large context windows while still working
-    /// with smaller models. Transient failures are retried with exponential backoff.
+    /// with smaller models, and bounds the number of chunk requests. Transient failures are
+    /// retried with exponential backoff.
     /// </summary>
-    private async Task<float[]> GenerateChunkedEmbeddingAsync(string text, CancellationToken ct)
+    private async Task<float[]> GenerateChunkedEmbeddingAsync(
+        StoredConversation conversation, string text, CancellationToken ct)
     {
         // Fast path — try the full text first.
         try
@@ -267,8 +293,28 @@ public class EmbeddingService(
         catch (Exception ex) when (IsContextLengthError(ex))
         {
             logger.LogDebug(
-                "Embedding model rejected full text ({Len} chars); falling back to chunked embedding.",
+                "Embedding model rejected full text ({Len} chars); falling back to shorter text.",
                 text.Length);
+        }
+
+        // Trim path — long-context text was too long for the model; retry at the standard length,
+        // trimmed on message boundaries. Chunking below then works from the trimmed text, so a very
+        // long conversation can't fan out into hundreds of chunk requests.
+        if (text.Length > MaxEmbeddingTextChars)
+        {
+            text = BuildEmbeddingText(conversation, MaxEmbeddingTextChars);
+
+            try
+            {
+                var result = await GenerateWithRetryAsync(text, ct);
+                return result[0].Vector.ToArray();
+            }
+            catch (Exception ex) when (IsContextLengthError(ex))
+            {
+                logger.LogDebug(
+                    "Embedding model rejected trimmed text ({Len} chars); falling back to chunked embedding.",
+                    text.Length);
+            }
         }
 
         // Slow path — chunk, embed each piece, and average.

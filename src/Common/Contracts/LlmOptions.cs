@@ -42,6 +42,24 @@ public class LlmOptions
     /// API key for the embedding provider, if different from the primary LLM ApiKey.
     /// </summary>
     public string? EmbeddingApiKey { get; set; }
+    
+    /// <summary>
+    /// Specifies the provider to use for reranking search results. Will default to <see cref="Provider"/>
+    /// if not specified and rereanking is enabled.
+    /// </summary>
+    public string? RerankingProvider { get; set; }
+    
+    /// <summary>
+    /// Specifies the API key to use when calling a reranking model. If not specified, will use the value
+    /// provided for <see cref="ApiKey"/> instead; or none if both are null.
+    /// </summary>
+    public string? RerankingApiKey { get; set; }
+    
+    /// <summary>
+    /// The reranking model to use for ranking search results. Must not be null when <see cref="RagOptions"/>
+    /// specifies True for UseReranking.
+    /// </summary>
+    public string? RerankingModelId { get; set; }
 
     /// <summary>
     /// Endpoint for the embedding provider, if different from the primary LLM Endpoint.
