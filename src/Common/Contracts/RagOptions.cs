@@ -70,7 +70,7 @@ public class RagOptions
     /// list of results, and uses a reranking model to select the top 10. Must have a model configured
     /// in <see cref="LlmOptions"/>
     /// </summary>
-    public bool UseReranking { get; set; } = true;
+    public bool UseReranking { get; set; }
 
     /// <summary>
     /// Maximum characters of conversation content (title, summary and messages) sent to the embedding

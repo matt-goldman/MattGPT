@@ -25,6 +25,9 @@ public static class AiExtensions
             builder.Services.Configure<LlmOptions>(builder.Configuration.GetSection(LlmOptions.SectionName));
             var llmOptions = builder.Configuration.GetSection(LlmOptions.SectionName).Get<LlmOptions>() ?? new LlmOptions();
 
+            var ragOptions = builder.Configuration.GetSection(RagOptions.SectionName).Get<RagOptions>() ?? new RagOptions();
+            ValidateRerankingOptions(ragOptions, llmOptions);
+
             Console.WriteLine($"Starting API with LLM provider {llmOptions.Provider} and embeddings provider {llmOptions.EmbeddingProvider}");
 
             switch (llmOptions.Provider.ToLowerInvariant())
@@ -81,5 +84,31 @@ public static class AiExtensions
             }
             return builder;
         }
+    }
+
+    /// <summary>
+    /// Validates the reranking-related settings across <see cref="RagOptions"/> and <see cref="LlmOptions"/>:
+    /// a reranking model must be configured when <see cref="RagOptions.UseReranking"/> is enabled, and
+    /// <see cref="RagOptions.MaxEmbeddingChars"/>, when set, must be positive.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">One or more settings are invalid.</exception>
+    internal static void ValidateRerankingOptions(RagOptions ragOptions, LlmOptions llmOptions)
+    {
+        var errors = new List<string>();
+
+        if (ragOptions.UseReranking && string.IsNullOrWhiteSpace(llmOptions.RerankingModelId))
+            errors.Add(
+                $"{LlmOptions.SectionName}:{nameof(LlmOptions.RerankingModelId)} is required when " +
+                $"{RagOptions.SectionName}:{nameof(RagOptions.UseReranking)} is true. Configure a reranking model, " +
+                $"or set {RagOptions.SectionName}:{nameof(RagOptions.UseReranking)} to false.");
+
+        if (ragOptions.MaxEmbeddingChars is <= 0)
+            errors.Add(
+                $"{RagOptions.SectionName}:{nameof(RagOptions.MaxEmbeddingChars)} must be greater than 0 " +
+                $"(was {ragOptions.MaxEmbeddingChars}). Leave it unset to use the default.");
+
+        if (errors.Count > 0)
+            throw new InvalidOperationException(
+                "Invalid reranking configuration: " + string.Join(" ", errors));
     }
 }
