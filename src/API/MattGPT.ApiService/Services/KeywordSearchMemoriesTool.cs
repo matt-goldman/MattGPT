@@ -31,11 +31,18 @@ public class KeywordSearchMemoriesTool(
 
     private readonly RagOptions _options = options.Value;
 
+    private readonly List<ChatSource> _sources = [];
+
     /// <summary>
-    /// Sources retrieved by the most recent tool invocation. Populated after
-    /// <see cref="SearchMemoriesKeywordAsync"/> is called by the LLM tool-call loop.
+    /// Sources retrieved by every invocation of this tool since the last <see cref="ResetSources"/>.
+    /// The LLM may call the tool several times in one turn (e.g. retrying with a reworded query),
+    /// so results accumulate rather than being replaced; a call that finds nothing or fails adds
+    /// nothing. May contain the same conversation more than once - the consumer de-duplicates.
     /// </summary>
-    public IReadOnlyList<ChatSource> LastSources { get; private set; } = [];
+    public IReadOnlyList<ChatSource> Sources => _sources;
+
+    /// <summary>Clears <see cref="Sources"/>; called at the start of each chat turn.</summary>
+    public void ResetSources() => _sources.Clear();
 
     /// <summary>
     /// Creates an <see cref="AIFunction"/> wrapping <see cref="SearchMemoriesKeywordAsync"/>
@@ -107,19 +114,17 @@ public class KeywordSearchMemoriesTool(
 
             if (results.Count == 0)
             {
-                LastSources = [];
                 return "No past conversations contain those exact words. "
                     + "Try fewer or different keywords, or use search_memories to search by meaning instead.";
             }
 
-            LastSources = BuildSources(results);
+            _sources.AddRange(BuildSources(results));
 
             return FormatResults(results);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "search_memories_keyword tool failed.");
-            LastSources = [];
             return $"Keyword search failed: {ex.Message}. Responding without memory context.";
         }
         finally

@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using MattGPT.ApiService.Extensions;
 using MattGPT.Contracts;
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
@@ -55,12 +56,6 @@ public class RagService(
     ISystemConfigRepository? systemConfigRepository = null,
     KeywordSearchMemoriesTool? keywordSearchMemoriesTool = null)
 {
-    /// <summary>
-    /// Maximum number of message characters to include per conversation in the context window.
-    /// Prevents a single long conversation from consuming the entire context budget.
-    /// </summary>
-    public const int MaxExcerptCharsPerConversation = 4_000;
-
     /// <summary>
     /// The default system prompt used when no custom prompt is stored.
     /// </summary>
@@ -150,6 +145,8 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         logger.LogInformation("RAG ChatAsync called. Query: {Query}, Mode: {Mode}, DiagnosticMode: {Diagnostic}",
             query, _options.Mode, _options.DiagnosticMode);
 
+        ResetToolSources();
+
         // 1. Automatic retrieval (full, light, or none depending on mode).
         var (relevant, conversationLookup) = await AutoRetrieveAsync(query, ct);
 
@@ -162,7 +159,8 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
             : null;
 
         // 3. Build the augmented prompt, adding the diagnostic instruction if enabled.
-        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt);
+        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt,
+            autoRetrievalRan: EffectiveTopK > 0);
         if (_options.DiagnosticMode)
             AppendDiagnosticInstruction(messages);
 
@@ -211,6 +209,8 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         logger.LogInformation("RAG ChatStreamAsync called. Query: {Query}, Mode: {Mode}, DiagnosticMode: {Diagnostic}",
             query, _options.Mode, _options.DiagnosticMode);
 
+        ResetToolSources();
+
         // 1. Automatic retrieval (full, light, or none depending on mode).
         var (relevant, conversationLookup) = await AutoRetrieveAsync(query, ct);
 
@@ -223,7 +223,8 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
             : null;
 
         // 3. Build the augmented prompt, adding the diagnostic instruction if enabled.
-        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt);
+        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt,
+            autoRetrievalRan: EffectiveTopK > 0);
         if (_options.DiagnosticMode)
             AppendDiagnosticInstruction(messages);
 
@@ -351,6 +352,16 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
     }
 
     /// <summary>
+    /// Clears the sources the tools have accumulated, so a turn reports only what was retrieved
+    /// during that turn.
+    /// </summary>
+    private void ResetToolSources()
+    {
+        searchMemoriesTool?.ResetSources();
+        keywordSearchMemoriesTool?.ResetSources();
+    }
+
+    /// <summary>
     /// Merges sources from automatic retrieval with any sources from tool invocations.
     /// De-duplicates by conversation ID, preferring the higher score.
     /// </summary>
@@ -367,8 +378,8 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         // Tool-retrieved sources (may overlap with auto-retrieved, and with each other).
         IEnumerable<ChatSource> toolSources =
         [
-            .. searchMemoriesTool?.LastSources ?? [],
-            .. keywordSearchMemoriesTool?.LastSources ?? [],
+            .. searchMemoriesTool?.Sources ?? [],
+            .. keywordSearchMemoriesTool?.Sources ?? [],
         ];
 
         foreach (var s in toolSources)
@@ -511,6 +522,11 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
     /// as the assistant's own memory, includes full conversation excerpts from MongoDB,
     /// and inserts session context (rolling summary + recent messages) for multi-turn support.
     /// </summary>
+    /// <param name="autoRetrievalRan">
+    /// Whether automatic retrieval ran for this query. When it did and found nothing, the prompt
+    /// says so. When it did not (<see cref="RagMode.ToolsOnly"/>), the prompt says nothing about
+    /// memories, so the model isn't told there are none before it has had a chance to search.
+    /// </param>
     public static List<AIChatMessage> BuildMessages(
         string query,
         IReadOnlyList<VectorSearchResult> context,
@@ -518,7 +534,8 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         ChatSession? session = null,
         int recentMessageCount = 6,
         UserProfile? userProfile = null,
-        string? systemPromptOverride = null)
+        string? systemPromptOverride = null,
+        bool autoRetrievalRan = true)
     {
         var messages = new List<AIChatMessage>();
 
@@ -568,7 +585,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
                     && full.LinearisedMessages.Count > 0)
                 {
                     system.AppendLine("Conversation excerpt:");
-                    var excerpt = BuildConversationExcerpt(full);
+                    var excerpt = full.ToExcerpt();
                     system.AppendLine(excerpt);
                 }
 
@@ -577,7 +594,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
 
             system.AppendLine("=== END MEMORIES ===");
         }
-        else
+        else if (autoRetrievalRan)
         {
             system.AppendLine();
             system.AppendLine("No relevant memories were found for this query.");
@@ -626,45 +643,5 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         messages.Add(new AIChatMessage(ChatRole.User, query));
 
         return messages;
-    }
-
-    /// <summary>
-    /// Builds a truncated human-readable excerpt of a conversation's messages,
-    /// limited to <see cref="MaxExcerptCharsPerConversation"/> characters.
-    /// </summary>
-    public static string BuildConversationExcerpt(StoredConversation conversation)
-    {
-        var sb = new StringBuilder();
-        foreach (var msg in conversation.LinearisedMessages)
-        {
-            var role = msg.Role switch
-            {
-                "user" => "User",
-                "assistant" => "Assistant",
-                "system" => "System",
-                "tool" => "Tool",
-                _ => msg.Role,
-            };
-
-            var content = string.Join(" ", msg.Parts);
-            if (string.IsNullOrWhiteSpace(content))
-                continue;
-
-            var line = $"{role}: {content}";
-
-            if (sb.Length + line.Length + 1 > MaxExcerptCharsPerConversation)
-            {
-                // Truncate and signal there's more.
-                var remaining = MaxExcerptCharsPerConversation - sb.Length - 20;
-                if (remaining > 0)
-                    sb.AppendLine(line[..remaining] + "...");
-                sb.AppendLine("[conversation truncated]");
-                break;
-            }
-
-            sb.AppendLine(line);
-        }
-
-        return sb.ToString();
     }
 }

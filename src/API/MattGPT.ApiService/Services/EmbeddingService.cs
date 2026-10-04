@@ -1,5 +1,5 @@
 using System.Net;
-using System.Text;
+using MattGPT.ApiService.Extensions;
 using MattGPT.Contracts;
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
@@ -167,7 +167,7 @@ public class EmbeddingService(
     private async Task<EmbedOutcome> EmbedConversationAsync(
         StoredConversation conversation, CancellationToken ct)
     {
-        var embeddingText = BuildEmbeddingText(conversation, maxEmbeddingChars);
+        var embeddingText = conversation.ToEmbeddingText(maxEmbeddingChars);
 
         if (string.IsNullOrWhiteSpace(embeddingText))
         {
@@ -211,67 +211,6 @@ public class EmbeddingService(
     }
 
     /// <summary>
-    /// Builds the text that will be embedded. Uses the summary if available (higher quality),
-    /// but always includes the title and message content so that freshly imported conversations
-    /// can be embedded without waiting for LLM summarisation. Message content is included up to
-    /// <paramref name="maxChars"/> characters.
-    /// </summary>
-    internal static string BuildEmbeddingText(StoredConversation conversation, int maxChars = MaxEmbeddingTextChars)
-    {
-        var sb = new StringBuilder();
-
-        if (!string.IsNullOrWhiteSpace(conversation.Title))
-            sb.Append("Title: ").AppendLine(conversation.Title);
-
-        if (!string.IsNullOrWhiteSpace(conversation.Summary))
-            sb.Append("Summary: ").AppendLine(conversation.Summary);
-
-        // Append message content up to the character limit.
-        // Skip hidden and zero-weight messages (system scaffolding, custom instructions)
-        // to dedicate the embedding window to actual conversational content.
-        foreach (var msg in conversation.LinearisedMessages)
-        {
-            if (msg.IsHidden || msg.Weight == 0.0)
-                continue;
-
-            var content = string.Join(" ", msg.Parts);
-            if (string.IsNullOrWhiteSpace(content))
-                continue;
-
-            var line = $"{msg.Role}: {content}\n";
-
-            if (sb.Length + line.Length > maxChars)
-            {
-                // Fit as much as we can.
-                var remaining = maxChars - sb.Length;
-                if (remaining > 20)
-                    sb.Append(line.AsSpan(0, remaining));
-                break;
-            }
-
-            sb.Append(line);
-
-            // Include citation context (file names and web source titles/URLs).
-            if (msg.Citations is { Count: > 0 })
-            {
-                foreach (var citation in msg.Citations)
-                {
-                    var citName = !string.IsNullOrWhiteSpace(citation.Name) ? citation.Name
-                        : citation.Source;
-                    if (citName is not null)
-                    {
-                        var citLine = $"[Cited: {citName}]\n";
-                        if (sb.Length + citLine.Length <= maxChars)
-                            sb.Append(citLine);
-                    }
-                }
-            }
-        }
-
-        return sb.ToString().Trim();
-    }
-
-    /// <summary>
     /// Generates an embedding for <paramref name="text"/> (built from <paramref name="conversation"/>).
     /// Tries to embed the full text first; if the model reports a context-length error and the text
     /// is longer than <see cref="MaxEmbeddingTextChars"/>, retries with the conversation rebuilt to
@@ -302,7 +241,7 @@ public class EmbeddingService(
         // long conversation can't fan out into hundreds of chunk requests.
         if (text.Length > MaxEmbeddingTextChars)
         {
-            text = BuildEmbeddingText(conversation, MaxEmbeddingTextChars);
+            text = conversation.ToEmbeddingText(MaxEmbeddingTextChars);
 
             try
             {

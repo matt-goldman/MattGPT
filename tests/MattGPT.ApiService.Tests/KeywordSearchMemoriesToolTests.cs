@@ -49,7 +49,7 @@ public class KeywordSearchMemoriesToolTests
 
         Assert.Contains("No past conversations contain those exact words", result);
         Assert.Contains("search_memories", result);
-        Assert.Empty(tool.LastSources);
+        Assert.Empty(tool.Sources);
     }
 
     [Fact]
@@ -70,8 +70,8 @@ public class KeywordSearchMemoriesToolTests
         Assert.Contains("Binding work", result);
         Assert.Contains("Matching excerpts:", result);
         Assert.Contains("NoClassDefFoundError", result);
-        Assert.Single(tool.LastSources);
-        Assert.Equal("c1", tool.LastSources[0].ConversationId);
+        Assert.Single(tool.Sources);
+        Assert.Equal("c1", tool.Sources[0].ConversationId);
     }
 
     [Fact]
@@ -90,9 +90,9 @@ public class KeywordSearchMemoriesToolTests
         // The fake ranks by matched-term count (2 and 1), which the tool rescales so the
         // best hit is 1.0 and the rest are fractions of it - keeping keyword scores in the
         // same 0-1 range as the cosine similarities they get merged with.
-        Assert.Equal(2, tool.LastSources.Count);
-        Assert.Equal(1.0f, tool.LastSources[0].Score);
-        Assert.Equal(0.5f, tool.LastSources[1].Score);
+        Assert.Equal(2, tool.Sources.Count);
+        Assert.Equal(1.0f, tool.Sources[0].Score);
+        Assert.Equal(0.5f, tool.Sources[1].Score);
     }
 
     [Fact]

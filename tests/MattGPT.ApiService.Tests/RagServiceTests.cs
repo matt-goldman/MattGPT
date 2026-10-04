@@ -1,4 +1,5 @@
 using MattGPT.ApiService;
+using MattGPT.ApiService.Extensions;
 using MattGPT.ApiService.Services;
 using MattGPT.Contracts;
 using MattGPT.Contracts.Models;
@@ -258,7 +259,7 @@ public class RagServiceTests
     }
 
     [Fact]
-    public void BuildConversationExcerpt_TruncatesLongConversations()
+    public void ToExcerpt_TruncatesLongConversations()
     {
         var conv = new StoredConversation
         {
@@ -274,9 +275,9 @@ public class RagServiceTests
                 })],
         };
 
-        var excerpt = RagService.BuildConversationExcerpt(conv);
+        var excerpt = conv.ToExcerpt();
 
-        Assert.True(excerpt.Length <= RagService.MaxExcerptCharsPerConversation + 100); // small buffer for final line
+        Assert.True(excerpt.Length <= StoredConversationExtensions.DefaultExcerptChars + 100); // small buffer for final line
         Assert.Contains("[conversation truncated]", excerpt);
     }
 
@@ -551,6 +552,111 @@ public class RagServiceTests
         var result = await service.ChatAsync("query");
 
         Assert.Equal(2, result.Sources.Count);
+    }
+
+    [Fact]
+    public void BuildMessages_AutoRetrievalNotRun_OmitsNoMemoriesLine()
+    {
+        var messages = RagService.BuildMessages("Any query", [], autoRetrievalRan: false);
+
+        Assert.DoesNotContain("No relevant memories", messages[0].Text!);
+    }
+
+    [Fact]
+    public async Task ChatAsync_ToolsOnlyMode_DoesNotClaimNoMemories()
+    {
+        // ToolsOnly skips automatic retrieval, so the prompt must not tell the model there are
+        // no memories before it has searched - that discourages the tool call.
+        IEnumerable<ChatMessage>? sent = null;
+        var chatClient = new FakeChatClient(messages =>
+        {
+            sent = messages.ToList();
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, "Answer."));
+        });
+
+        var service = new RagService(
+            TestRetriever.Create(new FakeSearchVectorStore([])),
+            chatClient,
+            Options.Create(new RagOptions { Mode = RagMode.ToolsOnly }),
+            Options.Create(new ChatSessionOptions()),
+            NullLogger<RagService>.Instance);
+
+        await service.ChatAsync("query");
+
+        Assert.NotNull(sent);
+        Assert.DoesNotContain(sent!, m => m.Text.Contains("No relevant memories"));
+    }
+
+    [Fact]
+    public async Task ChatAsync_WithPromptMode_NoMatches_SaysNoMemories()
+    {
+        IEnumerable<ChatMessage>? sent = null;
+        var chatClient = new FakeChatClient(messages =>
+        {
+            sent = messages.ToList();
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, "Answer."));
+        });
+
+        var service = new RagService(
+            TestRetriever.Create(new FakeSearchVectorStore([])),
+            chatClient,
+            Options.Create(new RagOptions { Mode = RagMode.WithPrompt }),
+            Options.Create(new ChatSessionOptions()),
+            NullLogger<RagService>.Instance);
+
+        await service.ChatAsync("query");
+
+        Assert.Contains(sent!, m => m.Text.Contains("No relevant memories"));
+    }
+
+    [Fact]
+    public async Task ChatAsync_ToolCalledTwiceInTurn_ReportsSourcesFromBothCalls()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", "First"), MakeConversation("c2", "Second")]);
+        var tool = new SearchMemoriesTool(
+            TestRetriever.Create(new SequenceSearchVectorStore(
+                [new("c1", 0.9f, "First", null)],
+                [new("c2", 0.8f, "Second", null)]), repo),
+            Options.Create(new RagOptions()),
+            NullLogger<SearchMemoriesTool>.Instance);
+
+        // Simulate the tool-call loop: the model searches, then searches again reworded.
+        var chatClient = new FakeChatClient(_ =>
+        {
+            tool.SearchMemoriesAsync("first query").GetAwaiter().GetResult();
+            tool.SearchMemoriesAsync("reworded query").GetAwaiter().GetResult();
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, "Answer."));
+        });
+
+        var service = new RagService(
+            TestRetriever.Create(new FakeSearchVectorStore([])),
+            chatClient,
+            Options.Create(new RagOptions { Mode = RagMode.ToolsOnly }),
+            Options.Create(new ChatSessionOptions()),
+            NullLogger<RagService>.Instance,
+            tool);
+
+        var result = await service.ChatAsync("query");
+
+        Assert.Equal(["c1", "c2"], result.Sources.Select(s => s.ConversationId));
+    }
+
+    [Fact]
+    public async Task ChatAsync_ClearsToolSourcesFromPreviousTurn()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", "Earlier")]);
+        var tool = CreateSearchMemoriesTool([new("c1", 0.9f, "Earlier", null)], repo);
+
+        // A search from an earlier turn on the same instance.
+        await tool.SearchMemoriesAsync("earlier query");
+
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.ToolsOnly }, searchMemoriesTool: tool);
+
+        var result = await service.ChatAsync("new query");
+
+        Assert.Empty(result.Sources);
     }
 
     private static SearchMemoriesTool CreateSearchMemoriesTool(

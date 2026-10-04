@@ -1,4 +1,5 @@
 using System.Net;
+using MattGPT.ApiService.Extensions;
 using MattGPT.ApiService.Services;
 using MattGPT.Contracts;
 using MattGPT.Contracts.Models;
@@ -436,11 +437,11 @@ public class EmbeddingServiceTests
     }
 
     [Fact]
-    public void BuildEmbeddingText_IncludesTitleAndMessages()
+    public void ToEmbeddingText_IncludesTitleAndMessages()
     {
         var conv = MakeConversation("c1", title: "My Topic", messageCount: 2);
 
-        var text = EmbeddingService.BuildEmbeddingText(conv);
+        var text = conv.ToEmbeddingText(EmbeddingService.MaxEmbeddingTextChars);
 
         Assert.Contains("My Topic", text);
         Assert.Contains("user: Message content 0", text);
@@ -448,18 +449,18 @@ public class EmbeddingServiceTests
     }
 
     [Fact]
-    public void BuildEmbeddingText_WithSummary_IncludesSummary()
+    public void ToEmbeddingText_WithSummary_IncludesSummary()
     {
         var conv = MakeConversation("c1", title: "My Topic", summary: "This is a summary.", messageCount: 1);
 
-        var text = EmbeddingService.BuildEmbeddingText(conv);
+        var text = conv.ToEmbeddingText(EmbeddingService.MaxEmbeddingTextChars);
 
         Assert.Contains("This is a summary.", text);
         Assert.Contains("My Topic", text);
     }
 
     [Fact]
-    public void BuildEmbeddingText_TruncatesLongConversations()
+    public void ToEmbeddingText_TruncatesLongConversations()
     {
         var conv = new StoredConversation
         {
@@ -475,13 +476,13 @@ public class EmbeddingServiceTests
                 })],
         };
 
-        var text = EmbeddingService.BuildEmbeddingText(conv);
+        var text = conv.ToEmbeddingText(EmbeddingService.MaxEmbeddingTextChars);
 
         Assert.True(text.Length <= EmbeddingService.MaxEmbeddingTextChars);
     }
 
     [Fact]
-    public void BuildEmbeddingText_ExcludesZeroWeightMessages()
+    public void ToEmbeddingText_ExcludesZeroWeightMessages()
     {
         var conv = new StoredConversation
         {
@@ -495,7 +496,7 @@ public class EmbeddingServiceTests
             ],
         };
 
-        var text = EmbeddingService.BuildEmbeddingText(conv);
+        var text = conv.ToEmbeddingText(EmbeddingService.MaxEmbeddingTextChars);
 
         Assert.DoesNotContain("System prompt", text);
         Assert.Contains("user: Hello", text);
@@ -503,7 +504,7 @@ public class EmbeddingServiceTests
     }
 
     [Fact]
-    public void BuildEmbeddingText_ExcludesHiddenMessages()
+    public void ToEmbeddingText_ExcludesHiddenMessages()
     {
         var conv = new StoredConversation
         {
@@ -517,7 +518,7 @@ public class EmbeddingServiceTests
             ],
         };
 
-        var text = EmbeddingService.BuildEmbeddingText(conv);
+        var text = conv.ToEmbeddingText(EmbeddingService.MaxEmbeddingTextChars);
 
         Assert.DoesNotContain("User Profile", text);
         Assert.Contains("user: Real question", text);
@@ -525,7 +526,7 @@ public class EmbeddingServiceTests
     }
 
     [Fact]
-    public void BuildEmbeddingText_NullWeight_IncludesMessage()
+    public void ToEmbeddingText_NullWeight_IncludesMessage()
     {
         var conv = new StoredConversation
         {
@@ -537,13 +538,13 @@ public class EmbeddingServiceTests
             ],
         };
 
-        var text = EmbeddingService.BuildEmbeddingText(conv);
+        var text = conv.ToEmbeddingText(EmbeddingService.MaxEmbeddingTextChars);
 
         Assert.Contains("user: Hello", text);
     }
 
     [Fact]
-    public void BuildEmbeddingText_AllMessagesHidden_StillIncludesTitleAndSummary()
+    public void ToEmbeddingText_AllMessagesHidden_StillIncludesTitleAndSummary()
     {
         var conv = new StoredConversation
         {
@@ -557,7 +558,7 @@ public class EmbeddingServiceTests
             ],
         };
 
-        var text = EmbeddingService.BuildEmbeddingText(conv);
+        var text = conv.ToEmbeddingText(EmbeddingService.MaxEmbeddingTextChars);
 
         Assert.Contains("Topic", text);
         Assert.Contains("A summary.", text);
@@ -566,7 +567,7 @@ public class EmbeddingServiceTests
     }
 
     [Fact]
-    public void BuildEmbeddingText_WithCitations_IncludesCitationContext()
+    public void ToEmbeddingText_WithCitations_IncludesCitationContext()
     {
         var conv = new StoredConversation
         {
@@ -589,7 +590,7 @@ public class EmbeddingServiceTests
             ],
         };
 
-        var text = EmbeddingService.BuildEmbeddingText(conv);
+        var text = conv.ToEmbeddingText(EmbeddingService.MaxEmbeddingTextChars);
 
         Assert.Contains("[Cited: Wikipedia: AI]", text);
         Assert.Contains("[Cited: https://example.com/article]", text);
@@ -958,12 +959,12 @@ public class EmbeddingServiceTests
         Assert.False(EmbeddingService.IsTransientError(ex));
     }
     [Fact]
-    public void BuildEmbeddingText_RespectsMaxChars()
+    public void ToEmbeddingText_RespectsMaxChars()
     {
         var conv = MakeLongConversation("long", 20_000);
 
-        var standard = EmbeddingService.BuildEmbeddingText(conv);
-        var longContext = EmbeddingService.BuildEmbeddingText(conv, EmbeddingService.LongContextMaxEmbeddingTextChars);
+        var standard = conv.ToEmbeddingText(EmbeddingService.MaxEmbeddingTextChars);
+        var longContext = conv.ToEmbeddingText(EmbeddingService.LongContextMaxEmbeddingTextChars);
 
         Assert.True(standard.Length <= EmbeddingService.MaxEmbeddingTextChars);
         Assert.True(longContext.Length > EmbeddingService.MaxEmbeddingTextChars);

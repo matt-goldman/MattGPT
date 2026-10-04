@@ -47,7 +47,7 @@ public class SearchMemoriesToolTests
         var result = await tool.SearchMemoriesAsync("anything");
 
         Assert.Contains("No past conversations were semantically similar enough", result);
-        Assert.Empty(tool.LastSources);
+        Assert.Empty(tool.Sources);
     }
 
     [Fact]
@@ -67,8 +67,45 @@ public class SearchMemoriesToolTests
         Assert.Contains("Found 1 past conversation(s) semantically similar", result);
         Assert.Contains("Python Help", result);
         Assert.Contains("Helped with decorators", result);
-        Assert.Single(tool.LastSources);
-        Assert.Equal("c1", tool.LastSources[0].ConversationId);
+        Assert.Single(tool.Sources);
+        Assert.Equal("c1", tool.Sources[0].ConversationId);
+    }
+
+    [Fact]
+    public async Task SearchMemoriesAsync_MultipleInvocations_AccumulateSources()
+    {
+        // The LLM may search more than once in a turn; earlier results must not be lost,
+        // and a later search that finds nothing must not wipe them.
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", "First", null), MakeConversation("c2", "Second", null)]);
+
+        var store = new SequenceSearchVectorStore(
+            [new("c1", 0.9f, "First", null)],
+            [new("c2", 0.8f, "Second", null)],
+            []);
+        var tool = new SearchMemoriesTool(
+            TestRetriever.Create(store, repo),
+            Options.Create(new RagOptions()),
+            NullLogger<SearchMemoriesTool>.Instance);
+
+        await tool.SearchMemoriesAsync("first query");
+        await tool.SearchMemoriesAsync("reworded query");
+        await tool.SearchMemoriesAsync("query with no matches");
+
+        Assert.Equal(["c1", "c2"], tool.Sources.Select(s => s.ConversationId));
+    }
+
+    [Fact]
+    public async Task ResetSources_ClearsAccumulatedSources()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", "Title", null)]);
+        var tool = CreateTool([new("c1", 0.9f, "Title", null)], repo);
+
+        await tool.SearchMemoriesAsync("query");
+        tool.ResetSources();
+
+        Assert.Empty(tool.Sources);
     }
 
     [Fact]
@@ -89,7 +126,7 @@ public class SearchMemoriesToolTests
         Assert.Contains("Found 1 past conversation(s) semantically similar", result);
         Assert.Contains("High Score", result);
         Assert.DoesNotContain("Low Score", result);
-        Assert.Single(tool.LastSources);
+        Assert.Single(tool.Sources);
     }
 
     [Fact]
@@ -160,7 +197,7 @@ public class SearchMemoriesToolTests
         var result = await tool.SearchMemoriesAsync("query");
 
         Assert.Contains("Memory search failed", result);
-        Assert.Empty(tool.LastSources);
+        Assert.Empty(tool.Sources);
     }
 }
 
@@ -178,4 +215,23 @@ internal sealed class ThrowingSearchVectorStore : IVectorStore
 
     public Task<ulong?> GetPointCountAsync(CancellationToken ct = default)
         => Task.FromResult<ulong?>(null);
+}
+
+/// <summary>
+/// Fake IVectorStore that returns the next configured result set on each search,
+/// then empty results once they run out.
+/// </summary>
+internal sealed class SequenceSearchVectorStore(params IReadOnlyList<VectorSearchResult>[] resultSets) : IVectorStore
+{
+    private int _next;
+
+    public Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
+        => Task.CompletedTask;
+
+    public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
+        float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
+        => Task.FromResult(_next < resultSets.Length ? resultSets[_next++] : []);
+
+    public Task<ulong?> GetPointCountAsync(CancellationToken ct = default)
+        => Task.FromResult<ulong?>(0);
 }

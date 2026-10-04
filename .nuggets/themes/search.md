@@ -29,23 +29,26 @@ silent full-scan regression, not a compile error.
 (constant), `SearchTextAsync`, `EnsureSchemaAsync` (index DDL)
 **Tags:** gotcha, search, postgres
 
-## 2026-10-05 — Semantic retrieval goes through MemoryRetriever; tool sources and ToolsOnly prompt have hidden hazards
+## 2026-10-05 — Semantic retrieval goes through MemoryRetriever; remaining source/prompt quirks
 
-**Context:** Assessing whether to split `RagService` before adding reranking.
+**Context:** Splitting `RagService` before adding reranking.
 **Observation:** The embed → vector search → MinScore filter → `GetByIdsAsync` pipeline used to be
 duplicated in `RagService.AutoRetrieveAsync` and `SearchMemoriesTool`; it is now a single
 `MemoryRetriever.RetrieveAsync` used by both, so retrieval changes (e.g. reranking) belong there.
-`KeywordSearchMemoriesTool` is the lexical path and does not go through it. Two non-obvious hazards found while tracing:
-1. `LastSources` on both tools is **overwritten** per invocation, and `CollectAllSources` reads it
-   once at the end of the turn — if the LLM calls a tool twice in one turn (the tool description
-   tells it to retry once), the first call's sources vanish from the response.
-2. In `RagMode.ToolsOnly`, `EffectiveTopK` is 0 so `BuildMessages` always appends "No relevant
-   memories were found for this query." to the system prompt *before* the model has searched —
-   which can discourage the very tool call ToolsOnly depends on. Conversely, `DefaultSystemPrompt`
-   tells the model to use `search_memories` even in `WithPrompt` mode, where no tools are offered.
-Also: keyword-tool scores are rescaled so the best keyword hit is 1.0, so after merging it always
-outranks any cosine hit — the merged source order is not meaningful across the two tools.
+`KeywordSearchMemoriesTool` is the lexical path and does not go through it. Conversation → text
+renderings (`ToEmbeddingText`, `ToExcerpt`) live in a `StoredConversation` extension block.
+Fixed in the same pass (don't reintroduce): tool sources used to be *overwritten* per invocation
+(`LastSources`), losing earlier searches in a turn — they now accumulate in `Sources` and
+`RagService` calls `ResetSources()` at the start of each turn; and ToolsOnly used to get
+"No relevant memories were found" in its prompt before searching — `BuildMessages` now only says
+that when `autoRetrievalRan`.
+Still open:
+1. `DefaultSystemPrompt` tells the model to use `search_memories` even in `WithPrompt` mode, where
+   no tools are offered (the prompt is user-overridable, so it can't simply vary by mode).
+2. Keyword-tool scores are rescaled so the best keyword hit is 1.0, so after merging it always
+   outranks any cosine hit — the merged source order is not meaningful across the two tools.
 **Pointer:** `src/API/MattGPT.ApiService/Services/MemoryRetriever.cs`,
-`src/API/MattGPT.ApiService/Services/RagService.cs` (`CollectAllSources`, `BuildMessages` memories/no-memories block), `SearchMemoriesTool.cs` (`LastSources` assignment),
+`src/API/MattGPT.ApiService/Extensions/StoredConversationExtensions.cs`,
+`src/API/MattGPT.ApiService/Services/RagService.cs` (`ResetToolSources`, `CollectAllSources`, `BuildMessages`),
 `KeywordSearchMemoriesTool.cs` (`BuildSources`)
 **Tags:** code-path, gotcha, search, rag

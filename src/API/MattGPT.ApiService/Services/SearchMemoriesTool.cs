@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text;
+using MattGPT.ApiService.Extensions;
 using MattGPT.Contracts;
 using MattGPT.Contracts.Services;
 using Microsoft.Extensions.AI;
@@ -29,11 +30,18 @@ public class SearchMemoriesTool(
 {
     private readonly RagOptions _options = options.Value;
 
+    private readonly List<ChatSource> _sources = [];
+
     /// <summary>
-    /// Sources retrieved by the most recent tool invocation. Populated after
-    /// <see cref="SearchMemoriesAsync"/> is called by the LLM tool-call loop.
+    /// Sources retrieved by every invocation of this tool since the last <see cref="ResetSources"/>.
+    /// The LLM may call the tool several times in one turn (e.g. retrying with a reworded query),
+    /// so results accumulate rather than being replaced; a call that finds nothing or fails adds
+    /// nothing. May contain the same conversation more than once - the consumer de-duplicates.
     /// </summary>
-    public IReadOnlyList<ChatSource> LastSources { get; private set; } = [];
+    public IReadOnlyList<ChatSource> Sources => _sources;
+
+    /// <summary>Clears <see cref="Sources"/>; called at the start of each chat turn.</summary>
+    public void ResetSources() => _sources.Clear();
 
     /// <summary>
     /// Creates an <see cref="AIFunction"/> wrapping <see cref="SearchMemoriesAsync"/>
@@ -106,7 +114,6 @@ public class SearchMemoriesTool(
 
             if (relevant.Count == 0)
             {
-                LastSources = [];
                 return "No past conversations were semantically similar enough to this query. "
                     + "If you expected a match, search again describing the same topic in different or broader terms "
                     + "rather than adding keywords.";
@@ -128,23 +135,21 @@ public class SearchMemoriesTool(
                     && full.LinearisedMessages.Count > 0)
                 {
                     result.AppendLine("Excerpt:");
-                    result.AppendLine(RagService.BuildConversationExcerpt(full));
+                    result.AppendLine(full.ToExcerpt());
                 }
 
                 result.AppendLine();
             }
 
             // Track sources for the response metadata.
-            LastSources = relevant
-                .Select(r => new ChatSource(r.ConversationId, r.Title, r.Summary, r.Score))
-                .ToList();
+            _sources.AddRange(relevant
+                .Select(r => new ChatSource(r.ConversationId, r.Title, r.Summary, r.Score)));
 
             return result.ToString();
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogError(ex, "search_memories tool failed.");
-            LastSources = [];
             return $"Memory search failed: {ex.Message}. Responding without memory context.";
         }
         finally
