@@ -1,7 +1,9 @@
+using MattGPT.Contracts;
 using MattGPT.Contracts.Models;
 using MattGPT.ApiService.Services;
 using System.Threading.Channels;
 using MattGPT.Contracts.Services;
+using Microsoft.Extensions.Options;
 
 namespace MattGPT.ApiService.Endpoints;
 
@@ -140,6 +142,100 @@ public static class ConversationsEndpoints
             }));
         })
         .WithName("GetFailedEmbeddings");
+
+        // Diagnostics summary: pipeline health at a glance (status counts, vector-store point count,
+        // config, and derived issues), scoped to the current user.
+        app.MapGet("/conversations/diagnostics", async (
+            IConversationRepository repository,
+            IVectorStore vectorStore,
+            IOptions<LlmOptions> llmOptions,
+            ICurrentUserService currentUser,
+            CancellationToken ct) =>
+        {
+            var byStatus = await repository.GetStatusCountsAsync(currentUser.UserId, ct);
+            var total = byStatus.Values.Sum();
+
+            long? vectorPoints = null;
+            string? vectorError = null;
+            try { vectorPoints = (long?)await vectorStore.GetPointCountAsync(ct); }
+            catch (Exception ex) { vectorError = ex.Message; }
+
+            var imported = byStatus.GetValueOrDefault(ConversationProcessingStatus.Imported);
+            var summarised = byStatus.GetValueOrDefault(ConversationProcessingStatus.Summarised);
+            var embedded = byStatus.GetValueOrDefault(ConversationProcessingStatus.Embedded);
+            var summaryErrors = byStatus.GetValueOrDefault(ConversationProcessingStatus.SummaryError);
+            var embeddingErrors = byStatus.GetValueOrDefault(ConversationProcessingStatus.EmbeddingError);
+
+            var issues = new List<string>();
+            if (total == 0)
+                issues.Add("No conversations imported yet.");
+            if (imported + summarised > 0)
+                issues.Add($"{imported + summarised} conversation(s) not yet embedded.");
+            if (summaryErrors > 0)
+                issues.Add($"{summaryErrors} conversation(s) failed summarisation (non-blocking — embedding uses raw content).");
+            if (embeddingErrors > 0)
+                issues.Add($"{embeddingErrors} conversation(s) failed embedding; the next embed run retries them.");
+            if (vectorError is not null)
+                issues.Add($"Vector store unreachable: {vectorError}");
+            else if (vectorPoints is not null && embedded > vectorPoints)
+                issues.Add($"{embedded} embedded conversation(s) but only {vectorPoints} vector(s) stored — mismatch.");
+
+            var llm = llmOptions.Value;
+            return Results.Ok(new
+            {
+                totalConversations  = total,
+                byStatus            = byStatus.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
+                vectorPoints,
+                vectorStoreError    = vectorError,
+                llmProvider         = llm.Provider,
+                llmModelId          = llm.ModelId,
+                embeddingModelId    = llm.EmbeddingModelId,
+                issues,
+            });
+        })
+        .WithName("GetConversationDiagnostics");
+
+        // Diagnostics drill-down: a paged, optionally status/title-filtered list of conversations
+        // with their pipeline state. Built from a field projection (not a full deserialize).
+        app.MapGet("/conversations/diagnostics/conversations", async (
+            IConversationRepository repository,
+            ICurrentUserService currentUser,
+            string? status,
+            string? q,
+            int page,
+            int pageSize,
+            CancellationToken ct) =>
+        {
+            if (page < 1) page = 1;
+            if (pageSize is < 1 or > 200) pageSize = 25;
+
+            ConversationProcessingStatus? statusFilter = null;
+            if (!string.IsNullOrWhiteSpace(status) &&
+                Enum.TryParse<ConversationProcessingStatus>(status, ignoreCase: true, out var parsed))
+            {
+                statusFilter = parsed;
+            }
+
+            var (items, total) = await repository.GetDiagnosticsPageAsync(
+                statusFilter, page, pageSize, q, currentUser.UserId, ct);
+
+            return Results.Ok(new
+            {
+                page,
+                pageSize,
+                total,
+                items = items.Select(r => new
+                {
+                    conversationId  = r.ConversationId,
+                    title           = r.Title,
+                    status          = r.Status.ToString(),
+                    hasSummary      = r.HasSummary,
+                    updateTime      = r.UpdateTime,
+                    importTimestamp = r.ImportTimestamp,
+                }),
+            });
+        })
+        .WithName("GetConversationDiagnosticsList");
 
         // Get a single imported conversation with full message history.
         // Hidden/scaffolding messages (e.g. user profile prompts) are excluded by default.

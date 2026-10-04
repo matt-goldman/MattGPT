@@ -34,3 +34,26 @@ public record ProjectItem(string TemplateId, int ConversationCount, string? Most
 
 /// <summary>Paginated list of conversations within a project.</summary>
 public record ProjectConversationsResponse(string TemplateId, int Page, int PageSize, long Total, List<ImportedConversationItem> Items);
+
+/// <summary>Pipeline-health summary shown at the top of the diagnostics view.</summary>
+public record DiagnosticsSummary(
+    long TotalConversations,
+    Dictionary<string, long> ByStatus,
+    long? VectorPoints,
+    string? VectorStoreError,
+    string? LlmProvider,
+    string? LlmModelId,
+    string? EmbeddingModelId,
+    List<string> Issues);
+
+/// <summary>A single conversation's pipeline state in the diagnostics drill-down table.</summary>
+public record ConversationDiagnostic(
+    string ConversationId,
+    string? Title,
+    string Status,
+    bool HasSummary,
+    double? UpdateTime,
+    DateTimeOffset? ImportTimestamp);
+
+/// <summary>A paged list of diagnostic conversation rows.</summary>
+public record DiagnosticConversationsResponse(int Page, int PageSize, long Total, List<ConversationDiagnostic> Items);

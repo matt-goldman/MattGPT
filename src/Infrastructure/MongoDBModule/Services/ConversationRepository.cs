@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
 using Microsoft.Extensions.Logging;
@@ -238,6 +239,42 @@ public class ConversationRepository : IConversationRepository
             counts[status] = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
         }
         return counts;
+    }
+
+    /// <inheritdoc/>
+    public async Task<(IReadOnlyList<ConversationDiagnosticRow> Items, long Total)> GetDiagnosticsPageAsync(
+        ConversationProcessingStatus? status, int page, int pageSize,
+        string? titleContains = null, string? userId = null, CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize is < 1 or > 200) pageSize = 20;
+
+        var builder = Builders<StoredConversation>.Filter;
+        var filter = builder.Eq(x => x.UserId, userId);
+        if (status is { } s)
+            filter &= builder.Eq(x => x.ProcessingStatus, s);
+        if (!string.IsNullOrWhiteSpace(titleContains))
+            filter &= builder.Regex(x => x.Title, new BsonRegularExpression(Regex.Escape(titleContains.Trim()), "i"));
+
+        var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
+
+        // Project only the fields the diagnostic row needs — never the message bodies or the
+        // embedding vector — so the listing stays cheap over a large collection.
+        var projected = await _collection
+            .Find(filter)
+            .SortByDescending(x => x.UpdateTime)
+            .Skip((page - 1) * pageSize)
+            .Limit(pageSize)
+            .Project(x => new { x.ConversationId, x.Title, x.ProcessingStatus, x.Summary, x.UpdateTime, x.ImportTimestamp })
+            .ToListAsync(ct);
+
+        var items = projected
+            .Select(p => new ConversationDiagnosticRow(
+                p.ConversationId, p.Title, p.ProcessingStatus,
+                !string.IsNullOrWhiteSpace(p.Summary), p.UpdateTime, p.ImportTimestamp))
+            .ToList();
+
+        return (items, total);
     }
 
     /// <inheritdoc/>

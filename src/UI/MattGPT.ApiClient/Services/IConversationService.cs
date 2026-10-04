@@ -34,4 +34,14 @@ public interface IConversationService
 
     /// <summary>Returns conversations whose embedding failed and will be retried on the next run.</summary>
     Task<IReadOnlyList<FailedEmbeddingItem>> GetFailedEmbeddingsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the pipeline-health summary for the diagnostics view.</summary>
+    Task<DiagnosticsSummary?> GetDiagnosticsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns a paged list of conversations with their pipeline state for the diagnostics
+    /// drill-down, optionally filtered by processing status and a title substring.
+    /// </summary>
+    Task<DiagnosticConversationsResponse?> GetDiagnosticConversationsAsync(
+        string? status, string? query, int page, int pageSize, CancellationToken cancellationToken = default);
 }
