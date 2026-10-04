@@ -99,6 +99,25 @@ internal sealed class FakeConversationRepository : IConversationRepository{
         return Task.FromResult(counts);
     }
 
+    public Task<(IReadOnlyList<ConversationDiagnosticRow> Items, long Total)> GetDiagnosticsPageAsync(
+        ConversationProcessingStatus? status, int page, int pageSize,
+        string? titleContains = null, string? userId = null, CancellationToken ct = default)
+    {
+        IEnumerable<StoredConversation> q = _conversations;
+        if (status is { } s) q = q.Where(c => c.ProcessingStatus == s);
+        if (!string.IsNullOrWhiteSpace(titleContains))
+            q = q.Where(c => c.Title is not null && c.Title.Contains(titleContains, StringComparison.OrdinalIgnoreCase));
+
+        var ordered = q.OrderByDescending(c => c.UpdateTime).ToList();
+        var items = ordered
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(c => new ConversationDiagnosticRow(
+                c.ConversationId, c.Title, c.ProcessingStatus,
+                !string.IsNullOrWhiteSpace(c.Summary), c.UpdateTime, c.ImportTimestamp))
+            .ToList();
+        return Task.FromResult<(IReadOnlyList<ConversationDiagnosticRow>, long)>((items, (long)ordered.Count));
+    }
+
     public Task<List<ConversationProject>> GetProjectsAsync(string? userId = null, CancellationToken ct = default)
         => Task.FromResult(new List<ConversationProject>());
 

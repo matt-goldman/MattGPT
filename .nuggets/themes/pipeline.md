@@ -1,0 +1,75 @@
+# Pipeline (import / embedding / status)
+
+## 2026-10-04 — Undeserializable conversation rows are invisible, wasteful, and can starve the embedder
+
+**Context:** Improving the re-run-embeddings UX; a fresh import + immediate re-run was
+producing `JsonException`s when reading conversations back out of Postgres (same build wrote
+and read them, so not model drift).
+
+**Observation — three linked facts:**
+1. `GetStatusCountsAsync` counts via the promoted `processing_status` **column**
+   (`SELECT processing_status, COUNT(*) ... GROUP BY`), no deserialization. The embedder fetches
+   via `GetByStatusesAsync`, which deserializes JSONB and **silently drops** any row that fails
+   (`ReadConversationsAsync`). So a bad row shows forever in the counts (e.g. as `Imported`) but
+   is never embedded and never counted as an error — an invisible gap between the two numbers.
+2. Dropped rows are never added to the embedder's `attempted` set and never get a status update,
+   so they stay in the eligible set (`{Imported, Summarised, EmbeddingError}`) and are
+   re-fetched + re-failed + re-logged on **every** run. Permanent waste + log spam.
+3. **Starvation risk:** `GetByStatusesAsync` is `LIMIT 50` with **no `ORDER BY`**. The embed loop
+   (`EmbeddingService.EmbedAsync`) breaks when a fetched batch *deserializes* to 0 items. If a
+   50-row batch comes back all-bad, it deserializes to empty → loop breaks → valid `Imported`
+   rows behind them are never embedded.
+
+**Root cause (found 2026-10-04):** a write/read enum-serialization asymmetry in the Postgres
+repo. `UpsertAsync` serialises the whole `StoredConversation` with converter-less
+`SerializerOptions`, so `ProcessingStatus` is written as a **number** (`"processingStatus": 0`).
+But `UpdateSummaryAsync` / `UpdateEmbeddingAsync` overwrite that jsonb field via
+`jsonb_set(..., '{processingStatus}', $4::jsonb)` with `$4 = JsonSerializer.Serialize(status.ToString())`
+— a **string** (`"Embedded"`). Default STJ can read the number but throws on the string → every
+row that has been through an update becomes unreadable. ("Small subset" = only updated rows;
+freshly-imported-but-never-updated rows still hold the numeric form and read fine.) Not model
+drift, not corruption, not metadata pollution (only `StoredConversation` is ever written to the
+`conversations` table; the user profile goes to its own table).
+
+**Fix applied:** put `[JsonConverter(typeof(JsonStringEnumConverter))]` on the
+`ConversationProcessingStatus` enum itself (`StoredConversation.cs`), not in the repo's options —
+so every System.Text.Json consumer inherits the string contract rather than each backend
+configuring enum handling. Reads accept both the numeric (legacy/insert) and string (update)
+forms, so existing bad rows become readable again; new upserts emit the string form, matching
+`jsonb_set`. The `JsonException.Path` logging in `ReadConversationsAsync` remains as a safety net
+for any future deserialization drift.
+**MongoDB:** uses the BSON serializer (`BsonSerializer.Deserialize<StoredConversation>`), which
+the STJ attribute does not touch, so its enum handling is a separate, higher-layer concern — left
+alone deliberately (Postgres is the active backend).
+
+**Pointer:** `src/API/MattGPT.ApiService/Services/EmbeddingService.cs:83-115` (loop + `attempted`),
+`src/Infrastructure/PostgresModule/Services/PostgresConversationRepository.cs`
+(`ReadConversationsAsync`, `GetByStatusesAsync` ~114-135, `GetStatusCountsAsync` ~252)
+**Tags:** code-path, gotcha, pipeline, embedding, postgres
+
+## 2026-10-04 — A 400 from the embedding provider hides its reason in the raw response body, not the exception message
+
+**Context:** Diagnosing frequent 400s from `embeddingGenerator.GenerateAsync` in `EmbeddingService`.
+
+**Observation:** The OpenAI path (`OpenAIModule`) uses the System.ClientModel SDK, which throws
+`ClientResultException` on a 4xx. Its `.Message` is only `"Service request failed. Status: 400
+(Bad Request)"` — the server's actual error JSON (unknown model, input-too-long, bad dimension,
+invalid key) lives in `GetRawResponse().Content`, which the plain `logger.LogWarning(ex, ...)`
+never surfaced. Azure.Core's `RequestFailedException` has the same `GetRawResponse().Content`
+shape. A 400 is correctly non-transient (`IsRetryableStatus`), so it skips retry and lands
+straight in `EmbedConversationAsync`'s catch.
+
+**Fix applied:** added `TryGetServerErrorBody` (reflective `GetRawResponse()` → `Content.ToString()`,
+truncated to 2 000 chars) and `GetHttpStatusCode` (chain-walking), plus `LogEmbeddingFailure`
+which also logs provider/endpoint/model from `IEmbeddingGenerator.GetService(typeof(
+EmbeddingGeneratorMetadata))` — `ProviderUri` is the destination URL, provider-agnostic, no SDK
+reference needed. Input **length** is logged, never the conversation text (PII).
+
+**Gotcha for diagnosis:** `EmbeddingGeneratorMetadata.ProviderUri` is the configured **base**
+endpoint (e.g. `https://api.openai.com/v1/`), not the exact `/embeddings` path. For the OpenAI
+module note `Module.cs` appends `/v1/` to `LLM:Endpoint` — a double `/v1` in the base endpoint
+config is a classic 400/404 cause worth checking first.
+
+**Pointer:** `src/API/MattGPT.ApiService/Services/EmbeddingService.cs` (`TryGetServerErrorBody`,
+`GetHttpStatusCode`, `LogEmbeddingFailure`), `src/Infrastructure/OpenAIModule/Module.cs:25` (uri build)
+**Tags:** code-path, gotcha, pipeline, embedding, diagnostics, openai

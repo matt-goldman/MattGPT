@@ -1,9 +1,34 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MattGPT.Contracts.Models;
 
+/// <summary>
+/// A lightweight projection of a conversation's pipeline state, for the diagnostics view.
+/// Deliberately excludes message content and the embedding vector so it can be built from
+/// promoted columns / a field projection without deserializing the whole document.
+/// </summary>
+public record ConversationDiagnosticRow(
+    string ConversationId,
+    string? Title,
+    ConversationProcessingStatus Status,
+    bool HasSummary,
+    double? UpdateTime,
+    DateTimeOffset? ImportTimestamp);
+
 /// <summary>Processing status of a stored conversation.</summary>
+/// <remarks>
+/// Serialised as a string in JSON. This contract lives on the model — not in any single
+/// infrastructure backend — so every System.Text.Json consumer inherits it instead of each
+/// repository configuring enum handling independently. It is load-bearing for the Postgres
+/// backend: its UPDATE paths write <c>data.processingStatus</c> into the JSONB document as a
+/// string via <c>jsonb_set</c>, whereas a plain insert serialises the whole document; without a
+/// consistent string representation the reader can deserialize one form but throws on the other,
+/// silently dropping rows. Reading also accepts the legacy numeric form, so pre-existing rows
+/// remain readable.
+/// </remarks>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ConversationProcessingStatus { Imported, Summarised, Embedded, SummaryError, EmbeddingError }
 
 /// <summary>A citation stored with a message.</summary>

@@ -169,6 +169,135 @@
                     }
                 </section>
             </LumexTab>
+            <LumexTab Title="Diagnostics">
+                <section class="mb-8">
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="text-lg font-semibold">Pipeline diagnostics</h2>
+                        <button class="text-xs text-default-400 hover:text-primary underline"
+                                @onclick="RefreshDiagnosticsAsync">
+                            Refresh
+                        </button>
+                    </div>
+                    <p class="text-sm text-default-400 mb-4">
+                        Status of imported conversations as they move through summarisation, embedding,
+                        and into the vector store.
+                    </p>
+
+                    @if (_diagLoading)
+                    {
+                        <div class="flex justify-center py-8">
+                            <LumexSpinner Size="@Size.Small" Color="@ThemeColor.Primary" />
+                        </div>
+                    }
+                    else if (_diagError is not null)
+                    {
+                        <LumexAlert Color="@ThemeColor.Danger" Title="Couldn't load diagnostics">@_diagError</LumexAlert>
+                    }
+                    else if (_summary is not null)
+                    {
+                        @* Summary cards *@
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                            <div class="border border-default-200 rounded-lg p-3">
+                                <div class="text-2xl font-semibold">@_summary.TotalConversations</div>
+                                <div class="text-xs text-default-400">Conversations</div>
+                            </div>
+                            <div class="border border-default-200 rounded-lg p-3">
+                                <div class="text-2xl font-semibold">@(_summary.VectorPoints?.ToString() ?? "—")</div>
+                                <div class="text-xs text-default-400">Vectors stored</div>
+                            </div>
+                            <div class="border border-default-200 rounded-lg p-3">
+                                <div class="text-sm font-medium truncate" title="@_summary.LlmProvider">@(_summary.LlmProvider ?? "—")</div>
+                                <div class="text-xs text-default-400 truncate" title="@(_summary.EmbeddingModelId ?? _summary.LlmModelId)">
+                                    @(_summary.EmbeddingModelId ?? _summary.LlmModelId ?? "")
+                                </div>
+                            </div>
+                        </div>
+
+                        @* Status breakdown *@
+                        <div class="flex flex-wrap gap-2 mb-4">
+                            @foreach (var kv in OrderedStatuses(_summary.ByStatus))
+                            {
+                                <span class="text-xs px-2 py-1 rounded-full @StatusClass(kv.Key)">@kv.Key: @kv.Value</span>
+                            }
+                        </div>
+
+                        @* Derived issues / warnings *@
+                        @if (_summary.Issues.Count > 0)
+                        {
+                            <div class="mb-4 space-y-1">
+                                @foreach (var issue in _summary.Issues)
+                                {
+                                    <div class="text-sm text-warning-600 flex items-start gap-1.5">
+                                        <span aria-hidden="true">⚠</span><span>@issue</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @* Filters *@
+                        <div class="flex flex-wrap items-center gap-2 mb-3">
+                            <select @bind="_statusFilter" @bind:after="ApplyFilterAsync"
+                                    class="rounded-lg border border-default-200 bg-default-50 px-2 py-1 text-sm">
+                                <option value="">All statuses</option>
+                                @foreach (var st in AllStatuses)
+                                {
+                                    <option value="@st">@st</option>
+                                }
+                            </select>
+                            <input @bind="_search" @bind:after="ApplyFilterAsync" @bind:event="onchange"
+                                   placeholder="Search title…"
+                                   class="rounded-lg border border-default-200 bg-default-50 px-2 py-1 text-sm flex-1 min-w-[8rem]" />
+                        </div>
+
+                        @* Drill-down table *@
+                        @if (_rows.Count == 0)
+                        {
+                            <p class="text-sm text-default-400 py-4">No conversations match.</p>
+                        }
+                        else
+                        {
+                            <div class="overflow-x-auto border border-default-200 rounded-lg">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-default-100 text-default-500">
+                                        <tr>
+                                            <th class="text-left font-medium px-3 py-2">Title</th>
+                                            <th class="text-left font-medium px-3 py-2">Status</th>
+                                            <th class="text-center font-medium px-3 py-2">Summary</th>
+                                            <th class="text-left font-medium px-3 py-2">Updated</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var row in _rows)
+                                        {
+                                            <tr class="border-t border-default-100">
+                                                <td class="px-3 py-2 max-w-xs truncate" title="@(row.Title ?? row.ConversationId)">
+                                                    @(string.IsNullOrWhiteSpace(row.Title) ? row.ConversationId : row.Title)
+                                                </td>
+                                                <td class="px-3 py-2">
+                                                    <span class="text-xs px-2 py-0.5 rounded-full @StatusClass(row.Status)">@row.Status</span>
+                                                </td>
+                                                <td class="px-3 py-2 text-center">@(row.HasSummary ? "✓" : "–")</td>
+                                                <td class="px-3 py-2 text-default-500">@FormatUnixDate(row.UpdateTime)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="flex items-center justify-between mt-3 text-sm">
+                                <span class="text-default-400">@_diagTotal conversation(s)</span>
+                                <div class="flex items-center gap-2">
+                                    <button class="px-2 py-1 rounded border border-default-200 disabled:opacity-40"
+                                            disabled="@(_page <= 1)" @onclick="PrevPageAsync">Prev</button>
+                                    <span>Page @_page / @TotalPages</span>
+                                    <button class="px-2 py-1 rounded border border-default-200 disabled:opacity-40"
+                                            disabled="@(_page >= TotalPages)" @onclick="NextPageAsync">Next</button>
+                                </div>
+                            </div>
+                        }
+                    }
+                </section>
+            </LumexTab>
         </LumexTabs>
     }
 </div>
@@ -208,6 +337,7 @@
     {
         await LoadSettings();
         await ResumeEmbedStateAsync();
+        await LoadDiagnosticsAsync();
     }
 
     private async Task LoadSettings()
@@ -407,6 +537,101 @@
             // Non-fatal: leave the previously loaded list in place.
         }
     }
+
+    // — Diagnostics —
+    private bool _diagLoading = true;
+    private string? _diagError;
+    private DiagnosticsSummary? _summary;
+    private IReadOnlyList<ConversationDiagnostic> _rows = [];
+    private long _diagTotal;
+    private int _page = 1;
+    private const int DiagPageSize = 25;
+    private string _statusFilter = string.Empty;
+    private string _search = string.Empty;
+
+    private static readonly string[] AllStatuses =
+        ["Imported", "Summarised", "Embedded", "SummaryError", "EmbeddingError"];
+
+    private int TotalPages => (int)Math.Max(1, Math.Ceiling(_diagTotal / (double)DiagPageSize));
+
+    /// <summary>Loads the diagnostics summary and the first page of conversations. Best-effort.</summary>
+    private async Task LoadDiagnosticsAsync()
+    {
+        _diagLoading = true;
+        _diagError = null;
+        StateHasChanged();
+        try
+        {
+            _summary = await ConversationService.GetDiagnosticsAsync();
+            await LoadDiagnosticPageAsync();
+        }
+        catch (Exception ex)
+        {
+            _diagError = ex.Message;
+        }
+        finally
+        {
+            _diagLoading = false;
+        }
+    }
+
+    private async Task LoadDiagnosticPageAsync()
+    {
+        var resp = await ConversationService.GetDiagnosticConversationsAsync(
+            string.IsNullOrEmpty(_statusFilter) ? null : _statusFilter,
+            string.IsNullOrWhiteSpace(_search) ? null : _search,
+            _page, DiagPageSize);
+        _rows = resp?.Items ?? [];
+        _diagTotal = resp?.Total ?? 0;
+    }
+
+    private async Task RefreshDiagnosticsAsync()
+    {
+        _page = 1;
+        await LoadDiagnosticsAsync();
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        _page = 1;
+        await LoadDiagnosticPageAsync();
+        StateHasChanged();
+    }
+
+    private async Task PrevPageAsync()
+    {
+        if (_page <= 1) return;
+        _page--;
+        await LoadDiagnosticPageAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (_page >= TotalPages) return;
+        _page++;
+        await LoadDiagnosticPageAsync();
+    }
+
+    /// <summary>Known statuses first (in pipeline order), then any unexpected status the server returned.</summary>
+    private static IEnumerable<KeyValuePair<string, long>> OrderedStatuses(Dictionary<string, long> byStatus)
+        => AllStatuses.Where(byStatus.ContainsKey).Select(s => new KeyValuePair<string, long>(s, byStatus[s]))
+            .Concat(byStatus.Where(kv => !AllStatuses.Contains(kv.Key)));
+
+    private static string StatusClass(string status) => status switch
+    {
+        "Embedded"       => "bg-success-100 text-success-700",
+        "Summarised"     => "bg-primary-100 text-primary-700",
+        "Imported"       => "bg-default-100 text-default-600",
+        "SummaryError"   => "bg-warning-100 text-warning-700",
+        "EmbeddingError" => "bg-danger-100 text-danger-700",
+        _                => "bg-default-100 text-default-600",
+    };
+
+    /// <summary>ChatGPT timestamps are Unix seconds (fractional). Render as a local date, or a dash.</summary>
+    private static string FormatUnixDate(double? unixSeconds)
+        => unixSeconds is { } s
+            ? DateTimeOffset.FromUnixTimeMilliseconds((long)(s * 1000)).LocalDateTime.ToString("yyyy-MM-dd")
+            : "—";
 
     private async Task ResetSystemPrompt()
     {

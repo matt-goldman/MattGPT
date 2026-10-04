@@ -1,3 +1,4 @@
+using System.Net;
 using MattGPT.ApiService.Services;
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
@@ -758,7 +759,7 @@ public class EmbeddingServiceTests
     }
 
     [Theory]
-    [InlineData(typeof(HttpRequestException), true)]
+    [InlineData(typeof(HttpRequestException), true)] // no status => connection-level fault
     [InlineData(typeof(IOException), true)]
     [InlineData(typeof(InvalidOperationException), false)]
     [InlineData(typeof(ArgumentException), false)]
@@ -766,6 +767,141 @@ public class EmbeddingServiceTests
     {
         var ex = (Exception)Activator.CreateInstance(exceptionType, "test error")!;
         Assert.Equal(expected, EmbeddingService.IsTransientError(ex));
+    }
+
+    [Theory]
+    // Permanent failures — an identical retry cannot fix these.
+    [InlineData(HttpStatusCode.BadRequest, false)]
+    [InlineData(HttpStatusCode.Unauthorized, false)]
+    [InlineData(HttpStatusCode.Forbidden, false)]
+    [InlineData(HttpStatusCode.NotFound, false)]
+    [InlineData(HttpStatusCode.Conflict, false)]
+    [InlineData(HttpStatusCode.RequestEntityTooLarge, false)]
+    // Transient failures — a retry could plausibly succeed.
+    [InlineData(HttpStatusCode.RequestTimeout, true)]
+    [InlineData(HttpStatusCode.TooManyRequests, true)]
+    [InlineData(HttpStatusCode.InternalServerError, true)]
+    [InlineData(HttpStatusCode.BadGateway, true)]
+    [InlineData(HttpStatusCode.ServiceUnavailable, true)]
+    [InlineData(HttpStatusCode.GatewayTimeout, true)]
+    public void IsTransientError_HttpStatus_ClassifiesByRetryability(HttpStatusCode status, bool expected)
+    {
+        var ex = new HttpRequestException("http error", inner: null, statusCode: status);
+        Assert.Equal(expected, EmbeddingService.IsTransientError(ex));
+    }
+
+    [Theory]
+    // Provider SDK exceptions (OpenAI/Azure) carry the HTTP status on an int `Status` property
+    // rather than deriving from HttpRequestException; they must classify the same way.
+    [InlineData(400, false)]
+    [InlineData(401, false)]
+    [InlineData(403, false)]
+    [InlineData(404, false)]
+    [InlineData(408, true)]
+    [InlineData(429, true)]
+    [InlineData(500, true)]
+    [InlineData(503, true)]
+    public void IsTransientError_SdkExceptionWithStatus_ClassifiesByRetryability(int status, bool expected)
+    {
+        Assert.Equal(expected, EmbeddingService.IsTransientError(new FakeStatusException(status)));
+    }
+
+    /// <summary>
+    /// Mimics a provider SDK exception (e.g. System.ClientModel's ClientResultException) that
+    /// exposes the HTTP status on a public <c>int Status</c> property without deriving from
+    /// <see cref="HttpRequestException"/>.
+    /// </summary>
+    public sealed class FakeStatusException(int status) : Exception("provider sdk error")
+    {
+        public int Status { get; } = status;
+    }
+
+    /// <summary>
+    /// Mimics a provider SDK exception (e.g. System.ClientModel's ClientResultException) that
+    /// exposes the server's error body via a parameterless <c>GetRawResponse()</c> whose result
+    /// carries a <c>Content</c> property — the shape <see cref="EmbeddingService.TryGetServerErrorBody"/>
+    /// reads reflectively.
+    /// </summary>
+    public sealed class FakeRawResponseException(int status, string body) : Exception("provider sdk error")
+    {
+        public int Status { get; } = status;
+
+        public FakeRawResponse GetRawResponse() => new(body);
+
+        public sealed class FakeRawResponse(string body)
+        {
+            private readonly string body = body;
+
+            public override string ToString() => body;
+
+            // The reflective reader invokes `Content` and calls ToString() on the result.
+            public object Content => this;
+        }
+    }
+
+    [Fact]
+    public void TryGetServerErrorBody_ReadsRawResponseContent()
+    {
+        var ex = new FakeRawResponseException(400, """{"error":{"message":"model not found"}}""");
+
+        Assert.True(EmbeddingService.TryGetServerErrorBody(ex, out var body));
+        Assert.Contains("model not found", body);
+    }
+
+    [Fact]
+    public void TryGetServerErrorBody_WalksInnerExceptions()
+    {
+        var inner = new FakeRawResponseException(400, "the real server error");
+        var outer = new InvalidOperationException("wrapper", inner);
+
+        Assert.True(EmbeddingService.TryGetServerErrorBody(outer, out var body));
+        Assert.Equal("the real server error", body);
+    }
+
+    [Fact]
+    public void TryGetServerErrorBody_TruncatesLongBodies()
+    {
+        var ex = new FakeRawResponseException(400, new string('x', 5_000));
+
+        Assert.True(EmbeddingService.TryGetServerErrorBody(ex, out var body));
+        Assert.True(body!.Length < 5_000);
+        Assert.EndsWith("(truncated)", body);
+    }
+
+    [Fact]
+    public void TryGetServerErrorBody_NoRawResponse_ReturnsFalse()
+    {
+        Assert.False(EmbeddingService.TryGetServerErrorBody(new InvalidOperationException("no response"), out var body));
+        Assert.Null(body);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest, 400)]
+    [InlineData(HttpStatusCode.TooManyRequests, 429)]
+    public void GetHttpStatusCode_ReadsHttpRequestException(HttpStatusCode status, int expected)
+    {
+        var ex = new HttpRequestException("http error", inner: null, statusCode: status);
+        Assert.Equal(expected, EmbeddingService.GetHttpStatusCode(ex));
+    }
+
+    [Fact]
+    public void GetHttpStatusCode_ReadsSdkStatusProperty()
+    {
+        Assert.Equal(400, EmbeddingService.GetHttpStatusCode(new FakeStatusException(400)));
+    }
+
+    [Fact]
+    public void GetHttpStatusCode_WalksInnerExceptions()
+    {
+        var inner = new HttpRequestException("http error", inner: null, statusCode: HttpStatusCode.BadRequest);
+        var outer = new InvalidOperationException("wrapper", inner);
+        Assert.Equal(400, EmbeddingService.GetHttpStatusCode(outer));
+    }
+
+    [Fact]
+    public void GetHttpStatusCode_NoStatus_ReturnsZero()
+    {
+        Assert.Equal(0, EmbeddingService.GetHttpStatusCode(new InvalidOperationException("no status")));
     }
 
     [Fact]

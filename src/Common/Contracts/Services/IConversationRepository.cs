@@ -64,6 +64,21 @@ public interface IConversationRepository
     Task<Dictionary<ConversationProcessingStatus, long>> GetStatusCountsAsync(string? userId = null, CancellationToken ct = default);
 
     /// <summary>
+    /// Return a page of lightweight diagnostic projections (status, summary availability, timestamps)
+    /// for the diagnostics view, optionally filtered by processing <paramref name="status"/> and a
+    /// case-insensitive title substring <paramref name="titleContains"/>, scoped to the given user and
+    /// ordered by <see cref="StoredConversation.UpdateTime"/> descending.
+    /// </summary>
+    /// <remarks>
+    /// Implementations must build rows from a field projection (not a full document deserialize) so
+    /// the view stays robust even if a stored document cannot be fully deserialized, and so large
+    /// message bodies and embedding vectors are never loaded.
+    /// </remarks>
+    Task<(IReadOnlyList<ConversationDiagnosticRow> Items, long Total)> GetDiagnosticsPageAsync(
+        ConversationProcessingStatus? status, int page, int pageSize,
+        string? titleContains = null, string? userId = null, CancellationToken ct = default);
+
+    /// <summary>
     /// Return project groups (conversations grouped by ConversationTemplateId where GizmoType is "snorlax"), scoped to the given user.
     /// Each group contains the template ID, conversation count, and a representative title.
     /// </summary>

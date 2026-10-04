@@ -16,7 +16,7 @@ public static class AiExtensions
     extension(WebApplicationBuilder builder)
     {
         /// <summary>
-        /// Adds the seleceted AI provider to the application builder.
+        /// Adds the selected AI provider to the application builder.
         /// </summary>
         /// <returns><see cref="WebApplicationBuilder"/></returns>
         public WebApplicationBuilder AddAiProvider()
@@ -24,6 +24,8 @@ public static class AiExtensions
             // Register LLM services based on configuration.
             builder.Services.Configure<LlmOptions>(builder.Configuration.GetSection(LlmOptions.SectionName));
             var llmOptions = builder.Configuration.GetSection(LlmOptions.SectionName).Get<LlmOptions>() ?? new LlmOptions();
+
+            Console.WriteLine($"Starting API with LLM provider {llmOptions.Provider} and embeddings provider {llmOptions.EmbeddingProvider}");
 
             switch (llmOptions.Provider.ToLowerInvariant())
             {
@@ -40,7 +42,7 @@ public static class AiExtensions
                     break;
 
                 case "openai":
-                    builder.AddOpenAIModule();
+                    builder.AddOpenAiModule();
                     break;
 
                 case "anthropic":
@@ -62,7 +64,7 @@ public static class AiExtensions
             switch (llmOptions.EmbeddingProvider.ToLowerInvariant())
             {
                 case "openai":
-                    builder.AddOpenAIEmbeddingModule();
+                    builder.AddOpenAiEmbeddingModule();
                     break;
 
                 case "azureopenai":

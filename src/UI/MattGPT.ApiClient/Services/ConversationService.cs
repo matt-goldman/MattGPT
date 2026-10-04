@@ -214,4 +214,39 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
         return await response.Content.ReadFromJsonAsync<List<FailedEmbeddingItem>>(JsonOptions, cancellationToken)
             ?? [];
     }
+
+    /// <inheritdoc/>
+    public Task<DiagnosticsSummary?> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
+        => GetJsonWithAuthRetryAsync<DiagnosticsSummary>("/conversations/diagnostics", cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<DiagnosticConversationsResponse?> GetDiagnosticConversationsAsync(
+        string? status, string? query, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var qs = new List<string> { $"page={page}", $"pageSize={pageSize}" };
+        if (!string.IsNullOrWhiteSpace(status)) qs.Add($"status={Uri.EscapeDataString(status)}");
+        if (!string.IsNullOrWhiteSpace(query)) qs.Add($"q={Uri.EscapeDataString(query)}");
+        return GetJsonWithAuthRetryAsync<DiagnosticConversationsResponse>(
+            $"/conversations/diagnostics/conversations?{string.Join('&', qs)}", cancellationToken);
+    }
+
+    /// <summary>
+    /// GETs <paramref name="url"/> and deserializes the JSON body, transparently retrying once
+    /// after a 401 via <see cref="IAuthFailureHandler"/>. Returns default on 204 or any
+    /// non-success response so callers can treat "no data" uniformly.
+    /// </summary>
+    private async Task<T?> GetJsonWithAuthRetryAsync<T>(string url, CancellationToken ct)
+    {
+        var client = CreateClient();
+        using var response = await client.GetAsync(url, ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (!await authFailureHandler.HandleAsync(ct)) return default;
+            using var retry = await client.GetAsync(url, ct);
+            if (retry.StatusCode == System.Net.HttpStatusCode.NoContent || !retry.IsSuccessStatusCode) return default;
+            return await retry.Content.ReadFromJsonAsync<T>(JsonOptions, ct);
+        }
+        if (response.StatusCode == System.Net.HttpStatusCode.NoContent || !response.IsSuccessStatusCode) return default;
+        return await response.Content.ReadFromJsonAsync<T>(JsonOptions, ct);
+    }
 }

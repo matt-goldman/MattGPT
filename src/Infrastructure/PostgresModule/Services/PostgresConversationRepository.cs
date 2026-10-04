@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using System.Text;
 using System.Text.Json;
 using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
@@ -27,6 +28,11 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
     private volatile bool _schemaEnsured;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
+    // The UPDATE paths (UpdateSummaryAsync / UpdateEmbeddingAsync) write data.processingStatus into
+    // the JSONB as a string via jsonb_set, while a plain insert serialises the whole document, so
+    // the two must agree on the enum's JSON shape. That contract is enforced on the model —
+    // ConversationProcessingStatus carries [JsonStringEnumConverter] — so no converter is needed
+    // here. Removing the attribute would silently reintroduce the drop-on-read bug.
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -274,6 +280,79 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
     }
 
     /// <inheritdoc/>
+    public async Task<(IReadOnlyList<ConversationDiagnosticRow> Items, long Total)> GetDiagnosticsPageAsync(
+        ConversationProcessingStatus? status, int page, int pageSize,
+        string? titleContains = null, string? userId = null, CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        if (page < 1) page = 1;
+        if (pageSize is < 1 or > 200) pageSize = 20;
+
+        // Build the filter once (with positional params in add-order) so the count and page agree.
+        var filter = new StringBuilder("WHERE user_id IS NOT DISTINCT FROM $1");
+        var args = new List<object> { (object?)userId ?? DBNull.Value };
+
+        if (status is { } s)
+        {
+            args.Add(s.ToString());
+            filter.Append($" AND processing_status = ${args.Count}");
+        }
+        if (!string.IsNullOrWhiteSpace(titleContains))
+        {
+            args.Add($"%{titleContains.Trim()}%");
+            filter.Append($" AND data->>'title' ILIKE ${args.Count}");
+        }
+
+        await using var countCmd = dataSource.CreateCommand($"SELECT COUNT(*) FROM {TableName} {filter}");
+        foreach (var a in args) countCmd.Parameters.AddWithValue(a);
+        var total = (long)(await countCmd.ExecuteScalarAsync(ct))!;
+
+        // Project from promoted columns + JSONB field access only — never a full document
+        // deserialize — so a document that fails to deserialize still shows up here.
+        await using var cmd = dataSource.CreateCommand(
+            $"""
+            SELECT conversation_id,
+                   data->>'title',
+                   processing_status,
+                   COALESCE(jsonb_typeof(data->'summary') = 'string', false),
+                   update_time,
+                   data->>'importTimestamp'
+            FROM {TableName}
+            {filter}
+            ORDER BY update_time DESC NULLS LAST
+            LIMIT ${args.Count + 1} OFFSET ${args.Count + 2}
+            """);
+        foreach (var a in args) cmd.Parameters.AddWithValue(a);
+        cmd.Parameters.AddWithValue(pageSize);
+        cmd.Parameters.AddWithValue((page - 1) * pageSize);
+
+        var items = new List<ConversationDiagnosticRow>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var statusText = reader.GetString(2);
+            var parsedStatus = Enum.TryParse<ConversationProcessingStatus>(statusText, out var st)
+                ? st
+                : ConversationProcessingStatus.Imported;
+
+            DateTimeOffset? importTs = null;
+            if (!reader.IsDBNull(5) && DateTimeOffset.TryParse(reader.GetString(5), out var ts))
+                importTs = ts;
+
+            items.Add(new ConversationDiagnosticRow(
+                reader.GetString(0),
+                reader.IsDBNull(1) ? null : reader.GetString(1),
+                parsedStatus,
+                !reader.IsDBNull(3) && reader.GetBoolean(3),
+                reader.IsDBNull(4) ? null : reader.GetDouble(4),
+                importTs));
+        }
+
+        return (items, total);
+    }
+
+    /// <inheritdoc/>
     public async Task<List<ConversationProject>> GetProjectsAsync(string? userId = null, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
@@ -395,7 +474,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
         return (await ReadConversationsAsync(cmd, excludeEmbedding: true, ct), total);
     }
 
-    private static async Task<List<StoredConversation>> ReadConversationsAsync(
+    private async Task<List<StoredConversation>> ReadConversationsAsync(
         NpgsqlCommand cmd, bool excludeEmbedding, CancellationToken ct)
     {
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -403,17 +482,61 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
 
         while (await reader.ReadAsync(ct))
         {
+            // Hoisted out of the try so the catch blocks can recover the conversation id from the
+            // raw document for diagnostics. Stored data is always valid JSON (Postgres validates
+            // the ::jsonb cast on insert), so a failure here is model drift — the document no
+            // longer matches StoredConversation — not a corrupt row.
             var json = reader.GetString(0);
-            var conv = JsonSerializer.Deserialize<StoredConversation>(json, SerializerOptions);
-            if (conv is null) continue;
+            try
+            {
+                var conv = JsonSerializer.Deserialize<StoredConversation>(json, SerializerOptions);
+                if (conv is null) continue;
 
-            if (excludeEmbedding)
-                conv.Embedding = null;
+                if (excludeEmbedding)
+                    conv.Embedding = null;
 
-            results.Add(conv);
+                results.Add(conv);
+            }
+            catch (JsonException ex)
+            {
+                // ex.Path pinpoints the exact JSON member that failed (e.g.
+                // "$.linearisedMessages[3].weight") — the fastest route to the root cause.
+                logger.LogError(ex, "Skipping conversation {ConversationId}: stored document could not be " +
+                    "deserialized into StoredConversation at JSON path {JsonPath}. {Message}",
+                    TryReadConversationId(json), ex.Path ?? "(unknown)", ex.Message);
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Unexpected error reading conversation {ConversationId}. {Message}",
+                    TryReadConversationId(json), e.Message);
+            }
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Best-effort extraction of the conversation id from a raw JSONB document, used for
+    /// diagnostics when the document cannot be deserialized into <see cref="StoredConversation"/>.
+    /// Returns <c>"(unknown)"</c> if the id cannot be read.
+    /// </summary>
+    private static string TryReadConversationId(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("conversationId", out var id) &&
+                id.ValueKind == JsonValueKind.String)
+            {
+                return id.GetString() ?? "(unknown)";
+            }
+        }
+        catch
+        {
+            // Fall through — diagnostics only; never throw from the read path.
+        }
+
+        return "(unknown)";
     }
 
     private async Task EnsureSchemaAsync(CancellationToken ct)
