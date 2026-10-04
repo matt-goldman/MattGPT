@@ -44,20 +44,30 @@ public class LlmOptions
     public string? EmbeddingApiKey { get; set; }
     
     /// <summary>
-    /// Specifies the provider to use for reranking search results. Will default to <see cref="Provider"/>
-    /// if not specified and rereanking is enabled.
+    /// The API format of the reranking service. Supported: <c>Cohere</c> (the Cohere-style
+    /// <c>/rerank</c> request, also accepted by Jina, vLLM, llama.cpp server, Infinity, LiteLLM and
+    /// Cohere on Azure AI Foundry). Defaults to <c>Cohere</c> when not set. None of the chat providers
+    /// offers reranking, so this does not fall back to <see cref="Provider"/>.
     /// </summary>
     public string? RerankingProvider { get; set; }
-    
+
     /// <summary>
-    /// Specifies the API key to use when calling a reranking model. If not specified, will use the value
-    /// provided for <see cref="ApiKey"/> instead; or none if both are null.
+    /// The full URL of the reranking endpoint, including its path (e.g. <c>https://api.cohere.com/v2/rerank</c>,
+    /// <c>https://api.jina.ai/v1/rerank</c>, or <c>http://localhost:8000/v1/rerank</c> for a local vLLM).
+    /// Defaults to Cohere's hosted endpoint when not set.
+    /// </summary>
+    public string? RerankingEndpoint { get; set; }
+
+    /// <summary>
+    /// The API key sent (as a bearer token) to the reranking endpoint. Not sent when unset, which suits
+    /// local servers. Deliberately does not fall back to <see cref="ApiKey"/>: the reranking service is
+    /// usually a different vendor, and the chat provider's key must not be sent to it.
     /// </summary>
     public string? RerankingApiKey { get; set; }
-    
+
     /// <summary>
-    /// The reranking model to use for ranking search results. Must not be null when <see cref="RagOptions"/>
-    /// specifies True for UseReranking.
+    /// The reranking model to use for ranking search results. Required when
+    /// <see cref="RagOptions.UseReranking"/> is true.
     /// </summary>
     public string? RerankingModelId { get; set; }
 

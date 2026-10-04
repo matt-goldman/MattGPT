@@ -73,6 +73,36 @@ Some providers (Anthropic, Gemini) don't have native embedding APIs or have limi
 }
 ```
 
+### Reranking
+
+When `RAG:UseReranking` is `true`, retrieval sends a larger set of vector-search candidates to a reranking (cross-encoder) model, which picks and orders the final results. None of the chat providers offers reranking, so it is configured separately. Any service that accepts the Cohere-style rerank request works: Cohere, Jina, vLLM, llama.cpp server, Infinity, LiteLLM, and Cohere on Azure AI Foundry. Ollama has no rerank API.
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `RerankingModelId` | Reranking model name (e.g. `rerank-v3.5` for Cohere, `BAAI/bge-reranker-v2-m3` for a self-hosted model). **Required** when reranking is on | — |
+| `RerankingEndpoint` | Full URL of the rerank endpoint, **including the path** (e.g. `https://api.jina.ai/v1/rerank`, `http://localhost:8000/v1/rerank`) | `https://api.cohere.com/v2/rerank` |
+| `RerankingApiKey` | Sent as a bearer token. Omit for local servers. Does **not** fall back to `ApiKey`, so your chat provider's key is never sent to the rerank service | — |
+| `RerankingProvider` | API format. Only `Cohere` (Cohere-compatible) is supported | `Cohere` |
+
+**Example: OpenAI chat + Cohere reranking**
+```json
+{
+  "LLM": {
+    "Provider": "OpenAI",
+    "ModelId": "gpt-4o",
+    "ApiKey": "sk-YOUR_OPENAI_KEY",
+    "EmbeddingModelId": "text-embedding-3-small",
+    "RerankingModelId": "rerank-v3.5",
+    "RerankingApiKey": "YOUR_COHERE_KEY"
+  },
+  "RAG": {
+    "UseReranking": true
+  }
+}
+```
+
+If the rerank service fails at query time, retrieval logs a warning and falls back to plain vector search, so chat keeps working.
+
 ## Document DB Settings
 
 The `DocumentDb` section controls where conversations and chat sessions are stored.
@@ -148,6 +178,10 @@ The `RAG` section controls retrieval behaviour.
 | `AutoMinScore` | Minimum similarity for `Auto` mode's light pass | `0.65` |
 | `ToolMaxResults` | Maximum results per `search_memories` tool invocation | `5` |
 | `DiagnosticMode` | When `true`, the LLM outputs structured JSON with reasoning (logged at Information level). Adds latency due to server-side buffering. | `false` |
+| `UseReranking` | Rerank vector-search candidates with a reranking model (see [Reranking](#reranking)). When on, `MinScore`/`AutoMinScore` are ignored and long-context embedding is enabled. Requires `LLM:RerankingModelId` | `false` |
+| `RerankCandidateCount` | Vector-search candidates sent to the reranker; it returns `TopK`/`AutoTopK`/the tool's limit from these | `30` |
+| `RerankDocumentChars` | Maximum characters of each candidate conversation sent to the reranker. Reranker context windows are small, and all candidates go in one request | `4000` |
+| `MaxEmbeddingChars` | Maximum characters of each conversation sent to the embedding model | `32000` with reranking, `8000` without |
 
 ### Tuning Tips
 
@@ -155,6 +189,8 @@ The `RAG` section controls retrieval behaviour.
 - Lower `MinScore`/`AutoMinScore` to include less similar results (may add noise).
 - Raise thresholds to require higher relevance.
 - For `Auto` mode, the light pass provides baseline context while the tool enables deeper retrieval on demand.
+- With reranking on, raise `RerankCandidateCount` to give the reranker more to choose from (slower, larger requests), or lower `RerankDocumentChars` if the rerank service rejects long inputs.
+- Changing `UseReranking` changes the default `MaxEmbeddingChars`, so re-run embeddings afterwards for consistent vectors.
 
 ## Authentication Settings
 

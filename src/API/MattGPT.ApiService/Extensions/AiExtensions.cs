@@ -1,6 +1,8 @@
 using MattGPT.AnthropicModule;
+using MattGPT.ApiService.Services;
 using MattGPT.AzureModule;
 using MattGPT.Contracts;
+using MattGPT.Contracts.Services;
 using MattGPT.GeminiModule;
 using MattGPT.OllamaModule;
 using MattGPT.OpenAIModule;
@@ -27,6 +29,10 @@ public static class AiExtensions
 
             var ragOptions = builder.Configuration.GetSection(RagOptions.SectionName).Get<RagOptions>() ?? new RagOptions();
             ValidateRerankingOptions(ragOptions, llmOptions);
+
+            // Reranking runs inside MemoryRetriever, which uses the reranker only when one is registered.
+            if (ragOptions.UseReranking)
+                builder.Services.AddHttpClient<IReranker, CohereCompatibleReranker>();
 
             Console.WriteLine($"Starting API with LLM provider {llmOptions.Provider} and embeddings provider {llmOptions.EmbeddingProvider}");
 
@@ -87,9 +93,11 @@ public static class AiExtensions
     }
 
     /// <summary>
-    /// Validates the reranking-related settings across <see cref="RagOptions"/> and <see cref="LlmOptions"/>:
-    /// a reranking model must be configured when <see cref="RagOptions.UseReranking"/> is enabled, and
-    /// <see cref="RagOptions.MaxEmbeddingChars"/>, when set, must be positive.
+    /// Validates the reranking-related settings across <see cref="RagOptions"/> and <see cref="LlmOptions"/>.
+    /// When <see cref="RagOptions.UseReranking"/> is enabled: a reranking model is required, the provider
+    /// (if set) must be a supported format, the endpoint (if set) must be an absolute http(s) URL, and the
+    /// candidate count and document length must be positive. <see cref="RagOptions.MaxEmbeddingChars"/>,
+    /// when set, must be positive regardless.
     /// </summary>
     /// <exception cref="InvalidOperationException">One or more settings are invalid.</exception>
     internal static void ValidateRerankingOptions(RagOptions ragOptions, LlmOptions llmOptions)
@@ -101,6 +109,31 @@ public static class AiExtensions
                 $"{LlmOptions.SectionName}:{nameof(LlmOptions.RerankingModelId)} is required when " +
                 $"{RagOptions.SectionName}:{nameof(RagOptions.UseReranking)} is true. Configure a reranking model, " +
                 $"or set {RagOptions.SectionName}:{nameof(RagOptions.UseReranking)} to false.");
+
+        if (ragOptions.UseReranking)
+        {
+            if (llmOptions.RerankingProvider is { } provider
+                && !provider.Equals(CohereCompatibleReranker.ProviderName, StringComparison.OrdinalIgnoreCase))
+                errors.Add(
+                    $"Unsupported {LlmOptions.SectionName}:{nameof(LlmOptions.RerankingProvider)} '{provider}'. " +
+                    $"Supported values: {CohereCompatibleReranker.ProviderName} (any Cohere-compatible rerank API).");
+
+            if (llmOptions.RerankingEndpoint is { } endpoint
+                && !(Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"))
+                errors.Add(
+                    $"{LlmOptions.SectionName}:{nameof(LlmOptions.RerankingEndpoint)} must be an absolute http(s) URL " +
+                    $"including the rerank path (e.g. {CohereCompatibleReranker.DefaultEndpoint}); was '{endpoint}'.");
+
+            if (ragOptions.RerankCandidateCount <= 0)
+                errors.Add(
+                    $"{RagOptions.SectionName}:{nameof(RagOptions.RerankCandidateCount)} must be greater than 0 " +
+                    $"(was {ragOptions.RerankCandidateCount}).");
+
+            if (ragOptions.RerankDocumentChars <= 0)
+                errors.Add(
+                    $"{RagOptions.SectionName}:{nameof(RagOptions.RerankDocumentChars)} must be greater than 0 " +
+                    $"(was {ragOptions.RerankDocumentChars}).");
+        }
 
         if (ragOptions.MaxEmbeddingChars is <= 0)
             errors.Add(

@@ -66,11 +66,28 @@ public class RagOptions
     public bool DiagnosticMode { get; set; } = false;
 
     /// <summary>
-    /// When true, uses a reranking strategy, which uses longer context when embedding, returns a longer
-    /// list of results, and uses a reranking model to select the top 10. Must have a model configured
-    /// in <see cref="LlmOptions"/>
+    /// When true, retrieval fetches a larger candidate set from vector search (<see cref="RerankCandidateCount"/>)
+    /// and uses a reranking model to choose and order the results; similarity thresholds (<see cref="MinScore"/>,
+    /// <see cref="AutoMinScore"/>) are then ignored. Also enables long-context embedding (see
+    /// <see cref="MaxEmbeddingChars"/>). Requires <see cref="LlmOptions.RerankingModelId"/>. If the reranking
+    /// service fails at query time, retrieval falls back to plain vector search.
     /// </summary>
     public bool UseReranking { get; set; }
+
+    /// <summary>
+    /// Number of vector-search candidates passed to the reranker when <see cref="UseReranking"/> is true.
+    /// The reranker then returns the requested number of results (e.g. <see cref="TopK"/>) from these.
+    /// Default is 30.
+    /// </summary>
+    public int RerankCandidateCount { get; set; } = 30;
+
+    /// <summary>
+    /// Maximum characters of each candidate conversation (title, summary and messages) sent to the
+    /// reranker. Reranking models have small context windows (typically 512–4k tokens for query plus
+    /// document) and every candidate is sent in one request, so this is kept well below the embedding
+    /// length. Default is 4,000 (~1k tokens).
+    /// </summary>
+    public int RerankDocumentChars { get; set; } = 4_000;
 
     /// <summary>
     /// Maximum characters of conversation content (title, summary and messages) sent to the embedding

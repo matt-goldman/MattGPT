@@ -13,6 +13,7 @@ Significant architectural decisions made during development of MattGPT.
 | [ADR-007](007-cloud-provider-selection.md) | Cloud provider selection |
 | [ADR-008](008-optional-authentication-strategy.md) | Optional authentication strategy |
 | [ADR-009](009-conversation-search-approach.md) | Conversation search approach — semantic vector search |
+| [ADR-012](012-reranking-via-cohere-compatible-api.md) | Reranking via a Cohere-compatible rerank API |
 
 To add a new ADR, copy [000-template.md](000-template.md) and fill in all sections.
 

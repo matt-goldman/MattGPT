@@ -1,6 +1,6 @@
 # Experiment with Graph RAG and reranking models
 
-**Status:** TODO
+**Status:** In Progress
 
 ## Summary
 
