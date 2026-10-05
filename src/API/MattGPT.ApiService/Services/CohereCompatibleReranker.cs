@@ -40,10 +40,12 @@ public class CohereCompatibleReranker(
         if (documents.Count == 0 || topN <= 0)
             return [];
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint)
-        {
-            Content = JsonContent.Create(new RerankRequest(_modelId, query, documents, Math.Min(topN, documents.Count))),
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint);
+        request.Content = JsonContent.Create(new RerankRequest(
+            _modelId,
+            query,
+            documents,
+            Math.Min(topN, documents.Count)));
 
         if (!string.IsNullOrWhiteSpace(_apiKey))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
@@ -91,7 +93,8 @@ public class CohereCompatibleReranker(
         [property: JsonPropertyName("model")] string Model,
         [property: JsonPropertyName("query")] string Query,
         [property: JsonPropertyName("documents")] IReadOnlyList<string> Documents,
-        [property: JsonPropertyName("top_n")] int TopN);
+        [property: JsonPropertyName("top_n")] int TopN,
+        [property: JsonPropertyName("max_doc_length")] int? MaxLength = 4000);
 
     private sealed record RerankResponse(
         [property: JsonPropertyName("results")] List<RerankResponseItem>? Results);

@@ -1,3 +1,4 @@
+using System.ClientModel;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -132,8 +133,9 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
 
         return new ChatOptions
         {
-            Tools = tools,
-            ToolMode = ChatToolMode.Auto,
+            Tools       = tools,
+            ToolMode    = ChatToolMode.Auto,
+            Reasoning   = new ReasoningOptions { Effort = ReasoningEffort.Low }
         };
     }
 
@@ -320,6 +322,24 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
             writer.TryWrite(new RagStreamChunk(null, sources));
 
             writer.Complete();
+        }
+        catch (ClientResultException ex)
+        {
+            var rawResponse = ex.GetRawResponse();
+
+            var rawResponseText = "No response content was provided";
+            
+            if (rawResponse?.ContentStream is not null)
+            {
+                using var reader = new StreamReader(rawResponse.ContentStream, Encoding.UTF8);
+                rawResponseText = await reader.ReadToEndAsync(ct);
+            }
+            
+            logger.LogError(ex, "Error in RagStreamAsync. Message: {Message}; inner message: {innerMessage}; raw response: {rawResponse}", ex.Message, ex.InnerException?.Message, rawResponseText);
+        }
+        catch (HttpRequestException e)
+        {
+            logger.LogError(e, "RAG ChatStreamAsync failed. API returned: {StatusCode}, {message}", e.StatusCode, e.Message);
         }
         catch (Exception ex)
         {

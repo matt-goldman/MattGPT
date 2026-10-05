@@ -49,10 +49,27 @@ public static class Module
             var llmOptions = builder.Configuration.GetSection(LlmOptions.SectionName).Get<LlmOptions>() ?? new LlmOptions();
             var embeddingModelId = llmOptions.EmbeddingModelId ?? llmOptions.ModelId;
             var embApiKey = llmOptions.EmbeddingApiKey ?? llmOptions.ApiKey;
+            
+            OpenAIClient? embOpenAi;
 
-            var embOpenAi = new OpenAIClient(
-                new ApiKeyCredential(embApiKey
-                                     ?? throw new InvalidOperationException("LLM:EmbeddingApiKey (or LLM:ApiKey) is required for OpenAI embedding provider.")));
+            if (!string.IsNullOrWhiteSpace(llmOptions.Endpoint.Trim()))
+            {
+                var uri = llmOptions.Endpoint.EndsWith("/v1") ? llmOptions.Endpoint : $"{llmOptions.Endpoint}/v1";
+                embOpenAi = new OpenAIClient(
+                    new ApiKeyCredential(embApiKey
+                                         ?? throw new InvalidOperationException(
+                                             "LLM:EmbeddingApiKey (or LLM:ApiKey) is required for OpenAI embedding provider. Use a dummy value for a local provider.")), options: new OpenAIClientOptions
+                    {
+                        Endpoint = new Uri(uri)
+                    });
+            }
+            else
+            {
+                embOpenAi = new OpenAIClient(
+                    new ApiKeyCredential(embApiKey
+                                         ?? throw new InvalidOperationException(
+                                             "LLM:EmbeddingApiKey (or LLM:ApiKey) is required for OpenAI embedding provider. Use a dummy value for a local provider.")));
+            }
 
             builder.Services.AddEmbeddingGenerator(
                 embOpenAi.GetEmbeddingClient(embeddingModelId).AsIEmbeddingGenerator());

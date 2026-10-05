@@ -2,6 +2,7 @@
 @page "/chat/conversation/{ConversationId}"
 @layout MattGPT.Web.Components.Layout.ChatLayout
 @rendermode InteractiveServer
+@using LumexUI.Shared.Icons
 @implements IAsyncDisposable
 @inject IChatService ChatService
 @inject IJSRuntime JS
@@ -199,8 +200,9 @@
                               style="min-height: 40px; max-height: 120px;"></textarea>
                     <LumexButton Color="@ThemeColor.Primary"
                                  IsDisabled="@(string.IsNullOrWhiteSpace(_inputText) || _isThinking)"
+                                 IconOnly="true"
                                  OnClick="SendMessage">
-                        Send
+                        <SendAltIcon />
                     </LumexButton>
                 </div>
             </LumexCard>
