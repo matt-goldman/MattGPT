@@ -27,12 +27,14 @@ public record RagChatResponse(string Answer, IReadOnlyList<ChatSource> Sources);
 /// <param name="ToolName">Set on tool event chunks; indicates which tool fired the event.</param>
 /// <param name="ToolStart">True when a tool invocation has just started.</param>
 /// <param name="ToolEnd">True when a tool invocation has just completed.</param>
+/// <param name="Error">Set when no answer could be produced; a user-facing description of why.</param>
 public record RagStreamChunk(
     string? Text,
     IReadOnlyList<ChatSource>? Sources = null,
     string? ToolName = null,
     bool ToolStart = false,
-    bool ToolEnd = false);
+    bool ToolEnd = false,
+    string? Error = null);
 
 /// <summary>
 /// Implements the retrieval-augmented generation (RAG) pipeline.
@@ -150,7 +152,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         ResetToolSources();
 
         // 1. Automatic retrieval (full, light, or none depending on mode).
-        var (relevant, conversationLookup) = await AutoRetrieveAsync(query, ct);
+        var (relevant, conversationLookup, autoRetrievalRan) = await AutoRetrieveAsync(query, session, ct);
 
         // 2. Fetch user profile and system prompt for context.
         var userProfile = userProfileRepository is not null
@@ -162,7 +164,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
 
         // 3. Build the augmented prompt, adding the diagnostic instruction if enabled.
         var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt,
-            autoRetrievalRan: EffectiveTopK > 0);
+            autoRetrievalRan: autoRetrievalRan);
         if (_options.DiagnosticMode)
             AppendDiagnosticInstruction(messages);
 
@@ -214,7 +216,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         ResetToolSources();
 
         // 1. Automatic retrieval (full, light, or none depending on mode).
-        var (relevant, conversationLookup) = await AutoRetrieveAsync(query, ct);
+        var (relevant, conversationLookup, autoRetrievalRan) = await AutoRetrieveAsync(query, session, ct);
 
         // 2. Fetch user profile and system prompt for context.
         var userProfile = userProfileRepository is not null
@@ -226,7 +228,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
 
         // 3. Build the augmented prompt, adding the diagnostic instruction if enabled.
         var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt,
-            autoRetrievalRan: EffectiveTopK > 0);
+            autoRetrievalRan: autoRetrievalRan);
         if (_options.DiagnosticMode)
             AppendDiagnosticInstruction(messages);
 
@@ -293,6 +295,9 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
     {
         try
         {
+            var stats = new StreamStats();
+            bool hasAnswer;
+
             if (_options.DiagnosticMode)
             {
                 // Buffer the full response so we can parse and log the reasoning.
@@ -300,21 +305,43 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
                 var rawBuffer = new StringBuilder();
                 await foreach (var update in chatClient.GetStreamingResponseAsync(messages, chatOptions, ct))
                 {
+                    stats.Observe(update);
                     if (!string.IsNullOrEmpty(update.Text))
                         rawBuffer.Append(update.Text);
                 }
 
-                var responseText = ExtractAndLogDiagnosticResponse(rawBuffer.ToString(), query);
-                if (!string.IsNullOrEmpty(responseText))
-                    writer.TryWrite(new RagStreamChunk(responseText));
+                var answer = ExtractAndLogDiagnosticResponse(rawBuffer.ToString(), query);
+                hasAnswer = !string.IsNullOrWhiteSpace(answer);
+                if (hasAnswer)
+                    writer.TryWrite(new RagStreamChunk(answer));
             }
             else
             {
                 await foreach (var update in chatClient.GetStreamingResponseAsync(messages, chatOptions, ct))
                 {
+                    stats.Observe(update);
                     if (!string.IsNullOrEmpty(update.Text))
                         writer.TryWrite(new RagStreamChunk(update.Text));
                 }
+
+                hasAnswer = stats.TextChars > 0;
+            }
+
+            if (!hasAnswer)
+            {
+                // The stream ended normally but with no answer text. Most often a reasoning model
+                // spent its output on reasoning (which some OpenAI-compatible servers, e.g. llama.cpp,
+                // send as reasoning_content, which the OpenAI SDK may not surface), or ran out of tokens.
+                logger.LogWarning(
+                    "LLM stream ended without answer text: {Updates} updates, finish reason {FinishReason}, " +
+                    "{ReasoningChars} reasoning chars, content types [{ContentTypes}]. If this is a reasoning model, " +
+                    "check its token budget and that the server returns the answer as content.",
+                    stats.Updates, stats.FinishReason?.Value ?? "(none)", stats.ReasoningChars,
+                    string.Join(", ", stats.ContentTypes));
+
+                writer.TryWrite(new RagStreamChunk(null, Error: "The model returned an empty response."));
+                writer.Complete();
+                return;
             }
 
             // Final chunk carries the merged sources.
@@ -328,47 +355,119 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
             var rawResponse = ex.GetRawResponse();
 
             var rawResponseText = "No response content was provided";
-            
+
             if (rawResponse?.ContentStream is not null)
             {
                 using var reader = new StreamReader(rawResponse.ContentStream, Encoding.UTF8);
                 rawResponseText = await reader.ReadToEndAsync(ct);
             }
-            
+
             logger.LogError(ex, "Error in RagStreamAsync. Message: {Message}; inner message: {innerMessage}; raw response: {rawResponse}", ex.Message, ex.InnerException?.Message, rawResponseText);
+            FailStream(writer, $"The language model returned an error (HTTP {ex.Status}).");
         }
         catch (HttpRequestException e)
         {
             logger.LogError(e, "RAG ChatStreamAsync failed. API returned: {StatusCode}, {message}", e.StatusCode, e.Message);
+            FailStream(writer, e.StatusCode is { } status
+                ? $"The language model returned an error (HTTP {(int)status})."
+                : "Could not reach the language model.");
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The caller went away; nothing to report.
+            writer.TryComplete();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error in LLM streaming producer.");
-            writer.TryComplete(ex);
+            FailStream(writer, "Something went wrong generating a response.");
+        }
+    }
+
+    /// <summary>
+    /// Ends the stream with a user-facing error chunk. The stream must always be completed, or
+    /// the consumer in <see cref="ChatStreamAsync"/> waits forever.
+    /// </summary>
+    private static void FailStream(ChannelWriter<RagStreamChunk> writer, string error)
+    {
+        writer.TryWrite(new RagStreamChunk(null, Error: error));
+        writer.TryComplete();
+    }
+
+    /// <summary>What a streamed LLM response contained, for diagnosing responses with no answer.</summary>
+    private sealed class StreamStats
+    {
+        public int Updates { get; private set; }
+        public int TextChars { get; private set; }
+        public int ReasoningChars { get; private set; }
+        public ChatFinishReason? FinishReason { get; private set; }
+        public SortedSet<string> ContentTypes { get; } = [];
+
+        public void Observe(ChatResponseUpdate update)
+        {
+            Updates++;
+            TextChars += update.Text?.Length ?? 0;
+            FinishReason = update.FinishReason ?? FinishReason;
+
+            foreach (var content in update.Contents)
+            {
+                ContentTypes.Add(content.GetType().Name);
+                if (content is TextReasoningContent reasoning)
+                    ReasoningChars += reasoning.Text?.Length ?? 0;
+            }
         }
     }
 
     /// <summary>
     /// Performs the automatic retrieval pass via <see cref="MemoryRetriever"/>.
     /// In <see cref="RagMode.ToolsOnly"/> mode, skips retrieval entirely.
-    /// In <see cref="RagMode.Auto"/> mode, uses lighter parameters (fewer results, higher threshold).
+    /// In <see cref="RagMode.Auto"/> mode, uses lighter parameters (fewer results, higher threshold), and
+    /// only runs for the first user message of a session when the search tools are available
+    /// (see <see cref="ShouldAutoRetrieve"/>).
     /// </summary>
-    private async Task<(IReadOnlyList<VectorSearchResult> Relevant, IReadOnlyDictionary<string, StoredConversation> ConversationLookup)> AutoRetrieveAsync(
-        string query, CancellationToken ct)
+    /// <returns>The hits, their conversations, and whether retrieval ran at all.</returns>
+    private async Task<(IReadOnlyList<VectorSearchResult> Relevant, IReadOnlyDictionary<string, StoredConversation> ConversationLookup, bool Ran)> AutoRetrieveAsync(
+        string query, ChatSession? session, CancellationToken ct)
     {
-        var topK = EffectiveTopK;
+        if (!ShouldAutoRetrieve(session))
+            return ([], new Dictionary<string, StoredConversation>(), false);
 
-        if (topK <= 0)
-        {
-            logger.LogDebug("Mode={Mode}: skipping automatic retrieval.", _options.Mode);
-            return ([], new Dictionary<string, StoredConversation>());
-        }
+        var topK = EffectiveTopK;
 
         logger.LogDebug("RAG auto-retrieval (Mode={Mode}): TopK={TopK}, MinScore={MinScore:F2}.",
             _options.Mode, topK, EffectiveMinScore);
 
         var (relevant, conversationLookup) = await retriever.RetrieveAsync(query, topK, EffectiveMinScore, ct);
-        return (relevant, conversationLookup);
+        return (relevant, conversationLookup, true);
+    }
+
+    /// <summary>
+    /// Whether this turn gets automatic retrieval. Never in <see cref="RagMode.ToolsOnly"/>; always in
+    /// <see cref="RagMode.WithPrompt"/> (the model has no other way to reach memories). In
+    /// <see cref="RagMode.Auto"/>, only on the first user message of a session: later turns can answer
+    /// from the conversation so far and call the search tools when they need more. If no search tool
+    /// is registered, Auto falls back to retrieving on every turn.
+    /// </summary>
+    internal bool ShouldAutoRetrieve(ChatSession? session)
+    {
+        if (EffectiveTopK <= 0)
+        {
+            logger.LogDebug("Mode={Mode}: skipping automatic retrieval.", _options.Mode);
+            return false;
+        }
+
+        if (_options.Mode != RagMode.Auto || BuildToolChatOptions() is null)
+            return true;
+
+        // The current user message is already in the session when the turn runs.
+        var userMessages = session?.Messages.Count(m => m.Role == "user") ?? 0;
+        if (userMessages <= 1)
+            return true;
+
+        logger.LogDebug(
+            "Mode=Auto: skipping automatic retrieval for follow-up message in session {SessionId}; search tools remain available.",
+            session!.SessionId);
+        return false;
     }
 
     /// <summary>

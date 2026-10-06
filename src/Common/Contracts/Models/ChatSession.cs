@@ -4,6 +4,20 @@ namespace MattGPT.Contracts.Models;
 public enum ChatSessionStatus { Active, Completed }
 
 /// <summary>
+/// A past conversation an assistant message drew on, stored with the message so it can be shown
+/// again when the session is reopened.
+/// </summary>
+public class ChatSessionMessageSource
+{
+    public string ConversationId { get; set; } = string.Empty;
+    public string? Title { get; set; }
+    public string? Summary { get; set; }
+
+    /// <summary>Relevance score at the time of the response (cosine similarity, or reranker relevance when reranking).</summary>
+    public float Score { get; set; }
+}
+
+/// <summary>
 /// A single message within a chat session, stored in MongoDB.
 /// </summary>
 public class ChatSessionMessage
@@ -11,6 +25,12 @@ public class ChatSessionMessage
     public string Role { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// Past conversations an assistant message drew on. <c>null</c> for user messages, assistant
+    /// messages with no sources, and messages stored before sources were persisted.
+    /// </summary>
+    public List<ChatSessionMessageSource>? Sources { get; set; }
 }
 
 /// <summary>

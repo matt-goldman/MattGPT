@@ -347,7 +347,7 @@
 
             foreach (var msg in session.Messages)
             {
-                _messages.Add(new ChatMessage(msg.Role, msg.Content, null, msg.Timestamp));
+                _messages.Add(new ChatMessage(msg.Role, msg.Content, msg.Sources, msg.Timestamp));
             }
         }
         catch (Exception ex)
@@ -480,6 +480,7 @@
         try
         {
             List<ChatSource>? sources = null;
+            string? streamError = null;
             var responseTimestamp = DateTimeOffset.UtcNow;
 
             await foreach (var evt in ChatService.StreamChatAsync(text, _sessionId, ct))
@@ -522,12 +523,21 @@
                         sources = sourcesEvt.Sources.ToList();
                         break;
 
+                    case ErrorChatEvent error:
+                        streamError = error.Message;
+                        break;
+
                     case DoneChatEvent:
                         break;
                 }
             }
 
-            _messages.Add(new ChatMessage("assistant", _streamingContent.ToString(), sources, responseTimestamp));
+            // Keep any partial answer, but never add an empty assistant bubble.
+            if (_streamingContent.Length > 0)
+                _messages.Add(new ChatMessage("assistant", _streamingContent.ToString(), sources, responseTimestamp));
+
+            if (streamError is not null)
+                _errorMessage = streamError;
 
             // Refresh sidebar to show the new/updated session.
             if (_sidebar is not null)

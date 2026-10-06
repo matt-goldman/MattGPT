@@ -164,7 +164,7 @@ The `RAG` section controls retrieval behaviour.
 | Mode | Behaviour |
 |------|-----------|
 | `WithPrompt` | Full automatic RAG injection on every message. No tools registered. Best for models that don't support tool calling (e.g. `llama3.2` 3B). |
-| `Auto` | Light auto-RAG (uses `AutoTopK`/`AutoMinScore`) plus a `search_memories` tool the LLM can call for deeper retrieval. Best for tool-capable models (e.g. `llama3.1` 8B+, GPT-4o). |
+| `Auto` | Light auto-RAG (uses `AutoTopK`/`AutoMinScore`) on the **first message of a chat only**, plus a `search_memories` tool the LLM can call for deeper retrieval. Follow-up messages rely on the conversation so far and the tool. Best for tool-capable models (e.g. `llama3.1` 8B+, GPT-4o). |
 | `ToolsOnly` | No automatic RAG injection. The LLM must explicitly call the `search_memories` tool. Best for high-capability models where you want minimal context waste. |
 
 ### Settings

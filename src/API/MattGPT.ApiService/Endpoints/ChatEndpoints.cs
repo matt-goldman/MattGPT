@@ -18,7 +18,8 @@ public static class ChatEndpoints
 
             var result = await ragService.ChatAsync(request.Message, session, ct);
 
-            await sessionService.AddAssistantMessageAsync(session, result.Answer, ct);
+            if (!string.IsNullOrWhiteSpace(result.Answer))
+                await sessionService.AddAssistantMessageAsync(session, result.Answer, result.Sources, ct);
 
             return Results.Ok(new
             {
@@ -36,7 +37,7 @@ public static class ChatEndpoints
         .WithName("Chat");
 
         // Streaming RAG chat endpoint — returns Server-Sent Events with incremental tokens.
-        app.MapPost("/chat/stream", async (ChatRequest request, RagService ragService, ChatSessionService sessionService, HttpContext httpContext, CancellationToken ct) =>
+        app.MapPost("/chat/stream", async (ChatRequest request, RagService ragService, ChatSessionService sessionService, HttpContext httpContext, ILogger<RagService> logger, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.Message))
             {
@@ -58,50 +59,73 @@ public static class ChatEndpoints
             await httpContext.Response.Body.FlushAsync(ct);
 
             var fullResponse = new System.Text.StringBuilder();
+            IReadOnlyList<ChatSource>? responseSources = null;
 
-            await foreach (var chunk in ragService.ChatStreamAsync(request.Message, session, ct))
+            try
             {
-                if (chunk.ToolStart && chunk.ToolName is not null)
+                await foreach (var chunk in ragService.ChatStreamAsync(request.Message, session, ct))
                 {
-                    // Tool invocation started — emit tool_start event.
-                    var toolStartJson = System.Text.Json.JsonSerializer.Serialize(new { tool = chunk.ToolName });
-                    await httpContext.Response.WriteAsync($"event: tool_start\ndata: {toolStartJson}\n\n", ct);
-                    await httpContext.Response.Body.FlushAsync(ct);
-                }
-                else if (chunk.ToolEnd && chunk.ToolName is not null)
-                {
-                    // Tool invocation completed — emit tool_end event.
-                    var toolEndJson = System.Text.Json.JsonSerializer.Serialize(new { tool = chunk.ToolName });
-                    await httpContext.Response.WriteAsync($"event: tool_end\ndata: {toolEndJson}\n\n", ct);
-                    await httpContext.Response.Body.FlushAsync(ct);
-                }
-                else if (chunk.Text is not null)
-                {
-                    fullResponse.Append(chunk.Text);
-                    // Text token — send as a "token" event.
-                    var escapedText = System.Text.Json.JsonSerializer.Serialize(chunk.Text);
-                    await httpContext.Response.WriteAsync($"event: token\ndata: {escapedText}\n\n", ct);
-                    await httpContext.Response.Body.FlushAsync(ct);
-                }
-                else if (chunk.Sources is not null)
-                {
-                    // Final frame — send sources as a "sources" event.
-                    var sourcesJson = System.Text.Json.JsonSerializer.Serialize(chunk.Sources.Select(s => new
+                    if (chunk.Error is not null)
                     {
-                        conversationId  = s.ConversationId,
-                        title           = s.Title,
-                        summary         = s.Summary,
-                        score           = s.Score,
-                    }));
-                    await httpContext.Response.WriteAsync($"event: sources\ndata: {sourcesJson}\n\n", ct);
-                    await httpContext.Response.Body.FlushAsync(ct);
+                        // No answer could be produced; tell the client instead of ending with an empty reply.
+                        var errorJson = System.Text.Json.JsonSerializer.Serialize(chunk.Error);
+                        await httpContext.Response.WriteAsync($"event: error\ndata: {errorJson}\n\n", ct);
+                        await httpContext.Response.Body.FlushAsync(ct);
+                        continue;
+                    }
+
+                    if (chunk.ToolStart && chunk.ToolName is not null)
+                    {
+                        // Tool invocation started — emit tool_start event.
+                        var toolStartJson = System.Text.Json.JsonSerializer.Serialize(new { tool = chunk.ToolName });
+                        await httpContext.Response.WriteAsync($"event: tool_start\ndata: {toolStartJson}\n\n", ct);
+                        await httpContext.Response.Body.FlushAsync(ct);
+                    }
+                    else if (chunk.ToolEnd && chunk.ToolName is not null)
+                    {
+                        // Tool invocation completed — emit tool_end event.
+                        var toolEndJson = System.Text.Json.JsonSerializer.Serialize(new { tool = chunk.ToolName });
+                        await httpContext.Response.WriteAsync($"event: tool_end\ndata: {toolEndJson}\n\n", ct);
+                        await httpContext.Response.Body.FlushAsync(ct);
+                    }
+                    else if (chunk.Text is not null)
+                    {
+                        fullResponse.Append(chunk.Text);
+                        // Text token — send as a "token" event.
+                        var escapedText = System.Text.Json.JsonSerializer.Serialize(chunk.Text);
+                        await httpContext.Response.WriteAsync($"event: token\ndata: {escapedText}\n\n", ct);
+                        await httpContext.Response.Body.FlushAsync(ct);
+                    }
+                    else if (chunk.Sources is not null)
+                    {
+                        responseSources = chunk.Sources;
+                        // Final frame — send sources as a "sources" event.
+                        var sourcesJson = System.Text.Json.JsonSerializer.Serialize(chunk.Sources.Select(s => new
+                        {
+                            conversationId  = s.ConversationId,
+                            title           = s.Title,
+                            summary         = s.Summary,
+                            score           = s.Score,
+                        }));
+                        await httpContext.Response.WriteAsync($"event: sources\ndata: {sourcesJson}\n\n", ct);
+                        await httpContext.Response.Body.FlushAsync(ct);
+                    }
                 }
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                // Failures before or around the LLM call (e.g. embedding the query). The response has
+                // already started (200 + SSE headers), so report it as an event rather than a status.
+                logger.LogError(ex, "Chat stream failed for session {SessionId}.", session.SessionId);
+                var errorJson = System.Text.Json.JsonSerializer.Serialize("Something went wrong generating a response.");
+                await httpContext.Response.WriteAsync($"event: error\ndata: {errorJson}\n\n", ct);
+                await httpContext.Response.Body.FlushAsync(ct);
             }
 
             // Persist the assistant's full response.
             if (fullResponse.Length > 0)
             {
-                await sessionService.AddAssistantMessageAsync(session, fullResponse.ToString(), ct);
+                await sessionService.AddAssistantMessageAsync(session, fullResponse.ToString(), responseSources, ct);
             }
 
             // Signal end of stream.
@@ -146,6 +170,13 @@ public static class ChatEndpoints
                     role        = m.Role,
                     content     = m.Content,
                     timestamp   = m.Timestamp,
+                    sources     = m.Sources?.Select(s => new
+                    {
+                        conversationId  = s.ConversationId,
+                        title           = s.Title,
+                        summary         = s.Summary,
+                        score           = s.Score,
+                    }),
                 }),
             });
         })

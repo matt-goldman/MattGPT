@@ -168,6 +168,55 @@ public class ChatSessionServiceTests
     }
 
     [Fact]
+    public async Task AddAssistantMessageAsync_WithSources_StoresThemOnTheMessage()
+    {
+        var repo = new FakeChatSessionRepository();
+        var service = CreateService(repo);
+        var session = await service.GetOrCreateAsync(null);
+
+        await service.AddAssistantMessageAsync(session, "Answer.",
+            [new ChatSource("c1", "Title 1", "Summary 1", 0.9f), new ChatSource("c2", null, null, 0.4f)]);
+
+        var stored = (await repo.GetByIdAsync(session.SessionId))!.Messages.Single();
+        Assert.Equal(["c1", "c2"], stored.Sources!.Select(s => s.ConversationId));
+        Assert.Equal("Title 1", stored.Sources![0].Title);
+        Assert.Equal(0.9f, stored.Sources[0].Score);
+    }
+
+    [Fact]
+    public void ChatSessionMessage_Sources_RoundTripJson_AndLegacyMessagesReadAsNull()
+    {
+        // Postgres stores messages as System.Text.Json (camelCase); Mongo maps the same properties.
+        var options = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+        var message = new ChatSessionMessage
+        {
+            Role = "assistant",
+            Content = "Answer.",
+            Sources = [new ChatSessionMessageSource { ConversationId = "c1", Title = "T", Score = 0.7f }],
+        };
+
+        var roundTripped = System.Text.Json.JsonSerializer.Deserialize<ChatSessionMessage>(
+            System.Text.Json.JsonSerializer.Serialize(message, options), options)!;
+        var legacy = System.Text.Json.JsonSerializer.Deserialize<ChatSessionMessage>(
+            """{"role":"assistant","content":"Old answer.","timestamp":"2026-01-01T00:00:00+00:00"}""", options)!;
+
+        Assert.Equal("c1", roundTripped.Sources!.Single().ConversationId);
+        Assert.Equal(0.7f, roundTripped.Sources![0].Score);
+        Assert.Null(legacy.Sources);
+    }
+
+    [Fact]
+    public async Task AddAssistantMessageAsync_WithoutSources_StoresNull()
+    {
+        var service = CreateService();
+        var session = await service.GetOrCreateAsync(null);
+
+        await service.AddAssistantMessageAsync(session, "Answer.", []);
+
+        Assert.Null(session.Messages.Single().Sources);
+    }
+
+    [Fact]
     public async Task AddAssistantMessageAsync_AppendsAssistantMessage()
     {
         var service = CreateService();

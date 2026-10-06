@@ -1,3 +1,4 @@
+using System.Net;
 using MattGPT.ApiService;
 using MattGPT.ApiService.Extensions;
 using MattGPT.ApiService.Services;
@@ -659,6 +660,156 @@ public class RagServiceTests
         Assert.Empty(result.Sources);
     }
 
+    // ── Streaming outcomes ──
+
+    private static RagService CreateStreamingService(
+        Func<IAsyncEnumerable<ChatResponseUpdate>> stream,
+        IReadOnlyList<VectorSearchResult>? searchResults = null,
+        FakeConversationRepository? repository = null)
+        => new(
+            TestRetriever.Create(new FakeSearchVectorStore(searchResults ?? []), repository),
+            new StreamingFakeChatClient(stream),
+            Options.Create(new RagOptions { Mode = RagMode.WithPrompt, TopK = 5, MinScore = 0.5f }),
+            Options.Create(new ChatSessionOptions()),
+            NullLogger<RagService>.Instance);
+
+    private static async IAsyncEnumerable<ChatResponseUpdate> Updates(params ChatResponseUpdate[] updates)
+    {
+        foreach (var update in updates)
+        {
+            await Task.Yield();
+            yield return update;
+        }
+    }
+
+    private static async IAsyncEnumerable<ChatResponseUpdate> Throws(Exception ex)
+    {
+        await Task.Yield();
+        throw ex;
+#pragma warning disable CS0162 // Unreachable: makes this an iterator.
+        yield break;
+#pragma warning restore CS0162
+    }
+
+    private static async Task<List<RagStreamChunk>> CollectAsync(IAsyncEnumerable<RagStreamChunk> stream)
+    {
+        var chunks = new List<RagStreamChunk>();
+        await foreach (var chunk in stream)
+            chunks.Add(chunk);
+        return chunks;
+    }
+
+    [Fact]
+    public async Task ChatStreamAsync_WithText_StreamsTextThenSources_NoError()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", "Title 1")]);
+        var service = CreateStreamingService(
+            () => Updates(new ChatResponseUpdate(ChatRole.Assistant, "Hello "), new ChatResponseUpdate(ChatRole.Assistant, "world")),
+            [new("c1", 0.9f, "Title 1", null)], repo);
+
+        var chunks = await CollectAsync(service.ChatStreamAsync("query")).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal("Hello world", string.Concat(chunks.Select(c => c.Text)));
+        Assert.All(chunks, c => Assert.Null(c.Error));
+        Assert.Equal("c1", Assert.Single(chunks.Last().Sources!).ConversationId);
+    }
+
+    [Fact]
+    public async Task ChatStreamAsync_NoAnswerText_EmitsErrorInsteadOfSources()
+    {
+        // e.g. a reasoning model that spent its whole output on reasoning.
+        var reasoningOnly = new ChatResponseUpdate(ChatRole.Assistant, [new TextReasoningContent("thinking...")]);
+        var service = CreateStreamingService(() => Updates(reasoningOnly), [new("c1", 0.9f, "Title 1", null)]);
+
+        var chunks = await CollectAsync(service.ChatStreamAsync("query")).WaitAsync(TimeSpan.FromSeconds(10));
+
+        var error = Assert.Single(chunks, c => c.Error is not null);
+        Assert.Contains("empty response", error.Error);
+        Assert.DoesNotContain(chunks, c => c.Sources is not null);
+    }
+
+    public static TheoryData<Exception> LlmFailures() =>
+    [
+        new HttpRequestException("boom", null, HttpStatusCode.InternalServerError),
+        new System.ClientModel.ClientResultException("Service request failed. Status: 500"),
+        new InvalidOperationException("unexpected"),
+    ];
+
+    [Theory]
+    [MemberData(nameof(LlmFailures))]
+    public async Task ChatStreamAsync_LlmFails_CompletesWithError(Exception failure)
+    {
+        // Every failure must complete the stream; previously some only logged and the consumer hung.
+        var service = CreateStreamingService(() => Throws(failure));
+
+        var chunks = await CollectAsync(service.ChatStreamAsync("query")).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.NotNull(Assert.Single(chunks, c => c.Error is not null).Error);
+        Assert.DoesNotContain(chunks, c => c.Sources is not null);
+    }
+
+    // ── Auto mode: retrieval only on the first message ──
+
+    private static ChatSession SessionWithUserMessages(int count)
+    {
+        var session = new ChatSession();
+        for (var i = 0; i < count; i++)
+        {
+            session.Messages.Add(new ChatSessionMessage { Role = "user", Content = $"question {i}" });
+            if (i < count - 1)
+                session.Messages.Add(new ChatSessionMessage { Role = "assistant", Content = $"answer {i}" });
+        }
+        return session;
+    }
+
+    [Theory]
+    [InlineData(RagMode.Auto, true, 1, true)]       // first message of an Auto session
+    [InlineData(RagMode.Auto, true, 2, false)]      // follow-up: tools can search instead
+    [InlineData(RagMode.Auto, false, 2, true)]      // no search tool registered: keep retrieving
+    [InlineData(RagMode.WithPrompt, false, 3, true)] // WithPrompt always retrieves
+    [InlineData(RagMode.ToolsOnly, true, 1, false)] // ToolsOnly never does
+    public void ShouldAutoRetrieve_ByModeAndTurn(RagMode mode, bool withTool, int userMessages, bool expected)
+    {
+        var service = CreateService([], ragOptions: new RagOptions { Mode = mode },
+            searchMemoriesTool: withTool ? CreateSearchMemoriesTool() : null);
+
+        Assert.Equal(expected, service.ShouldAutoRetrieve(SessionWithUserMessages(userMessages)));
+    }
+
+    [Fact]
+    public void ShouldAutoRetrieve_AutoWithoutSession_Retrieves()
+    {
+        var service = CreateService([], ragOptions: new RagOptions { Mode = RagMode.Auto }, searchMemoriesTool: CreateSearchMemoriesTool());
+
+        Assert.True(service.ShouldAutoRetrieve(null));
+    }
+
+    [Fact]
+    public async Task ChatAsync_AutoFollowUp_SkipsRetrievalAndNoMemoriesLine()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", "Title 1")]);
+        IEnumerable<ChatMessage>? sent = null;
+        var chatClient = new FakeChatClient(messages =>
+        {
+            sent = messages.ToList();
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, "Answer."));
+        });
+        var service = new RagService(
+            TestRetriever.Create(new FakeSearchVectorStore([new("c1", 0.95f, "Title 1", null)]), repo),
+            chatClient,
+            Options.Create(new RagOptions { Mode = RagMode.Auto }),
+            Options.Create(new ChatSessionOptions()),
+            NullLogger<RagService>.Instance,
+            CreateSearchMemoriesTool());
+
+        var result = await service.ChatAsync("follow-up", SessionWithUserMessages(2));
+
+        Assert.Empty(result.Sources);
+        Assert.DoesNotContain(sent!, m => m.Text.Contains("YOUR MEMORIES") || m.Text.Contains("No relevant memories"));
+    }
+
     private static SearchMemoriesTool CreateSearchMemoriesTool(
         IReadOnlyList<VectorSearchResult>? results = null,
         FakeConversationRepository? repository = null)
@@ -801,4 +952,20 @@ public class RagServiceTests
 
         Assert.Equal(rawResponse, result.Answer);
     }
+}
+
+/// <summary>Fake IChatClient whose streaming response comes from a supplied sequence.</summary>
+internal sealed class StreamingFakeChatClient(Func<IAsyncEnumerable<ChatResponseUpdate>> stream) : IChatClient
+{
+    public Task<ChatResponse> GetResponseAsync(
+        IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+
+    public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+        IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        => stream();
+
+    public object? GetService(Type serviceType, object? key = null) => null;
+
+    public void Dispose() { }
 }

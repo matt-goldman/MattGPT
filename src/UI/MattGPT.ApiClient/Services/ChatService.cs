@@ -67,6 +67,7 @@ public sealed class ChatService(IHttpClientFactory factory, IAuthFailureHandler 
                     "tool_start" => ParseToolStartEvent(data),
                     "tool_end" => new ToolEndChatEvent(),
                     "sources" => ParseSourcesEvent(data),
+                    "error" => new ErrorChatEvent(JsonSerializer.Deserialize<string>(data) ?? "Something went wrong."),
                     "done" => new DoneChatEvent(),
                     _ => null,
                 };

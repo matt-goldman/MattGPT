@@ -12,8 +12,10 @@ public enum RagMode
     WithPrompt,
 
     /// <summary>
-    /// Light automatic RAG (fewer results, higher threshold) plus a <c>search_memories</c>
-    /// tool the LLM can invoke for deeper/targeted retrieval.
+    /// Light automatic RAG (fewer results, higher threshold) on the first user message of a chat,
+    /// plus a <c>search_memories</c> tool the LLM can invoke for deeper/targeted retrieval. Follow-up
+    /// messages skip automatic retrieval: the model answers from the conversation so far and uses the
+    /// tool when it needs more. (If no search tool is registered, every message gets automatic RAG.)
     /// Best for models with reliable tool calling (e.g. llama3.1 8B+, GPT-4o).
     /// </summary>
     Auto,

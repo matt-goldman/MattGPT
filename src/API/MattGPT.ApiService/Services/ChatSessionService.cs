@@ -71,16 +71,25 @@ public class ChatSessionService(
     }
 
     /// <summary>
-    /// Records an assistant response message in the session.
+    /// Records an assistant response message in the session, with the past conversations it drew on.
     /// </summary>
     public async Task AddAssistantMessageAsync(
-        ChatSession session, string content, CancellationToken ct = default)
+        ChatSession session, string content, IReadOnlyList<ChatSource>? sources = null, CancellationToken ct = default)
     {
         var message = new ChatSessionMessage
         {
             Role = "assistant",
             Content = content,
             Timestamp = DateTimeOffset.UtcNow,
+            Sources = sources is { Count: > 0 }
+                ? [.. sources.Select(s => new ChatSessionMessageSource
+                    {
+                        ConversationId = s.ConversationId,
+                        Title = s.Title,
+                        Summary = s.Summary,
+                        Score = s.Score,
+                    })]
+                : null,
         };
 
         session.Messages.Add(message);

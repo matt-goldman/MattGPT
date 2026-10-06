@@ -47,7 +47,7 @@ This document is the **system of record** for project planning and issue trackin
 | 13 | 013-end-to-end-testing-and-docs.md | End-to-end testing and documentation | Done | Done/ | Depends on all |
 | 14 | 016-multi-file-import.md | Support importing multiple files | Done | Done/ | Depends on 5, 6 |
 | 15 | 018-multi-turn-chat-with-rolling-summaries.md | Multi-turn chat with rolling summaries | Done | Done/ | Depends on 11, 12; see ADR-004. Includes MongoDB session persistence (scope pulled forward from 019). |
-| 16 | 019-persist-and-embed-chat-conversations.md | Persist and embed chat conversations | Done | Done/ | Depends on 15, 7, 9, 10. Persistence, session lifecycle, auto-titles, and chat history sidebar all delivered (sidebar in 022). |
+| 16 | 019-persist-and-embed-chat-conversations.md | Persist and embed chat conversations | Done | Done/ | Depends on 15, 7, 9, 10. Persistence, auto-titles, and chat history sidebar delivered (sidebar in 022). **Session completion and embedding not implemented — see defect 049.** |
 | 17 | 020-tool-calling-rag-retrieval.md | Tool-calling RAG retrieval | Done | Done/ | Depends on 15, 11; see ADR-005 |
 | 18 | 015-clickable-citation-links.md | Clickable citation links in chat UI | Done | Done/ | Depends on 12 |
 | 19 | 017-export-content-analysis.md | Fully analyse export content for missing import detail | Done | Done/ | Depends on 4, 7. Analysed 2,913 conversations / 79,910 messages; created issues 023–028. |
@@ -79,6 +79,8 @@ This document is the **system of record** for project planning and issue trackin
 | 45 | 045-separate-auth-from-conversation-db.md | Separate auth backing store from document DB provider | In Progress | TODO/ | Depends on 040. Independent auth DB config; UseDocumentDbForAuth option; Keycloak external provider via Aspire. |
 | 46 | 046-azure-app-configuration.md | Switch to Azure App Configuration Service | Done | Done/ | No hard dependencies. Removes config fan-out from AppHost; emulator for local dev, real Azure service for deployed. |
 | 47 | 047-experiment-with-graph-rag-and-reranking.md | Experiment with Graph RAG and reranking models | In Progress | TODO/ | Reranking prototype in progress (branch `add-reranking`); Graph RAG not started. |
+| 48 | 048-export-summary-and-notifications.md | Export conversation summary and in-app notifications | TODO | TODO/ | Depends on 8, 22. Markdown export with background generation when missing; toast + bell badge notifications, also used for import completion. |
+| 49 | 049-defect-chat-sessions-never-completed-or-embedded.md | Defect: chat sessions are never completed or embedded | TODO | TODO/ | Defect against 19 (embedding criteria ticked but not implemented). Session lifecycle, embedding, whole-session summary; unblocks session export in 48. |
 
 ---
 

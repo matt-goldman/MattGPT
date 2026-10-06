@@ -70,3 +70,7 @@ This creates an asymmetry: the LLM "remembers" imported ChatGPT conversations bu
 - Rolling summaries from issue 018 serve double duty here: they provide intra-session memory during the conversation AND become high-quality embedding text for long-term RAG memory after the session ends.
 - Consider a background job that periodically scans for completed-but-not-embedded sessions, as a safety net in case the inline embedding trigger fails.
 - This issue, combined with issue 018, completes the "growing memory" vision: MattGPT gets smarter with every conversation, not just from imports.
+
+## Correction (2026-10-06)
+
+The acceptance criteria above for embedding completed sessions and for previous sessions influencing new ones via RAG were ticked, but are **not implemented**: nothing marks a session `Completed`, and nothing embeds sessions. Persistence, recovery, titles and concurrency were delivered. The remaining work is tracked as defect [049](../TODO/049-defect-chat-sessions-never-completed-or-embedded.md).

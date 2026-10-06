@@ -6,8 +6,8 @@ public record ChatSessionItem(Guid SessionId, string? Title, DateTimeOffset Crea
 /// <summary>Full detail of a chat session including all messages.</summary>
 public record SessionDetail(Guid SessionId, string? Title, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string Status, string? RollingSummary, List<SessionMessage> Messages);
 
-/// <summary>A single message within a chat session.</summary>
-public record SessionMessage(string Role, string Content, DateTimeOffset Timestamp);
+/// <summary>A single message within a chat session, with the sources an assistant message drew on (if any).</summary>
+public record SessionMessage(string Role, string Content, DateTimeOffset Timestamp, List<ChatSource>? Sources = null);
 
 /// <summary>Full detail of an imported conversation including all messages.</summary>
 public record ImportedConversationDetail(string ConversationId, string? Title, string? Summary, double? CreateTime, double? UpdateTime, List<ImportedMessage> Messages);
@@ -37,6 +37,9 @@ public sealed record ToolEndChatEvent() : ChatStreamEvent;
 
 /// <summary>Carries the RAG source citations for the completed response.</summary>
 public sealed record SourcesChatEvent(IReadOnlyList<ChatSource> Sources) : ChatStreamEvent;
+
+/// <summary>Signals that no answer could be produced; carries a user-facing description of why.</summary>
+public sealed record ErrorChatEvent(string Message) : ChatStreamEvent;
 
 /// <summary>Signals that the stream is complete.</summary>
 public sealed record DoneChatEvent() : ChatStreamEvent;
