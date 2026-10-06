@@ -101,12 +101,12 @@ public class StoredMessage
     {
         var stored = new StoredMessage
         {
-            Id = message.Id,
-            Role = message.Author.Role,
+            Id          = message.Id,
+            Role        = message.Author.Role,
             ContentType = message.Content.ContentType,
-            CreateTime = message.CreateTime,
-            Weight = message.Weight,
-            IsHidden = message.Metadata?.IsVisuallyHiddenFromConversation == true,
+            CreateTime  = message.CreateTime,
+            Weight      = message.Weight,
+            IsHidden    = message.Metadata?.IsVisuallyHiddenFromConversation == true,
         };
 
         ExtractContent(message.Content, stored);
@@ -115,13 +115,13 @@ public class StoredMessage
         {
             stored.Citations = citations.Select(c => new StoredCitation
             {
-                StartIndex = c.StartIndex,
-                EndIndex = c.EndIndex,
-                FormatType = c.FormatType,
-                Type = c.Metadata?.Type,
-                Name = c.Metadata?.Title,
-                Source = c.Metadata?.Url,
-                Text = c.Metadata?.Text,
+                StartIndex  = c.StartIndex,
+                EndIndex    = c.EndIndex,
+                FormatType  = c.FormatType,
+                Type        = c.Metadata?.Type,
+                Name        = c.Metadata?.Title,
+                Source      = c.Metadata?.Url,
+                Text        = c.Metadata?.Text,
             }).ToList();
         }
 
@@ -132,12 +132,12 @@ public class StoredMessage
             {
                 stored.ContentReferences = nonHidden.Select(r => new StoredContentReference
                 {
-                    Type = r.Type,
-                    Name = r.Title,
+                    Type        = r.Type,
+                    Name        = r.Title,
                     MatchedText = r.MatchedText,
-                    Snippet = r.Snippet,
-                    Url = r.Url,
-                    Source = r.Source,
+                    Snippet     = r.Snippet,
+                    Url         = r.Url,
+                    Source      = r.Source,
                 }).ToList();
             }
         }
