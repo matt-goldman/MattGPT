@@ -42,7 +42,7 @@ internal static class AppHostApiService
             throw new InvalidOperationException("No document database configured. Please check your configuration.");
 
         // --- Qdrant (only when configured as the vector store provider) ---
-        var vectorStoreProvider = builder.Configuration["VectorStore:Provider"] ?? "Qdrant";
+        var vectorStoreProvider = builder.Configuration.GetValueOrDefault("VectorStore:Provider", "Qdrant");
         if (vectorStoreProvider.Equals("Qdrant", StringComparison.OrdinalIgnoreCase))
         {
             var qdrant = builder.AddQdrant("qdrant").WithDataVolume();
@@ -50,12 +50,12 @@ internal static class AppHostApiService
         }
 
         // --- LLM provider container resources ---
-        var provider = builder.Configuration["LLM:Provider"] ?? "Ollama";
+        var provider = builder.Configuration.GetValueOrDefault("LLM:Provider", "Ollama");
 
         if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
         {
-            var modelId = builder.Configuration["LLM:ModelId"] ?? "llama3.2";
-            var embeddingModelId = builder.Configuration["LLM:EmbeddingModelId"] ?? modelId;
+            var modelId = builder.Configuration.GetValueOrDefault("LLM:ModelId", "llama3.2");
+            var embeddingModelId = builder.Configuration.GetValueOrDefault("LLM:EmbeddingModelId", modelId);
 
             var ollama = builder.AddOllama("ollama")
                 .WithImageTag("latest")
@@ -85,10 +85,11 @@ internal static class AppHostApiService
         }
         else if (provider.Equals("FoundryLocal", StringComparison.OrdinalIgnoreCase))
         {
-            var modelId = builder.Configuration["LLM:ModelId"]
-                ?? throw new InvalidOperationException(
+            var modelId = builder.Configuration.GetValueOrDefault("LLM:ModelId", "");
+            if (string.IsNullOrEmpty(modelId))
+                throw new InvalidOperationException(
                     "LLM:ModelId is required when LLM:Provider is 'FoundryLocal'.");
-            var embeddingModelId = builder.Configuration["LLM:EmbeddingModelId"] ?? modelId;
+            var embeddingModelId = builder.Configuration.GetValueOrDefault("LLM:EmbeddingModelId", modelId);
 
             // Use Aspire's Azure AI Foundry resource in local mode. RunAsFoundryLocal()
             // switches the resource from a provisioned Azure deployment to a local
