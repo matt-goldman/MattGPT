@@ -67,6 +67,64 @@ internal sealed class FakeChatSessionRepository : IChatSessionRepository
         return Task.FromResult(items);
     }
 
+    public Task<long> CompleteIdleSessionsAsync(DateTimeOffset idleBefore, CancellationToken ct = default)
+        => Task.FromResult(Complete(s => s.UpdatedAt < idleBefore));
+
+    public Task<long> CompleteOtherActiveSessionsAsync(string? userId, Guid exceptSessionId, CancellationToken ct = default)
+        => Task.FromResult(Complete(s => s.UserId == userId && s.SessionId != exceptSessionId));
+
+    private long Complete(Func<ChatSession, bool> predicate)
+    {
+        var toComplete = _sessions.Values.Where(s => s.Status == ChatSessionStatus.Active && predicate(s)).ToList();
+        foreach (var session in toComplete)
+        {
+            session.Status = ChatSessionStatus.Completed;
+            session.EmbeddingStatus = ChatSessionEmbeddingStatus.Pending;
+            session.CompletedAt = DateTimeOffset.UtcNow;
+        }
+        return toComplete.Count;
+    }
+
+    public Task ReactivateAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        if (_sessions.TryGetValue(sessionId, out var session))
+        {
+            session.Status = ChatSessionStatus.Active;
+            session.Summary = null;
+            session.EmbeddingStatus = ChatSessionEmbeddingStatus.None;
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task<List<ChatSession>> GetCompletedByEmbeddingStatusAsync(
+        IEnumerable<ChatSessionEmbeddingStatus> statuses, int maxCount,
+        IReadOnlyCollection<Guid>? excludeIds = null, CancellationToken ct = default)
+    {
+        var set = statuses.ToHashSet();
+        var items = _sessions.Values
+            .Where(s => s.Status == ChatSessionStatus.Completed && set.Contains(s.EmbeddingStatus)
+                && (excludeIds is null || !excludeIds.Contains(s.SessionId)))
+            .Take(maxCount)
+            .ToList();
+        return Task.FromResult(items);
+    }
+
+    public Task<bool> UpdateMemoryStateAsync(
+        Guid sessionId, string? summary, ChatSessionEmbeddingStatus status, int expectedMessageCount,
+        CancellationToken ct = default)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session)
+            || session.Status != ChatSessionStatus.Completed
+            || session.Messages.Count != expectedMessageCount)
+        {
+            return Task.FromResult(false);
+        }
+
+        session.Summary = summary;
+        session.EmbeddingStatus = status;
+        return Task.FromResult(true);
+    }
+
     /// <summary>Seed a pre-existing session for tests that need to start with state.</summary>
     public void Seed(ChatSession session) => _sessions[session.SessionId] = session;
 }

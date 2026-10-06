@@ -52,7 +52,8 @@ The background pipeline performs the following steps automatically:
 
 ### Chat history
 
-- All chat conversations in MattGPT are saved to MongoDB and embedded in the vector store, so they become part of your searchable memory over time.
+- All chat conversations in MattGPT are saved to the document database. When a session completes, it is summarised and embedded in the vector store, so it becomes part of your searchable memory. A session completes when you start a new chat, or after it has been idle for 30 minutes (configurable, see [Chat Settings](configuration.md#chat-settings)).
+- Sources from an earlier chat session open that session, not the imported-conversation viewer.
 - Use the sidebar to browse and resume past sessions.
 - Imported ChatGPT conversations can be viewed in a read-only viewer directly in the app.
 

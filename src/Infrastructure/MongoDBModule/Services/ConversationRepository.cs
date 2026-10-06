@@ -20,6 +20,13 @@ public class ConversationRepository : IConversationRepository
     /// <summary>Projection field holding the per-document relevance rank from a $text query.</summary>
     private const string TextScoreField = "textScore";
 
+    /// <summary>
+    /// Excludes chat session projections from browse listings. <c>Ne</c> also matches documents
+    /// stored before <see cref="StoredConversation.Source"/> existed, which are all imports.
+    /// </summary>
+    private static readonly FilterDefinition<StoredConversation> NotChatSession =
+        Builders<StoredConversation>.Filter.Ne(x => x.Source, ConversationSource.ChatSession);
+
     private readonly IMongoCollection<StoredConversation> _collection;
     private readonly ILogger<ConversationRepository> _logger;
 
@@ -119,7 +126,9 @@ public class ConversationRepository : IConversationRepository
     public async Task<(List<StoredConversation> Items, long Total)> GetPageAsync(
         int page, int pageSize, string? userId = null, CancellationToken ct = default)
     {
-        var filter = Builders<StoredConversation>.Filter.Eq(x => x.UserId, userId);
+        var filter = Builders<StoredConversation>.Filter.And(
+            Builders<StoredConversation>.Filter.Eq(x => x.UserId, userId),
+            NotChatSession);
         var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
         var items = await _collection
             .Find(filter)
@@ -239,7 +248,8 @@ public class ConversationRepository : IConversationRepository
                 score,
                 conversation.Title,
                 conversation.Summary,
-                ConversationTextSnippets.Build(conversation, query)));
+                ConversationTextSnippets.Build(conversation, query),
+                conversation.Source));
         }
 
         return results;
@@ -349,7 +359,8 @@ public class ConversationRepository : IConversationRepository
             Builders<StoredConversation>.Filter.Or(
                 Builders<StoredConversation>.Filter.Ne(x => x.GizmoType, "snorlax"),
                 Builders<StoredConversation>.Filter.Eq(x => x.ConversationTemplateId, null)),
-            Builders<StoredConversation>.Filter.Eq(x => x.UserId, userId));
+            Builders<StoredConversation>.Filter.Eq(x => x.UserId, userId),
+            NotChatSession);
         var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
         var items = await _collection
             .Find(filter)

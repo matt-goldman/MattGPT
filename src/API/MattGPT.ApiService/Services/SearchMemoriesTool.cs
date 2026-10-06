@@ -43,6 +43,9 @@ public class SearchMemoriesTool(
     /// <summary>Clears <see cref="Sources"/>; called at the start of each chat turn.</summary>
     public void ResetSources() => _sources.Clear();
 
+    /// <summary>A conversation never to return: the current chat session. Set at the start of each turn.</summary>
+    public string? ExcludeConversationId { get; set; }
+
     /// <summary>
     /// Creates an <see cref="AIFunction"/> wrapping <see cref="SearchMemoriesAsync"/>
     /// that can be passed to <see cref="ChatOptions.Tools"/>.
@@ -110,7 +113,7 @@ public class SearchMemoriesTool(
         {
             // Semantic retrieval, using MinScore (the same threshold as WithPrompt mode).
             var (relevant, conversationLookup) = await retriever.RetrieveAsync(
-                query, limit, _options.MinScore, cancellationToken);
+                query, limit, _options.MinScore, ExcludeConversationId, cancellationToken);
 
             if (relevant.Count == 0)
             {
@@ -142,8 +145,7 @@ public class SearchMemoriesTool(
             }
 
             // Track sources for the response metadata.
-            _sources.AddRange(relevant
-                .Select(r => new ChatSource(r.ConversationId, r.Title, r.Summary, r.Score)));
+            _sources.AddRange(relevant.Select(r => ChatSource.From(r, conversationLookup)));
 
             return result.ToString();
         }

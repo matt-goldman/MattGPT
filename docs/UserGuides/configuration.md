@@ -192,6 +192,31 @@ The `RAG` section controls retrieval behaviour.
 - With reranking on, raise `RerankCandidateCount` to give the reranker more to choose from (slower, larger requests), or lower `RerankDocumentChars` if the rerank service rejects long inputs.
 - Changing `UseReranking` changes the default `MaxEmbeddingChars`, so re-run embeddings afterwards for consistent vectors.
 
+## Chat Settings
+
+The `Chat` section controls multi-turn chat sessions and when they become memory.
+
+```json
+{
+  "Chat": {
+    "MaxConversationTokens": 2048,
+    "RecentMessageCount": 6,
+    "IdleTimeout": "00:30:00",
+    "SweepInterval": "00:05:00"
+  }
+}
+```
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `MaxConversationTokens` | Estimated token budget for session history in the prompt. Above it, older messages are compressed into a rolling summary | `2048` |
+| `RecentMessageCount` | Messages always included verbatim in the prompt | `6` |
+| `SummaryPrompt` | Instruction used to generate the rolling summary | (built in) |
+| `IdleTimeout` | How long a session can go without a message before it is completed (summarised and embedded as memory). Starting a new chat completes the previous one immediately | `00:30:00` |
+| `SweepInterval` | How often the background sweep completes idle sessions and embeds completed ones | `00:05:00` |
+
+A completed session is searchable like an imported conversation, but only by its owner and never from within the same session. Continuing a completed session reactivates it. It is re-summarised and re-embedded when it next completes.
+
 ## Authentication Settings
 
 The `Auth` section controls whether authentication is required and which provider handles it.

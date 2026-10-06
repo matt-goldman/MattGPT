@@ -1,7 +1,32 @@
+using System.Text.Json.Serialization;
+
 namespace MattGPT.Contracts.Models;
 
 /// <summary>Lifecycle status of a chat session.</summary>
+/// <remarks>
+/// Serialised as a string in JSON. Load-bearing for Postgres: inserts serialise the whole document,
+/// while status updates write <c>data.status</c> with <c>jsonb_set</c> as a string, so without a
+/// string contract on the enum a session becomes unreadable after its first status change.
+/// </remarks>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ChatSessionStatus { Active, Completed }
+
+/// <summary>Whether a session's current content is in the memory store (ADR-013).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ChatSessionEmbeddingStatus
+{
+    /// <summary>The current content has not been queued for embedding (the session is active, or predates embedding).</summary>
+    None,
+
+    /// <summary>Completed and waiting to be summarised, projected and embedded.</summary>
+    Pending,
+
+    /// <summary>The completed session's projection is embedded.</summary>
+    Embedded,
+
+    /// <summary>Projection or embedding failed. Retried by the backfill in <c>POST /conversations/embed</c>.</summary>
+    Error,
+}
 
 /// <summary>
 /// A past conversation an assistant message drew on, stored with the message so it can be shown
@@ -15,6 +40,9 @@ public class ChatSessionMessageSource
 
     /// <summary>Relevance score at the time of the response (cosine similarity, or reranker relevance when reranking).</summary>
     public float Score { get; set; }
+
+    /// <summary>Whether the source is an imported conversation or an earlier chat session.</summary>
+    public ConversationSource Source { get; set; } = ConversationSource.Import;
 }
 
 /// <summary>
@@ -35,8 +63,8 @@ public class ChatSessionMessage
 
 /// <summary>
 /// A persisted chat session stored as a MongoDB document.
-/// Tracks all messages, the rolling summary, and session lifecycle status.
-/// Designed for future extension with embedding fields (issue 019).
+/// Tracks all messages, the rolling summary, and session lifecycle status. Completed sessions are
+/// projected into a <see cref="StoredConversation"/> and embedded (ADR-013).
 /// </summary>
 public class ChatSession
 {
@@ -58,6 +86,19 @@ public class ChatSession
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public ChatSessionStatus Status { get; set; } = ChatSessionStatus.Active;
+
+    /// <summary>When the session was last completed; null while it has never been completed.</summary>
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    /// <summary>
+    /// LLM summary of the whole session, generated when it completes. Unlike
+    /// <see cref="RollingSummary"/> (older messages only, for the prompt) this covers every message.
+    /// Cleared when the session is reactivated, because it no longer covers the whole session.
+    /// </summary>
+    public string? Summary { get; set; }
+
+    /// <summary>Whether the session's current content is in the memory store.</summary>
+    public ChatSessionEmbeddingStatus EmbeddingStatus { get; set; } = ChatSessionEmbeddingStatus.None;
 
     /// <summary>
     /// The Identity user ID of the owner, or <c>null</c> for sessions created without authentication.

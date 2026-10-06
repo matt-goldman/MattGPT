@@ -61,14 +61,18 @@ public class MemoryRetriever(
     /// <param name="minScore">
     /// Minimum similarity score (0.0–1.0) a hit must have to be returned. Ignored when reranking.
     /// </param>
+    /// <param name="excludeConversationId">
+    /// A conversation never to return - the current chat session, so a resumed session does not
+    /// retrieve itself.
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     public async Task<MemoryRetrievalResult> RetrieveAsync(
-        string query, int limit, float minScore, CancellationToken ct = default)
+        string query, int limit, float minScore, string? excludeConversationId = null, CancellationToken ct = default)
     {
         var useReranking = UseReranking;
         var candidateCount = useReranking ? Math.Max(limit, _options.RerankCandidateCount) : limit;
 
-        var searchResults = await SearchAsync(query, candidateCount, ct);
+        var searchResults = await SearchAsync(query, candidateCount, excludeConversationId, ct);
 
         if (!useReranking)
             return await FilterAndLoadAsync(searchResults, limit, minScore, ct);
@@ -108,8 +112,22 @@ public class MemoryRetriever(
         return new MemoryRetrievalResult(results, OnlyFor(results, conversations));
     }
 
-    /// <summary>Embeds the query and returns the nearest <paramref name="limit"/> conversations.</summary>
-    private async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(string query, int limit, CancellationToken ct)
+    /// <summary>
+    /// Embeds the query and returns the nearest <paramref name="limit"/> conversations, other than
+    /// <paramref name="excludeConversationId"/>.
+    /// </summary>
+    private async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
+        string query, int limit, string? excludeConversationId, CancellationToken ct)
+    {
+        // Ask for one extra so excluding the current session still leaves a full set.
+        var results = await SearchVectorStoreAsync(query, excludeConversationId is null ? limit : limit + 1, ct);
+        if (excludeConversationId is null)
+            return results;
+
+        return [.. results.Where(r => r.ConversationId != excludeConversationId).Take(limit)];
+    }
+
+    private async Task<IReadOnlyList<VectorSearchResult>> SearchVectorStoreAsync(string query, int limit, CancellationToken ct)
     {
         // Embed the query with the same model used to embed the stored conversations.
         var embeddings = await embeddingGenerator.GenerateAsync([query], cancellationToken: ct);

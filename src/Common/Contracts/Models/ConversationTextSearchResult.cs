@@ -14,12 +14,14 @@ namespace MattGPT.Contracts.Models;
 /// <param name="Title">The conversation title, if any.</param>
 /// <param name="Summary">The stored summary, if the conversation has been summarised.</param>
 /// <param name="Snippets">Short excerpts of the conversation text around the matched terms.</param>
+/// <param name="Source">Whether the hit is an imported conversation or a chat session projection.</param>
 public record ConversationTextSearchResult(
     string ConversationId,
     double Score,
     string? Title,
     string? Summary,
-    IReadOnlyList<string> Snippets);
+    IReadOnlyList<string> Snippets,
+    ConversationSource Source = ConversationSource.Import);
 
 /// <summary>
 /// Rescales the backend-specific text ranks on <see cref="ConversationTextSearchResult.Score"/>

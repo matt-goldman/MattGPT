@@ -48,6 +48,11 @@ public class EmbedProcessingService(
                     job.EmbeddingSkipped = p.Skipped;
                 });
 
+                // Backfill chat sessions first (ADR-013): complete idle sessions and store pending ones
+                // in memory, retrying sessions that failed before. They are embedded by the session
+                // pipeline, not by EmbedAsync, so they are not part of the job's counts.
+                await BackfillChatSessionsAsync(scope.ServiceProvider, stoppingToken);
+
                 var result = await embedder.EmbedAsync(stoppingToken, progress);
 
                 job.EmbeddedConversations = result.Embedded;
@@ -74,6 +79,23 @@ public class EmbedProcessingService(
                 job.CompletedAt = DateTimeOffset.UtcNow;
                 logger.LogError(ex, "Embed job {JobId} failed.", request.JobId);
             }
+        }
+    }
+
+    private async Task BackfillChatSessionsAsync(IServiceProvider services, CancellationToken ct)
+    {
+        try
+        {
+            var sessionMemory = services.GetRequiredService<ChatSessionMemoryService>();
+            var result = await sessionMemory.SweepAsync(retryErrors: true, ct);
+            logger.LogInformation(
+                "Chat session backfill: {Completed} completed, {Embedded} embedded, {Errors} error(s).",
+                result.Completed, result.Embedded, result.Errors);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            // Don't fail the conversation embed run over sessions; the next run retries them.
+            logger.LogWarning(ex, "Chat session backfill failed.");
         }
     }
 }

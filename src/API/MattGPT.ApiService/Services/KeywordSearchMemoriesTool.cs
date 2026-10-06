@@ -44,6 +44,9 @@ public class KeywordSearchMemoriesTool(
     /// <summary>Clears <see cref="Sources"/>; called at the start of each chat turn.</summary>
     public void ResetSources() => _sources.Clear();
 
+    /// <summary>A conversation never to return: the current chat session. Set at the start of each turn.</summary>
+    public string? ExcludeConversationId { get; set; }
+
     /// <summary>
     /// Creates an <see cref="AIFunction"/> wrapping <see cref="SearchMemoriesKeywordAsync"/>
     /// that can be passed to <see cref="ChatOptions.Tools"/>.
@@ -106,7 +109,12 @@ public class KeywordSearchMemoriesTool(
 
         try
         {
-            var results = await repository.SearchTextAsync(query, limit, currentUser.UserId);
+            // Ask for one extra so excluding the current session still leaves a full set.
+            var exclude = ExcludeConversationId;
+            IReadOnlyList<ConversationTextSearchResult> results =
+                await repository.SearchTextAsync(query, exclude is null ? limit : limit + 1, currentUser.UserId);
+            if (exclude is not null)
+                results = [.. results.Where(r => r.ConversationId != exclude).Take(limit)];
 
             logger.LogInformation(
                 "search_memories_keyword: {Count} matching conversation(s) for query {Query}.",
@@ -182,6 +190,7 @@ public class KeywordSearchMemoriesTool(
             r.ConversationId,
             r.Title,
             r.Summary,
-            ConversationTextSearchRanking.Relative(r.Score, maxScore)))];
+            ConversationTextSearchRanking.Relative(r.Score, maxScore),
+            r.Source))];
     }
 }

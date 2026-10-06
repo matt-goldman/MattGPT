@@ -147,7 +147,8 @@ internal sealed class FakeConversationRepository : IConversationRepository{
                 x.Score,
                 x.Conversation.Title,
                 x.Conversation.Summary,
-                ConversationTextSnippets.Build(x.Conversation, query)))
+                ConversationTextSnippets.Build(x.Conversation, query),
+                x.Conversation.Source))
             .ToList();
 
         return Task.FromResult<IReadOnlyList<ConversationTextSearchResult>>(hits);

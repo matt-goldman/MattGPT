@@ -31,6 +31,7 @@ public static class ChatEndpoints
                     title           = s.Title,
                     summary         = s.Summary,
                     score           = s.Score,
+                    source          = s.Source.ToString(),
                 }),
             });
         })
@@ -106,6 +107,7 @@ public static class ChatEndpoints
                             title           = s.Title,
                             summary         = s.Summary,
                             score           = s.Score,
+                            source          = s.Source.ToString(),
                         }));
                         await httpContext.Response.WriteAsync($"event: sources\ndata: {sourcesJson}\n\n", ct);
                         await httpContext.Response.Body.FlushAsync(ct);
@@ -165,6 +167,9 @@ public static class ChatEndpoints
                 updatedAt       = session.UpdatedAt,
                 status          = session.Status.ToString(),
                 rollingSummary  = session.RollingSummary,
+                summary         = session.Summary,
+                completedAt     = session.CompletedAt,
+                embeddingStatus = session.EmbeddingStatus.ToString(),
                 messages        = session.Messages.Select(m => new
                 {
                     role        = m.Role,
@@ -176,6 +181,7 @@ public static class ChatEndpoints
                         title           = s.Title,
                         summary         = s.Summary,
                         score           = s.Score,
+                        source          = s.Source.ToString(),
                     }),
                 }),
             });

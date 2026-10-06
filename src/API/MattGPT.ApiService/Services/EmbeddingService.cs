@@ -138,6 +138,11 @@ public class EmbeddingService(
 
                 attempted.Add(conversation.ConversationId);
 
+                // Chat session projections are owned by the session pipeline (ADR-013), which
+                // embeds them and tracks the outcome on the session.
+                if (conversation.Source == ConversationSource.ChatSession)
+                    continue;
+
                 var outcome = await EmbedConversationAsync(conversation, ct);
                 switch (outcome)
                 {
@@ -163,6 +168,16 @@ public class EmbeddingService(
     }
 
     private enum EmbedOutcome { Success, Error, Skipped }
+
+    /// <summary>
+    /// Embeds a single conversation, whatever its status, and records the outcome on it
+    /// (<see cref="ConversationProcessingStatus.Embedded"/> or
+    /// <see cref="ConversationProcessingStatus.EmbeddingError"/>). A conversation with no embeddable
+    /// content counts as success.
+    /// </summary>
+    /// <returns>Whether the conversation is now embedded.</returns>
+    public async Task<bool> EmbedOneAsync(StoredConversation conversation, CancellationToken ct = default)
+        => await EmbedConversationAsync(conversation, ct) != EmbedOutcome.Error;
 
     private async Task<EmbedOutcome> EmbedConversationAsync(
         StoredConversation conversation, CancellationToken ct)

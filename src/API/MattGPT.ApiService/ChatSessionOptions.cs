@@ -27,4 +27,14 @@ public class ChatSessionOptions
     /// </summary>
     public string SummaryPrompt { get; set; } =
         "Summarise the conversation so far, preserving key facts, decisions, user preferences, and open questions. Be concise — aim for 200 words or fewer.";
+
+    /// <summary>
+    /// How long a session can go without a new message before the background sweep completes it,
+    /// which summarises and embeds it as memory. Starting a new chat completes the previous session
+    /// straight away; this is the fallback for sessions the user simply leaves.
+    /// </summary>
+    public TimeSpan IdleTimeout { get; set; } = TimeSpan.FromMinutes(30);
+
+    /// <summary>How often the background sweep looks for idle sessions and sessions waiting to be embedded.</summary>
+    public TimeSpan SweepInterval { get; set; } = TimeSpan.FromMinutes(5);
 }

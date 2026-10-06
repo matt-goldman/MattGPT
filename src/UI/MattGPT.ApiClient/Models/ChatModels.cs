@@ -4,7 +4,11 @@ namespace MattGPT.ApiClient.Models;
 public record ChatSessionItem(Guid SessionId, string? Title, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string Status);
 
 /// <summary>Full detail of a chat session including all messages.</summary>
-public record SessionDetail(Guid SessionId, string? Title, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string Status, string? RollingSummary, List<SessionMessage> Messages);
+/// <param name="Summary">Whole-session summary, generated when the session completes.</param>
+/// <param name="EmbeddingStatus">Whether the session is in memory: None, Pending, Embedded or Error.</param>
+public record SessionDetail(
+    Guid SessionId, string? Title, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string Status, string? RollingSummary,
+    List<SessionMessage> Messages, string? Summary = null, DateTimeOffset? CompletedAt = null, string? EmbeddingStatus = null);
 
 /// <summary>A single message within a chat session, with the sources an assistant message drew on (if any).</summary>
 public record SessionMessage(string Role, string Content, DateTimeOffset Timestamp, List<ChatSource>? Sources = null);
@@ -16,7 +20,12 @@ public record ImportedConversationDetail(string ConversationId, string? Title, s
 public record ImportedMessage(string Role, string Content, double? CreateTime);
 
 /// <summary>A RAG source citation included in a chat response.</summary>
-public record ChatSource(string ConversationId, string? Title, string? Summary, float Score);
+/// <param name="Source">"Import" for an imported conversation, "ChatSession" for an earlier chat session (whose id is the session id).</param>
+public record ChatSource(string ConversationId, string? Title, string? Summary, float Score, string? Source = null)
+{
+    /// <summary>Whether the source is an earlier chat session, opened as a session rather than an imported conversation.</summary>
+    public bool IsChatSession => Source == "ChatSession";
+}
 
 // ── SSE stream events ──────────────────────────────────────────────────────
 

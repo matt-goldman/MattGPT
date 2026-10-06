@@ -121,10 +121,20 @@
                                         @foreach (var src in msg.Sources)
                                         {
                                             <div class="text-xs">
-                                                <a href="/chat/conversation/@src.ConversationId"
-                                                   class="font-medium text-primary hover:underline cursor-pointer"
-                                                   @onclick="() => LoadImportedConversation(src.ConversationId)"
-                                                   @onclick:preventDefault>@(src.Title ?? "Untitled")</a>
+                                                @if (src.IsChatSession && Guid.TryParse(src.ConversationId, out var sourceSessionId))
+                                                {
+                                                    <a href="/chat"
+                                                       class="font-medium text-primary hover:underline cursor-pointer"
+                                                       @onclick="() => LoadSession(sourceSessionId)"
+                                                       @onclick:preventDefault>@(src.Title ?? "Untitled chat")</a>
+                                                }
+                                                else
+                                                {
+                                                    <a href="/chat/conversation/@src.ConversationId"
+                                                       class="font-medium text-primary hover:underline cursor-pointer"
+                                                       @onclick="() => LoadImportedConversation(src.ConversationId)"
+                                                       @onclick:preventDefault>@(src.Title ?? "Untitled")</a>
+                                                }
                                                 <span class="text-default-400 ml-1">(score: @src.Score.ToString("F2"))</span>
                                                 @if (!string.IsNullOrWhiteSpace(src.Summary))
                                                 {

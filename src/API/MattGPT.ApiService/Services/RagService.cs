@@ -16,7 +16,19 @@ using AIChatMessage = Microsoft.Extensions.AI.ChatMessage;
 namespace MattGPT.ApiService.Services;
 
 /// <summary>A single retrieved conversation reference included in a chat response.</summary>
-public record ChatSource(string ConversationId, string? Title, string? Summary, float Score);
+/// <param name="Source">Whether the reference is an imported conversation or an earlier chat session, which the UI opens differently.</param>
+public record ChatSource(
+    string ConversationId, string? Title, string? Summary, float Score,
+    ConversationSource Source = ConversationSource.Import)
+{
+    /// <summary>
+    /// The source for a vector search hit. Its kind comes from the loaded conversation; a hit whose
+    /// conversation could not be loaded is assumed to be an import.
+    /// </summary>
+    public static ChatSource From(VectorSearchResult hit, IReadOnlyDictionary<string, StoredConversation> conversations)
+        => new(hit.ConversationId, hit.Title, hit.Summary, hit.Score,
+            conversations.TryGetValue(hit.ConversationId, out var c) ? c.Source : ConversationSource.Import);
+}
 
 /// <summary>The result of a RAG-augmented chat request.</summary>
 public record RagChatResponse(string Answer, IReadOnlyList<ChatSource> Sources);
@@ -149,7 +161,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         logger.LogInformation("RAG ChatAsync called. Query: {Query}, Mode: {Mode}, DiagnosticMode: {Diagnostic}",
             query, _options.Mode, _options.DiagnosticMode);
 
-        ResetToolSources();
+        PrepareTools(session);
 
         // 1. Automatic retrieval (full, light, or none depending on mode).
         var (relevant, conversationLookup, autoRetrievalRan) = await AutoRetrieveAsync(query, session, ct);
@@ -184,7 +196,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
             : rawText;
 
         // 6. Merge sources from auto-retrieval and any tool invocations.
-        var sources = CollectAllSources(relevant);
+        var sources = CollectAllSources(relevant, conversationLookup);
 
         return new RagChatResponse(answerText, sources);
     }
@@ -213,7 +225,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         logger.LogInformation("RAG ChatStreamAsync called. Query: {Query}, Mode: {Mode}, DiagnosticMode: {Diagnostic}",
             query, _options.Mode, _options.DiagnosticMode);
 
-        ResetToolSources();
+        PrepareTools(session);
 
         // 1. Automatic retrieval (full, light, or none depending on mode).
         var (relevant, conversationLookup, autoRetrievalRan) = await AutoRetrieveAsync(query, session, ct);
@@ -266,7 +278,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         // Fire-and-forget producer: streams LLM tokens (and tool events via callbacks)
         // into the channel. The consumer below reads and yields them.
         var producerTask = ProduceStreamChunksAsync(
-            channel.Writer, messages, chatOptions, relevant, query, ct);
+            channel.Writer, messages, chatOptions, relevant, conversationLookup, query, ct);
 
         // Consumer: yield chunks to the caller (SSE endpoint) as they arrive.
         await foreach (var chunk in channel.Reader.ReadAllAsync(ct))
@@ -290,6 +302,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         List<AIChatMessage> messages,
         ChatOptions? chatOptions,
         IReadOnlyList<VectorSearchResult> relevant,
+        IReadOnlyDictionary<string, StoredConversation> conversationLookup,
         string query,
         CancellationToken ct)
     {
@@ -345,7 +358,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
             }
 
             // Final chunk carries the merged sources.
-            var sources = CollectAllSources(relevant);
+            var sources = CollectAllSources(relevant, conversationLookup);
             writer.TryWrite(new RagStreamChunk(null, sources));
 
             writer.Complete();
@@ -437,7 +450,8 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         logger.LogDebug("RAG auto-retrieval (Mode={Mode}): TopK={TopK}, MinScore={MinScore:F2}.",
             _options.Mode, topK, EffectiveMinScore);
 
-        var (relevant, conversationLookup) = await retriever.RetrieveAsync(query, topK, EffectiveMinScore, ct);
+        var (relevant, conversationLookup) = await retriever.RetrieveAsync(
+            query, topK, EffectiveMinScore, CurrentSessionConversationId(session), ct);
         return (relevant, conversationLookup, true);
     }
 
@@ -471,27 +485,46 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
     }
 
     /// <summary>
-    /// Clears the sources the tools have accumulated, so a turn reports only what was retrieved
-    /// during that turn.
+    /// Readies the tools for a turn: clears the sources they have accumulated, so a turn reports only
+    /// what was retrieved during that turn, and tells them which session is current so it is excluded
+    /// from their results.
     /// </summary>
-    private void ResetToolSources()
+    private void PrepareTools(ChatSession? session)
     {
-        searchMemoriesTool?.ResetSources();
-        keywordSearchMemoriesTool?.ResetSources();
+        var exclude = CurrentSessionConversationId(session);
+
+        if (searchMemoriesTool is not null)
+        {
+            searchMemoriesTool.ResetSources();
+            searchMemoriesTool.ExcludeConversationId = exclude;
+        }
+
+        if (keywordSearchMemoriesTool is not null)
+        {
+            keywordSearchMemoriesTool.ResetSources();
+            keywordSearchMemoriesTool.ExcludeConversationId = exclude;
+        }
     }
+
+    /// <summary>
+    /// The conversation id the current session has in the memory store once it has been embedded
+    /// (ADR-013). Excluded from retrieval, so a resumed session never retrieves itself.
+    /// </summary>
+    private static string? CurrentSessionConversationId(ChatSession? session) => session?.SessionId.ToString();
 
     /// <summary>
     /// Merges sources from automatic retrieval with any sources from tool invocations.
     /// De-duplicates by conversation ID, preferring the higher score.
     /// </summary>
-    private IReadOnlyList<ChatSource> CollectAllSources(IReadOnlyList<VectorSearchResult> autoRetrieved)
+    private IReadOnlyList<ChatSource> CollectAllSources(
+        IReadOnlyList<VectorSearchResult> autoRetrieved, IReadOnlyDictionary<string, StoredConversation> conversationLookup)
     {
         var sourcesDict = new Dictionary<string, ChatSource>();
 
         // Auto-retrieved sources.
         foreach (var r in autoRetrieved)
         {
-            sourcesDict[r.ConversationId] = new ChatSource(r.ConversationId, r.Title, r.Summary, r.Score);
+            sourcesDict[r.ConversationId] = ChatSource.From(r, conversationLookup);
         }
 
         // Tool-retrieved sources (may overlap with auto-retrieved, and with each other).

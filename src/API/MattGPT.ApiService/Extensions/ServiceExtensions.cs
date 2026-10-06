@@ -61,6 +61,11 @@ public static class ServiceExtensions
             builder.Services.AddScoped<ChatSessionService>();
             builder.Services.Configure<ChatSessionOptions>(builder.Configuration.GetSection(ChatSessionOptions.SectionName));
 
+            // Completed chat sessions become memory: summarised, projected and embedded in the background.
+            builder.Services.AddScoped<ChatSessionMemoryService>();
+            builder.Services.AddSingleton<ChatSessionMemorySignal>();
+            builder.Services.AddHostedService<ChatSessionLifecycleService>();
+
             // Allow large multipart form uploads on this service.
             builder.Services.Configure<FormOptions>(options =>
             {

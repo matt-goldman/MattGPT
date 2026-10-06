@@ -160,14 +160,139 @@ public class PostgresChatSessionRepository(NpgsqlDataSource dataSource, ILogger<
     }
 
     /// <inheritdoc/>
+    public async Task<long> CompleteIdleSessionsAsync(DateTimeOffset idleBefore, CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        await using var cmd = dataSource.CreateCommand(
+            $"""
+            UPDATE {TableName}
+            SET status = 'Completed', data = data || $2::jsonb
+            WHERE status = 'Active' AND updated_at < $1
+            """);
+        cmd.Parameters.AddWithValue(idleBefore.UtcDateTime);
+        cmd.Parameters.AddWithValue(CompletePatch());
+
+        return await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<long> CompleteOtherActiveSessionsAsync(string? userId, Guid exceptSessionId, CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        await using var cmd = dataSource.CreateCommand(
+            $"""
+            UPDATE {TableName}
+            SET status = 'Completed', data = data || $3::jsonb
+            WHERE status = 'Active'
+              AND user_id IS NOT DISTINCT FROM $1
+              AND session_id <> $2
+            """);
+        cmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue(exceptSessionId.ToString());
+        cmd.Parameters.AddWithValue(CompletePatch());
+
+        return await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>The JSONB members a completion sets, merged into the document with <c>||</c>.</summary>
+    private static string CompletePatch() => JsonSerializer.Serialize(new
+    {
+        status = ChatSessionStatus.Completed,
+        embeddingStatus = ChatSessionEmbeddingStatus.Pending,
+        completedAt = DateTimeOffset.UtcNow,
+    }, SerializerOptions);
+
+    /// <inheritdoc/>
+    public async Task ReactivateAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        await using var cmd = dataSource.CreateCommand(
+            $"""
+            UPDATE {TableName}
+            SET status = 'Active', data = data || $2::jsonb
+            WHERE session_id = $1
+            """);
+        cmd.Parameters.AddWithValue(sessionId.ToString());
+        cmd.Parameters.AddWithValue(JsonSerializer.Serialize(new
+        {
+            status = ChatSessionStatus.Active,
+            embeddingStatus = ChatSessionEmbeddingStatus.None,
+            summary = (string?)null,
+        }, SerializerOptions));
+
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<List<ChatSession>> GetCompletedByEmbeddingStatusAsync(
+        IEnumerable<ChatSessionEmbeddingStatus> statuses, int maxCount,
+        IReadOnlyCollection<Guid>? excludeIds = null, CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        var hasExclusions = excludeIds is { Count: > 0 };
+
+        // Sessions stored before embedding status existed have no member; they read as None.
+        await using var cmd = dataSource.CreateCommand(
+            $"""
+            SELECT data FROM {TableName}
+            WHERE status = 'Completed'
+              AND COALESCE(data->>'embeddingStatus', 'None') = ANY($1)
+              {(hasExclusions ? "AND session_id <> ALL($3)" : string.Empty)}
+            ORDER BY updated_at
+            LIMIT $2
+            """);
+        cmd.Parameters.AddWithValue(statuses.Select(st => st.ToString()).ToArray());
+        cmd.Parameters.AddWithValue(maxCount);
+        if (hasExclusions)
+            cmd.Parameters.AddWithValue(excludeIds!.Select(id => id.ToString()).ToArray());
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var results = new List<ChatSession>();
+
+        while (await reader.ReadAsync(ct))
+        {
+            var session = JsonSerializer.Deserialize<ChatSession>(reader.GetString(0), SerializerOptions);
+            if (session is not null) results.Add(session);
+        }
+
+        return results;
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> UpdateMemoryStateAsync(
+        Guid sessionId, string? summary, ChatSessionEmbeddingStatus status, int expectedMessageCount,
+        CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        await using var cmd = dataSource.CreateCommand(
+            $"""
+            UPDATE {TableName}
+            SET data = data || $2::jsonb
+            WHERE session_id = $1
+              AND status = 'Completed'
+              AND jsonb_array_length(data->'messages') = $3
+            """);
+        cmd.Parameters.AddWithValue(sessionId.ToString());
+        cmd.Parameters.AddWithValue(JsonSerializer.Serialize(new { summary, embeddingStatus = status }, SerializerOptions));
+        cmd.Parameters.AddWithValue(expectedMessageCount);
+
+        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    /// <inheritdoc/>
     public async Task<List<ChatSession>> ListRecentAsync(int limit = 50, string? userId = null, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
 
-        // Exclude messages and rollingSummary fields to minimise payload for list view.
+        // Exclude messages and the summaries to minimise payload for list view.
         await using var cmd = dataSource.CreateCommand(
             $"""
-            SELECT data - 'messages' - 'rollingSummary'
+            SELECT data - 'messages' - 'rollingSummary' - 'summary'
             FROM {TableName}
             WHERE user_id IS NOT DISTINCT FROM $1
             ORDER BY updated_at DESC

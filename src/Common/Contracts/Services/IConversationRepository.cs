@@ -10,7 +10,11 @@ public interface IConversationRepository
     /// <summary>Insert or update a conversation document keyed by <see cref="StoredConversation.ConversationId"/>.</summary>
     Task UpsertAsync(StoredConversation conversation, CancellationToken ct = default);
 
-    /// <summary>Return a page of conversations ordered by <see cref="StoredConversation.UpdateTime"/> descending, scoped to the given user.</summary>
+    /// <summary>
+    /// Return a page of imported conversations ordered by <see cref="StoredConversation.UpdateTime"/> descending,
+    /// scoped to the given user. Chat session projections (<see cref="ConversationSource.ChatSession"/>) are excluded:
+    /// sessions are listed from the session store.
+    /// </summary>
     Task<(List<StoredConversation> Items, long Total)> GetPageAsync(int page, int pageSize, string? userId = null, CancellationToken ct = default);
 
     /// <summary>Return up to <paramref name="maxCount"/> conversations with the given processing status.</summary>
@@ -94,7 +98,8 @@ public interface IConversationRepository
         string templateId, int page, int pageSize, string? userId = null, CancellationToken ct = default);
 
     /// <summary>
-    /// Return a page of conversations that do not belong to any project, scoped to the given user.
+    /// Return a page of imported conversations that do not belong to any project, scoped to the given user.
+    /// Chat session projections are excluded, as in <see cref="GetPageAsync"/>.
     /// </summary>
     Task<(List<StoredConversation> Items, long Total)> GetNonProjectConversationsAsync(
         int page, int pageSize, string? userId = null, CancellationToken ct = default);

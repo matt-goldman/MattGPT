@@ -31,6 +31,22 @@ public record ConversationDiagnosticRow(
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ConversationProcessingStatus { Imported, Summarised, Embedded, SummaryError, EmbeddingError }
 
+/// <summary>Where a stored conversation came from.</summary>
+/// <remarks>Serialised as a string in JSON, for the same reason as <see cref="ConversationProcessingStatus"/>.</remarks>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ConversationSource
+{
+    /// <summary>Imported from a ChatGPT export.</summary>
+    Import,
+
+    /// <summary>
+    /// A projection of a completed MattGPT <see cref="ChatSession"/>, so the session is retrievable as
+    /// memory (ADR-013). Its <see cref="StoredConversation.ConversationId"/> is the session id. The
+    /// session pipeline owns it: the bulk summarise and embed runs leave it alone.
+    /// </summary>
+    ChatSession,
+}
+
 /// <summary>A citation stored with a message.</summary>
 public class StoredCitation
 {
@@ -350,6 +366,39 @@ public class StoredConversation
     /// Used to scope data to individual users when auth is enabled.
     /// </summary>
     public string? UserId { get; set; }
+
+    /// <summary>Where this conversation came from. Absent (and so <see cref="ConversationSource.Import"/>) on documents stored before chat sessions were projected.</summary>
+    public ConversationSource Source { get; set; } = ConversationSource.Import;
+
+    /// <summary>
+    /// Projects a chat session into a conversation, so it can be embedded and retrieved exactly like an
+    /// import (ADR-013). The projection is marked <see cref="ConversationProcessingStatus.Summarised"/>
+    /// because the session pipeline owns its summary. That status keeps the bulk summariser away, even
+    /// when <paramref name="summary"/> is null.
+    /// </summary>
+    /// <param name="session">The session to project.</param>
+    /// <param name="summary">The whole-session summary, if one was generated.</param>
+    public static StoredConversation FromChatSession(ChatSession session, string? summary) => new()
+    {
+        ConversationId = session.SessionId.ToString(),
+        Title = session.Title,
+        CreateTime = session.CreatedAt.ToUnixTimeMilliseconds() / 1000.0,
+        UpdateTime = session.UpdatedAt.ToUnixTimeMilliseconds() / 1000.0,
+        LinearisedMessages = [.. session.Messages.Select((m, i) => new StoredMessage
+        {
+            Id          = i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            Role        = m.Role,
+            ContentType = "text",
+            Parts       = [m.Content],
+            CreateTime  = m.Timestamp.ToUnixTimeMilliseconds() / 1000.0,
+            Weight      = 1.0,
+        })],
+        ImportTimestamp = DateTimeOffset.UtcNow,
+        ProcessingStatus = ConversationProcessingStatus.Summarised,
+        Summary = summary,
+        UserId = session.UserId,
+        Source = ConversationSource.ChatSession,
+    };
 
     public static StoredConversation From(ParsedConversation conversation, string? userId = null) => new()
     {

@@ -25,6 +25,50 @@ public interface IChatSessionRepository
     /// <summary>Update the session status (e.g., Active → Completed).</summary>
     Task UpdateStatusAsync(Guid sessionId, ChatSessionStatus status, CancellationToken ct = default);
 
+    /// <summary>
+    /// Mark every active session last updated before <paramref name="idleBefore"/> as
+    /// <see cref="ChatSessionStatus.Completed"/>, with <see cref="ChatSessionEmbeddingStatus.Pending"/>
+    /// embedding, across all users. Does not change <see cref="ChatSession.UpdatedAt"/>.
+    /// </summary>
+    /// <returns>The number of sessions completed.</returns>
+    Task<long> CompleteIdleSessionsAsync(DateTimeOffset idleBefore, CancellationToken ct = default);
+
+    /// <summary>
+    /// Mark the given user's active sessions, other than <paramref name="exceptSessionId"/>, as
+    /// completed with pending embedding. Used when the user starts a new chat. Does not change
+    /// <see cref="ChatSession.UpdatedAt"/>.
+    /// </summary>
+    /// <returns>The number of sessions completed.</returns>
+    Task<long> CompleteOtherActiveSessionsAsync(string? userId, Guid exceptSessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Return a completed session to <see cref="ChatSessionStatus.Active"/>, clearing its whole-session
+    /// summary and resetting its embedding status to <see cref="ChatSessionEmbeddingStatus.None"/>, because
+    /// neither covers the messages about to be added.
+    /// </summary>
+    Task ReactivateAsync(Guid sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Return up to <paramref name="maxCount"/> <see cref="ChatSessionStatus.Completed"/> sessions (with
+    /// messages) whose embedding status is one of <paramref name="statuses"/>, across all users, excluding
+    /// <paramref name="excludeIds"/>.
+    /// </summary>
+    Task<List<ChatSession>> GetCompletedByEmbeddingStatusAsync(
+        IEnumerable<ChatSessionEmbeddingStatus> statuses, int maxCount,
+        IReadOnlyCollection<Guid>? excludeIds = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Record the outcome of storing a completed session in memory: its whole-session summary and
+    /// embedding status. Applies only if the session is still completed with exactly
+    /// <paramref name="expectedMessageCount"/> messages. This guards against a session that was continued
+    /// while it was being processed being marked as embedded with stale content. Does not change
+    /// <see cref="ChatSession.UpdatedAt"/>.
+    /// </summary>
+    /// <returns>Whether the session was updated.</returns>
+    Task<bool> UpdateMemoryStateAsync(
+        Guid sessionId, string? summary, ChatSessionEmbeddingStatus status, int expectedMessageCount,
+        CancellationToken ct = default);
+
     /// <summary>Return the most recent sessions ordered by <see cref="ChatSession.UpdatedAt"/> descending, scoped to the given user.</summary>
     Task<List<ChatSession>> ListRecentAsync(int limit = 50, string? userId = null, CancellationToken ct = default);
 }

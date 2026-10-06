@@ -73,4 +73,4 @@ This creates an asymmetry: the LLM "remembers" imported ChatGPT conversations bu
 
 ## Correction (2026-10-06)
 
-The acceptance criteria above for embedding completed sessions and for previous sessions influencing new ones via RAG were ticked, but are **not implemented**: nothing marks a session `Completed`, and nothing embeds sessions. Persistence, recovery, titles and concurrency were delivered. The remaining work is tracked as defect [049](../TODO/049-defect-chat-sessions-never-completed-or-embedded.md).
+The acceptance criteria above for embedding completed sessions and for previous sessions influencing new ones via RAG were ticked, but are **not implemented**: nothing marks a session `Completed`, and nothing embeds sessions. Persistence, recovery, titles and concurrency were delivered. The remaining work is tracked as defect [049](049-defect-chat-sessions-never-completed-or-embedded.md), now fixed.

@@ -68,6 +68,20 @@ public class SummarisationService(
         return new SummarisationResult(summarised, errors, skipped);
     }
 
+    /// <summary>
+    /// Generates a summary for one conversation without storing it. Returns null when the
+    /// conversation has no visible messages to summarise. Exceptions from the LLM propagate.
+    /// </summary>
+    public async Task<string?> GenerateSummaryAsync(StoredConversation conversation, CancellationToken ct = default)
+    {
+        var prompt = BuildPrompt(conversation);
+        if (prompt is null)
+            return null;
+
+        var response = await chatClient.GetResponseAsync(prompt, cancellationToken: ct);
+        return response.Text;
+    }
+
     private enum SummariseOutcome { Success, Error, Skipped }
 
     private async Task<SummariseOutcome> SummariseConversationAsync(
@@ -151,7 +165,9 @@ public class SummarisationService(
     public static string? BuildPrompt(StoredConversation conversation)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("You are summarising a ChatGPT conversation to capture its key information for future reference.");
+        sb.AppendLine(conversation.Source == ConversationSource.ChatSession
+            ? "You are summarising a conversation between a user and an AI assistant to capture its key information for future reference."
+            : "You are summarising a ChatGPT conversation to capture its key information for future reference.");
         sb.AppendLine();
         sb.Append("Conversation title: ").AppendLine(conversation.Title ?? "(untitled)");
         if (!string.IsNullOrEmpty(conversation.DefaultModelSlug))

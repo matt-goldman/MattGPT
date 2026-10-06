@@ -14,6 +14,7 @@ Significant architectural decisions made during development of MattGPT.
 | [ADR-008](008-optional-authentication-strategy.md) | Optional authentication strategy |
 | [ADR-009](009-conversation-search-approach.md) | Conversation search approach — semantic vector search |
 | [ADR-012](012-reranking-via-cohere-compatible-api.md) | Reranking via a Cohere-compatible rerank API |
+| [ADR-013](013-chat-sessions-as-conversation-projections.md) | Chat sessions enter memory as conversation projections |
 
 To add a new ADR, copy [000-template.md](000-template.md) and fill in all sections.
 

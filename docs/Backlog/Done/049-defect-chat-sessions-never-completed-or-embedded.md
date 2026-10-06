@@ -1,6 +1,6 @@
 # 049 — Defect: Chat Sessions Are Never Completed or Embedded
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 49
 **Type:** Defect (against 019)
 **Dependencies:** 019 (persist and embed chat conversations), 009 (embeddings), 018 (rolling summaries)
@@ -44,16 +44,29 @@ Issue 019 is marked Done, including the acceptance criteria "Completed chat sess
 
 ## Acceptance Criteria
 
-- [ ] Starting a new chat marks the previous active session `Completed`.
-- [ ] Sessions idle past the configured timeout are marked `Completed` by a background sweep.
-- [ ] Continuing a completed session reactivates it, and it is re-embedded on its next completion.
-- [ ] Completed sessions are embedded and returned by automatic RAG and `search_memories`, scoped to their owner.
-- [ ] A session does not appear in its own retrieval results.
-- [ ] Each completed session has a whole-session summary.
-- [ ] Existing sessions can be backfilled.
-- [ ] Unit tests cover the lifecycle transitions, embedding of sessions, self-exclusion from retrieval, and user scoping.
+- [x] Starting a new chat marks the previous active session `Completed`.
+- [x] Sessions idle past the configured timeout are marked `Completed` by a background sweep.
+- [x] Continuing a completed session reactivates it, and it is re-embedded on its next completion.
+- [x] Completed sessions are embedded and returned by automatic RAG and `search_memories`, scoped to their owner.
+- [x] A session does not appear in its own retrieval results.
+- [x] Each completed session has a whole-session summary.
+- [x] Existing sessions can be backfilled.
+- [x] Unit tests cover the lifecycle transitions, embedding of sessions, self-exclusion from retrieval, and user scoping.
 
 ## Notes
 
 - This defect was found while adding reranking (issue 047): `ChatSessionStatus.Completed` is never set anywhere in `src/`.
 - Issue 019's acceptance criteria were ticked without these parts being implemented. See the correction note in that file.
+
+## Resolution
+
+Decision recorded in [ADR-013](../../Decisions/013-chat-sessions-as-conversation-projections.md) (Option A: projection).
+
+- **Projection:** `StoredConversation.FromChatSession` maps a session into a conversation whose id is the session id, with `Source = ChatSession`, the owner's `UserId` and the whole-session summary. It is upserted into the conversation repository and embedded with `EmbeddingService.EmbedOneAsync`, so vector search, keyword search, reranking and `ToEmbeddingText` work unchanged.
+- **Lifecycle:** `ChatSessionService.GetOrCreateAsync` completes the user's other active sessions when it creates a new one. `AddUserMessageAsync` reactivates a completed session, clearing its summary and embedding status. `ChatSessionLifecycleService` (hosted) runs `ChatSessionMemoryService.SweepAsync` every `Chat:SweepInterval` (default 5 min), and immediately after a new chat completes sessions. It completes sessions idle past `Chat:IdleTimeout` (default 30 min) and stores `Pending` ones.
+- **Embedding state:** `ChatSession.EmbeddingStatus` (`None` / `Pending` / `Embedded` / `Error`). The session pipeline owns projections, so the bulk embed skips them and the bulk summariser never sees them (they are written as `Summarised`). The final write is guarded on the session still being completed with the same message count, so a session continued mid-processing isn't marked embedded with stale content.
+- **Summary:** `SummarisationService.GenerateSummaryAsync` runs over the projection. It is stored on the session (`ChatSession.Summary`, returned by `GET /chat/sessions/{id}`) and on the projection. A summary failure still embeds the session, without a summary.
+- **Retrieval hygiene:** `MemoryRetriever.RetrieveAsync(..., excludeConversationId)` and both search tools (`ExcludeConversationId`, set per turn by `RagService`) drop the current session, fetching one extra result so the limit is still filled. `ChatSource.Source` and the stored message sources carry the kind, and `Chat.razor` opens chat-session sources with `LoadSession`. Conversation browse listings (`GetPageAsync`, `GetNonProjectConversationsAsync`) exclude projections. Postgres has a new promoted `source` column for this.
+- **Backfill:** existing sessions are active with old timestamps, so the first sweep at startup completes and embeds them. `POST /conversations/embed` also runs the sweep with `retryErrors: true`, which retries sessions in `Error`.
+- **Latent bug fixed on the way:** `ChatSessionStatus` had no string enum converter. Postgres `UpdateStatusAsync` writes it via `jsonb_set` as a string, while inserts wrote a number, so a session would have become unreadable after its first status change. This is the same bug class as the `ConversationProcessingStatus` one. It was latent only because nothing called `UpdateStatusAsync`.
+- **Verification:** 14 unit tests in `ChatSessionMemoryTests`. The new repository methods for both backends, including the legacy-data migrations, were also exercised against real Postgres 17 and MongoDB 8 containers.

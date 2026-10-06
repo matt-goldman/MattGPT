@@ -25,6 +25,11 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
     /// definition character-for-character identical or Postgres will not use the index.
     /// </summary>
     private const string TextVectorExpression = "jsonb_to_tsvector('english'::regconfig, data, '[\"string\"]')";
+    /// <summary>
+    /// Excludes chat session projections from browse listings, via the promoted <c>source</c> column.
+    /// </summary>
+    private const string NotChatSession = "source <> 'ChatSession'";
+
     private volatile bool _schemaEnsured;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
@@ -49,8 +54,8 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
             $"""
             INSERT INTO {TableName}
                 (conversation_id, processing_status, create_time, update_time,
-                 gizmo_type, conversation_template_id, user_id, data)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+                 gizmo_type, conversation_template_id, user_id, source, data)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
             ON CONFLICT (conversation_id) DO UPDATE SET
                 processing_status        = EXCLUDED.processing_status,
                 create_time              = EXCLUDED.create_time,
@@ -58,6 +63,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
                 gizmo_type               = EXCLUDED.gizmo_type,
                 conversation_template_id = EXCLUDED.conversation_template_id,
                 user_id                  = EXCLUDED.user_id,
+                source                   = EXCLUDED.source,
                 data                     = EXCLUDED.data
             """);
 
@@ -68,6 +74,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
         cmd.Parameters.AddWithValue((object?)conversation.GizmoType ?? DBNull.Value);
         cmd.Parameters.AddWithValue((object?)conversation.ConversationTemplateId ?? DBNull.Value);
         cmd.Parameters.AddWithValue((object?)conversation.UserId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue(conversation.Source.ToString());
         cmd.Parameters.AddWithValue(data);
 
         await cmd.ExecuteNonQueryAsync(ct);
@@ -80,14 +87,14 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
         await EnsureSchemaAsync(ct);
 
         await using var countCmd = dataSource.CreateCommand(
-            $"SELECT COUNT(*) FROM {TableName} WHERE user_id IS NOT DISTINCT FROM $1");
+            $"SELECT COUNT(*) FROM {TableName} WHERE user_id IS NOT DISTINCT FROM $1 AND {NotChatSession}");
         countCmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
         var total = (long)(await countCmd.ExecuteScalarAsync(ct))!;
 
         await using var cmd = dataSource.CreateCommand(
             $"""
             SELECT data FROM {TableName}
-            WHERE user_id IS NOT DISTINCT FROM $1
+            WHERE user_id IS NOT DISTINCT FROM $1 AND {NotChatSession}
             ORDER BY update_time DESC NULLS LAST
             LIMIT $2 OFFSET $3
             """);
@@ -247,7 +254,8 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
                 reader.GetDouble(1),
                 conversation.Title,
                 conversation.Summary,
-                ConversationTextSnippets.Build(conversation, query)));
+                ConversationTextSnippets.Build(conversation, query),
+                conversation.Source));
         }
 
         return results;
@@ -453,6 +461,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
             WHERE (gizmo_type IS DISTINCT FROM 'snorlax'
                OR conversation_template_id IS NULL)
               AND user_id IS NOT DISTINCT FROM $1
+              AND {NotChatSession}
             """);
         countCmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
         var total = (long)(await countCmd.ExecuteScalarAsync(ct))!;
@@ -463,6 +472,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
             WHERE (gizmo_type IS DISTINCT FROM 'snorlax'
                OR conversation_template_id IS NULL)
               AND user_id IS NOT DISTINCT FROM $1
+              AND {NotChatSession}
             ORDER BY update_time DESC NULLS LAST
             LIMIT $2 OFFSET $3
             """);
@@ -575,6 +585,9 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
                 );
 
                 ALTER TABLE {TableName} ADD COLUMN IF NOT EXISTS user_id TEXT;
+
+                -- Existing rows predate chat session projections, so they are all imports.
+                ALTER TABLE {TableName} ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'Import';
 
                 CREATE INDEX IF NOT EXISTS {TableName}_processing_status_idx
                     ON {TableName} (processing_status);

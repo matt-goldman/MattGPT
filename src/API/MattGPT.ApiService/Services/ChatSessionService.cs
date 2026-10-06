@@ -16,7 +16,8 @@ public class ChatSessionService(
     IChatClient chatClient,
     IOptions<ChatSessionOptions> options,
     ICurrentUserService currentUser,
-    ILogger<ChatSessionService> logger)
+    ILogger<ChatSessionService> logger,
+    ChatSessionMemorySignal? memorySignal = null)
 {
     /// <summary>Approximate characters per token for estimation (English text).</summary>
     private const int CharsPerToken = 4;
@@ -39,7 +40,33 @@ public class ChatSessionService(
         var session = new ChatSession { UserId = currentUser.UserId };
         await repository.CreateAsync(session, ct);
         logger.LogInformation("Created new chat session {SessionId}.", session.SessionId);
+
+        await CompletePreviousSessionsAsync(session, ct);
+
         return session;
+    }
+
+    /// <summary>
+    /// Starting a new chat completes the user's other active sessions, so they become memory. Only the
+    /// status changes here; summarising and embedding happen in the background
+    /// (<see cref="ChatSessionLifecycleService"/>), which is woken so it doesn't wait for its next sweep.
+    /// </summary>
+    private async Task CompletePreviousSessionsAsync(ChatSession newSession, CancellationToken ct)
+    {
+        try
+        {
+            var completed = await repository.CompleteOtherActiveSessionsAsync(newSession.UserId, newSession.SessionId, ct);
+            if (completed > 0)
+            {
+                logger.LogInformation("New chat {SessionId} completed {Count} previous session(s).", newSession.SessionId, completed);
+                memorySignal?.Notify();
+            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            // Don't fail the new chat over this: the idle sweep completes them later.
+            logger.LogWarning(ex, "Could not complete previous sessions when starting chat {SessionId}.", newSession.SessionId);
+        }
     }
 
     /// <summary>
@@ -49,6 +76,17 @@ public class ChatSessionService(
     public async Task<ChatSession> AddUserMessageAsync(
         ChatSession session, string content, CancellationToken ct = default)
     {
+        // Continuing a completed session makes it active again. Its summary and embedding status no
+        // longer cover the whole session; it is re-summarised and re-embedded when it next completes.
+        if (session.Status == ChatSessionStatus.Completed)
+        {
+            await repository.ReactivateAsync(session.SessionId, ct);
+            session.Status = ChatSessionStatus.Active;
+            session.Summary = null;
+            session.EmbeddingStatus = ChatSessionEmbeddingStatus.None;
+            logger.LogInformation("Reactivated completed chat session {SessionId}.", session.SessionId);
+        }
+
         var message = new ChatSessionMessage
         {
             Role = "user",
@@ -62,7 +100,9 @@ public class ChatSessionService(
         // Auto-generate title from the first user message.
         if (session.Title is null)
         {
-            session.Title = content.Length > 80 ? content[..80] + "…" : content;            await repository.UpdateTitleAsync(session.SessionId, session.Title, ct);        }
+            session.Title = content.Length > 80 ? content[..80] + "…" : content;
+            await repository.UpdateTitleAsync(session.SessionId, session.Title, ct);
+        }
 
         // Check if rolling summary is needed before the LLM call.
         await MaybeUpdateRollingSummaryAsync(session, ct);
@@ -88,6 +128,7 @@ public class ChatSessionService(
                         Title = s.Title,
                         Summary = s.Summary,
                         Score = s.Score,
+                        Source = s.Source,
                     })]
                 : null,
         };
