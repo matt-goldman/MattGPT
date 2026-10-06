@@ -93,8 +93,7 @@ public class CohereCompatibleReranker(
         [property: JsonPropertyName("model")] string Model,
         [property: JsonPropertyName("query")] string Query,
         [property: JsonPropertyName("documents")] IReadOnlyList<string> Documents,
-        [property: JsonPropertyName("top_n")] int TopN,
-        [property: JsonPropertyName("max_doc_length")] int? MaxLength = 4000);
+        [property: JsonPropertyName("top_n")] int TopN);
 
     private sealed record RerankResponse(
         [property: JsonPropertyName("results")] List<RerankResponseItem>? Results);

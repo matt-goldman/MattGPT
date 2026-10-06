@@ -137,7 +137,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         {
             Tools       = tools,
             ToolMode    = ChatToolMode.Auto,
-            Reasoning   = new ReasoningOptions { Effort = ReasoningEffort.Low }
+            Reasoning   = new ReasoningOptions { Effort = ReasoningEffort.Low } // TODO: this needs to be configurable. Consider a triage approach like in Bubbles.
         };
     }
 
@@ -450,7 +450,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
     /// </summary>
     internal bool ShouldAutoRetrieve(ChatSession? session)
     {
-        if (EffectiveTopK <= 0)
+        if (EffectiveTopK <= 0) // TODO: this skipped for the first user message of a new conversation. Need to address this.
         {
             logger.LogDebug("Mode={Mode}: skipping automatic retrieval.", _options.Mode);
             return false;
