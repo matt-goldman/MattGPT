@@ -92,11 +92,12 @@ public class SummarisationServiceTests
         Assert.Single(repository.SummaryUpdates);
         Assert.Equal("c1", repository.SummaryUpdates[0].Id);
         Assert.Equal("This is a test summary.", repository.SummaryUpdates[0].Summary);
+        Assert.Equal(ConversationSummaryStatus.Generated, repository.SummaryUpdates[0].SummaryStatus);
         Assert.Equal(ConversationProcessingStatus.Summarised, repository.SummaryUpdates[0].Status);
     }
 
     [Fact]
-    public async Task SummariseAsync_LlmError_MarksAsSummaryError()
+    public async Task SummariseAsync_LlmError_MarksDigestFailed_WithoutChangingProcessingStatus()
     {
         var repository = new FakeConversationRepository();
         repository.Seed([MakeConversation("c1")]);
@@ -109,11 +110,13 @@ public class SummarisationServiceTests
         Assert.Equal(0, result.Summarised);
         Assert.Equal(1, result.Errors);
         Assert.Single(repository.SummaryUpdates);
-        Assert.Equal(ConversationProcessingStatus.SummaryError, repository.SummaryUpdates[0].Status);
+        Assert.Equal(ConversationSummaryStatus.Failed, repository.SummaryUpdates[0].SummaryStatus);
+        // A digest failure must not block embedding, so the processing status is left alone.
+        Assert.Null(repository.SummaryUpdates[0].Status);
     }
 
     [Fact]
-    public async Task SummariseAsync_NoMessages_MarksAsSummarisedSkipped()
+    public async Task SummariseAsync_NoMessages_RecordsSkipped()
     {
         var repository = new FakeConversationRepository();
         repository.Seed([MakeConversation("c1", messageCount: 0)]);
@@ -126,7 +129,8 @@ public class SummarisationServiceTests
         Assert.Equal(0, result.Summarised);
         Assert.Equal(0, result.Errors);
         Assert.Equal(1, result.Skipped);
-        Assert.Equal(ConversationProcessingStatus.Summarised, repository.SummaryUpdates[0].Status);
+        Assert.Equal(ConversationSummaryStatus.Skipped, repository.SummaryUpdates[0].SummaryStatus);
+        Assert.Null(repository.SummaryUpdates[0].Status);
         Assert.Null(repository.SummaryUpdates[0].Summary);
     }
 
@@ -237,9 +241,8 @@ public class SummarisationServiceTests
         var prompt = SummarisationService.BuildPrompt(conversation);
 
         Assert.NotNull(prompt);
-        Assert.Contains("truncated", prompt);
-        // Prompt should not be excessively large.
-        Assert.True(prompt.Length < 15_000);
+        Assert.Contains("from the middle of the conversation omitted", prompt);
+        Assert.True(prompt.Length <= SummarisationService.MaxPromptChars);
     }
 
     [Fact]
@@ -354,7 +357,7 @@ public class SummarisationServiceTests
         Assert.Equal(0, result.Errors);
         Assert.Equal(1, result.Skipped);
         Assert.Single(repository.SummaryUpdates);
-        Assert.Equal(ConversationProcessingStatus.Summarised, repository.SummaryUpdates[0].Status);
+        Assert.Equal(ConversationSummaryStatus.Skipped, repository.SummaryUpdates[0].SummaryStatus);
         Assert.Null(repository.SummaryUpdates[0].Summary);
     }
 }

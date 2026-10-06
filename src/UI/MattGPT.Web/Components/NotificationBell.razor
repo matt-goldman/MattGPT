@@ -1,0 +1,206 @@
+@implements IDisposable
+@inject INotificationService Notifications
+@inject NavigationManager Navigation
+
+@* In-app notifications: a bell with an unread badge, a list of recent notifications, and a toast when
+   a new one arrives. Notifications are created by the API's background work and polled from here
+   (ADR-015), so work that finishes while the user is away shows as unread on their next visit. *@
+
+<div class="relative">
+    <button class="relative p-1.5 rounded-md hover:bg-default-100 transition-colors"
+            @onclick="ToggleAsync"
+            title="Notifications"
+            aria-label="@(_unread > 0 ? $"Notifications, {_unread} unread" : "Notifications")"
+            aria-expanded="@_open">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-default-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 00-4-5.7V5a2 2 0 10-4 0v.3C7.7 6.2 6 8.4 6 11v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+        @if (_unread > 0)
+        {
+            <span class="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-danger text-white text-[10px] font-semibold leading-[1.1rem] text-center">
+                @(_unread > 99 ? "99+" : _unread.ToString())
+            </span>
+        }
+    </button>
+
+    @if (_open)
+    {
+        <div class="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-lg border border-default-200 bg-background shadow-lg z-50">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-default-200">
+                <span class="text-sm font-semibold">Notifications</span>
+                <button class="text-xs text-default-500 hover:text-default-700" @onclick="() => _open = false">Close</button>
+            </div>
+            @if (_items.Count == 0)
+            {
+                <p class="px-3 py-6 text-sm text-default-400 text-center">No notifications yet.</p>
+            }
+            else
+            {
+                @foreach (var item in _items)
+                {
+                    <button class="block w-full text-left px-3 py-2 border-b border-default-100 hover:bg-default-50 @(item.IsRead ? "" : "bg-primary-50")"
+                            @onclick="() => Open(item)">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-sm font-medium @(item.IsFailure ? "text-danger" : "")">@item.Title</span>
+                            <span class="text-[10px] text-default-400 shrink-0">@FormatAge(item.CreatedAt)</span>
+                        </div>
+                        <p class="text-xs text-default-500 mt-0.5">@item.Message</p>
+                    </button>
+                }
+            }
+        </div>
+    }
+</div>
+
+@if (_toasts.Count > 0)
+{
+    <div class="fixed bottom-4 right-4 z-50 w-80 space-y-2" role="status" aria-live="polite">
+        @foreach (var toast in _toasts)
+        {
+            <div class="rounded-lg border shadow-lg bg-background px-4 py-3 @(toast.IsFailure ? "border-danger-200" : "border-default-200")">
+                <div class="flex items-start justify-between gap-2">
+                    <span class="text-sm font-semibold @(toast.IsFailure ? "text-danger" : "")">@toast.Title</span>
+                    <button class="text-default-400 hover:text-default-600 text-xs" @onclick="() => _toasts.Remove(toast)" aria-label="Dismiss">✕</button>
+                </div>
+                <p class="text-xs text-default-500 mt-1">@toast.Message</p>
+                @if (toast.Link is not null)
+                {
+                    <button class="text-xs text-primary hover:underline mt-1" @onclick="() => Open(toast)">Open</button>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan ToastDuration = TimeSpan.FromSeconds(8);
+
+    private readonly CancellationTokenSource _cts = new();
+    private readonly HashSet<string> _seen = [];
+    private readonly List<NotificationItem> _toasts = [];
+    private List<NotificationItem> _items = [];
+    private long _unread;
+    private bool _open;
+    private bool _loadedOnce;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await RefreshAsync();
+        _ = PollAsync();
+    }
+
+    private async Task PollAsync()
+    {
+        using var timer = new PeriodicTimer(PollInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cts.Token))
+                await InvokeAsync(RefreshAsync);
+        }
+        catch (OperationCanceledException)
+        {
+            // Component disposed.
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        NotificationsResponse? response;
+        try
+        {
+            response = await Notifications.GetNotificationsAsync(20, _cts.Token);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return; // API unavailable; try again on the next tick.
+        }
+
+        if (response is null) return;
+
+        // Toast only what arrived since this page opened, not the backlog of unread notifications.
+        if (_loadedOnce)
+        {
+            foreach (var item in response.Items.Where(i => !i.IsRead && !_seen.Contains(i.Id)).Reverse())
+                ShowToast(item);
+        }
+
+        foreach (var item in response.Items)
+            _seen.Add(item.Id);
+
+        _items = response.Items;
+        _unread = response.UnreadCount;
+        _loadedOnce = true;
+        StateHasChanged();
+    }
+
+    private void ShowToast(NotificationItem item)
+    {
+        _toasts.Add(item);
+        _ = DismissLaterAsync(item);
+    }
+
+    private async Task DismissLaterAsync(NotificationItem item)
+    {
+        try
+        {
+            await Task.Delay(ToastDuration, _cts.Token);
+            await InvokeAsync(() =>
+            {
+                _toasts.Remove(item);
+                StateHasChanged();
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    /// <summary>Opening the list marks what it shows as read.</summary>
+    private async Task ToggleAsync()
+    {
+        _open = !_open;
+        if (!_open) return;
+
+        var unreadIds = _items.Where(i => !i.IsRead).Select(i => i.Id).ToList();
+        if (unreadIds.Count == 0) return;
+
+        try
+        {
+            await Notifications.MarkReadAsync(unreadIds, _cts.Token);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return; // Leave them unread; the next refresh shows the true state.
+        }
+
+        // Keep the read/unread styling for this viewing; the badge clears now.
+        _unread = Math.Max(0, _unread - unreadIds.Count);
+    }
+
+    private void Open(NotificationItem item)
+    {
+        _open = false;
+        _toasts.Remove(item);
+        if (item.Link is not null)
+            Navigation.NavigateTo(item.Link);
+    }
+
+    private static string FormatAge(DateTimeOffset createdAt)
+    {
+        var age = DateTimeOffset.UtcNow - createdAt;
+        return age.TotalMinutes < 1 ? "just now"
+            : age.TotalHours < 1 ? $"{(int)age.TotalMinutes}m ago"
+            : age.TotalDays < 1 ? $"{(int)age.TotalHours}h ago"
+            : createdAt.LocalDateTime.ToString("d MMM");
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

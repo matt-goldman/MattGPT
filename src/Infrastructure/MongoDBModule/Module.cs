@@ -21,6 +21,7 @@ public static class Module
         BsonClassMap.RegisterClassMap<ProjectName>(cm => { cm.AutoMap(); cm.MapIdProperty(c => c.TemplateId); });
         BsonClassMap.RegisterClassMap<UserProfile>(cm => { cm.AutoMap(); cm.MapIdProperty(c => c.Id); });
         BsonClassMap.RegisterClassMap<SystemConfig>(cm => { cm.AutoMap(); cm.MapIdProperty(c => c.Id); });
+        BsonClassMap.RegisterClassMap<Notification>(cm => { cm.AutoMap(); cm.MapIdProperty(c => c.Id); });
 
         builder.AddMongoDBClient("mattgptdb");
 
@@ -29,6 +30,7 @@ public static class Module
         builder.Services.AddSingleton<IUserProfileRepository, UserProfileRepository>();
         builder.Services.AddSingleton<ISystemConfigRepository, SystemConfigRepository>();
         builder.Services.AddSingleton<IChatSessionRepository, ChatSessionRepository>();
+        builder.Services.AddSingleton<INotificationRepository, NotificationRepository>();
 
         return builder;
     }

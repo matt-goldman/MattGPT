@@ -1,6 +1,6 @@
 # 048 — Conversation Record Export, Summary Generation on Import, and In-App Notifications
 
-**Status:** TODO
+**Status:** Done
 **Sequence:** 48
 **Dependencies:** 008 (conversation summaries), 022 (chat history sidebar / conversation view)
 
@@ -130,28 +130,66 @@ The original decision was correct for its constraints and is not being reversed 
 
 ## Acceptance Criteria
 
-- [ ] `Summary` and `Record` are distinct fields; nothing embeds `Record`.
-- [ ] Export record downloads a Markdown file for a conversation that has a record.
-- [ ] For a conversation without a record, the button triggers background generation for that conversation only, with a visible pending state.
-- [ ] A toast appears and the bell badge increments when the record is ready; it can then be downloaded.
-- [ ] `BuildPrompt` returns a non-null prompt for every conversation with at least one visible message, including one whose first visible message alone exceeds the budget.
-- [ ] A conversation with one oversized message mid-stream still has its later messages collected.
-- [ ] A truncated prompt retains both the opening and the closing of the conversation, with the marker at the elision point and wording that reflects the middle being dropped.
-- [ ] Import with **Generate summaries** unchecked behaves exactly as today (no summarisation, no added latency).
-- [ ] Import with **Generate summaries** checked produces a digest for each conversation, and each digest has a corresponding embedding when the import completes.
-- [ ] Generating a digest for an already-embedded conversation results in that digest being embedded, without a manual re-embed step.
-- [ ] A conversation digested via the bulk `POST /conversations/summarise` endpoint is searchable by its digest afterwards.
-- [ ] The number of digests lacking embeddings is reportable, and is zero after a reconciliation run.
-- [ ] Completing (or failing) a conversation import raises a notification, including digest counts where digests were requested.
-- [ ] The bell lists recent notifications and marks them read; the badge reflects the unread count.
-- [ ] Notifications survive a page reload.
-- [ ] Unit tests cover: each `BuildPrompt` fault above as a regression case; single-conversation digest and record generation; de-duplication of requests; digest-triggered re-embedding; the unchecked-checkbox no-op path; notification creation for digest, record and import events.
-- [ ] The ADR that removed import-time summarisation is superseded, recording the CPU-to-GPU constraint change as the reason.
+- [x] `Summary` and `Record` are distinct fields; nothing embeds `Record`.
+- [x] Export record downloads a Markdown file for a conversation that has a record.
+- [x] For a conversation without a record, the button triggers background generation for that conversation only, with a visible pending state.
+- [x] A toast appears and the bell badge increments when the record is ready; it can then be downloaded.
+- [x] `BuildPrompt` returns a non-null prompt for every conversation with at least one visible message, including one whose first visible message alone exceeds the budget.
+- [x] A conversation with one oversized message mid-stream still has its later messages collected.
+- [x] A truncated prompt retains both the opening and the closing of the conversation, with the marker at the elision point and wording that reflects the middle being dropped.
+- [x] Import with **Generate summaries** unchecked behaves exactly as today (no summarisation, no added latency).
+- [x] Import with **Generate summaries** checked produces a digest for each conversation, and each digest has a corresponding embedding when the import completes.
+- [x] Generating a digest for an already-embedded conversation results in that digest being embedded, without a manual re-embed step.
+- [x] A conversation digested via the bulk `POST /conversations/summarise` endpoint is searchable by its digest afterwards.
+- [x] The number of digests lacking embeddings is reportable, and is zero after a reconciliation run.
+- [x] Completing (or failing) a conversation import raises a notification, including digest counts where digests were requested.
+- [x] The bell lists recent notifications and marks them read; the badge reflects the unread count.
+- [x] Notifications survive a page reload.
+- [x] Unit tests cover: each `BuildPrompt` fault above as a regression case; single-conversation digest and record generation; de-duplication of requests; digest-triggered re-embedding; the unchecked-checkbox no-op path; notification creation for digest, record and import events.
+- [x] The ADR that removed import-time summarisation is superseded, recording the CPU-to-GPU constraint change as the reason.
 
 ## Notes
 
-- Chat sessions: exporting a session's record depends on issue 049, which adds a whole-session summary generated when a session completes. Until then, this issue covers imported conversations only; extend the button to sessions once 049 lands.
+- Chat sessions: exporting a session's record depends on issue 049, which adds a whole-session summary generated when a session completes. Until then, this issue covers imported conversations only; extend the button to sessions once 049 lands. (049 has landed; the extension is listed under Follow-ups in the Resolution below.)
 - Keep the notification store behind a repository interface in Contracts, with Mongo and Postgres implementations, like the other stores.
 - The Markdown file name must be sanitised for file systems (titles can contain `/`, `:` and similar characters).
 - The notification infrastructure built here is the dependency for background summarisation jobs generally, which is the point of building it now rather than later.
 
+## Follow-ups (not in this issue)
+
+- **Rolling / iterative record generation.** An ADR already exists for rolling summaries and the feature is already logged as defective in the backlog; that defect is the natural home for this work rather than a new issue. The approach under consideration is the refine chain — summarise, then update the summary per subsequent exchange. It trades the lost-in-the-middle attention problem for monotonic erosion of early content and non-recoverable error propagation. Needs a single-pass full-context baseline as a live comparator at every context size tested, since refine has negative value where the whole conversation already fits comfortably in context. This applies to `Record` only, never to `Summary`.
+- **Structured extraction over prose records.** Extract typed claims per exchange (decision, revision, abandonment, open question, constraint) with turn provenance, resolve supersession across the claim set, then render narrative from resolved structure. Addresses the case these conversations actually exhibit — decisions made and later reversed — which flat prose hides. Candidate schema: claim text, type, source conversation, turn index, timestamp, linked entities, superseded-by. Relational first; a graph index over the same table is a later view, not a rewrite.
+- **Record-derived digests as a routing layer.** Once records exist, test digest-from-record for routing plus fine-grained within-conversation retrieval for locating, against the current whole-conversation-chunk approach. A record-derived digest is a denoised large chunk, so the existing large-chunk finding predicts it should win at the routing layer.
+- **Retrieval eval set.** 20–30 questions with known answers over known conversations, weighted toward *what was decided*, *what was rejected and why*, *what is still open*. Include at least one conversation with a late reversal as a drift probe, and several unanswerable questions to measure abstention rather than only recall. Hold embedding model and vector store fixed per run — the current corpus cannot support controlled comparison (see Defect, above).
+- **Score semantics.** Confirm what the configured vector store actually returns as a match score before using it as a metric. The implementations differ: Weaviate computes similarity locally, while Qdrant, pgVector, Azure AI Search and Pinecone each return their own score. Qdrant returns raw cosine by default, so scores at or near 1.0 warrant investigation rather than being taken at face value.
+
+## Resolution
+
+ADRs: [ADR-014](../../Decisions/014-opt-in-digest-generation-on-import.md) (opt-in import digests, superseding part of ADR-003) and [ADR-015](../../Decisions/015-in-app-notifications-persisted-and-polled.md) (notifications persisted and polled).
+
+**Field split.** `StoredConversation.Record` (new, never embedded: `ToEmbeddingText` reads `Summary` only, which a test asserts) and `StoredConversation.SummaryStatus` (`None` / `Generated` / `Skipped` / `Failed`). Digest state is now separate from `ProcessingStatus`. A digest failure no longer sets `SummaryError`, which used to stop the conversation ever being embedded; legacy `SummaryError` rows are now embeddable. When a record exists, `GenerateSummaryAsync` builds the digest from it (`BuildDigestFromRecordPrompt`).
+
+**`BuildPrompt` fixes** (`SummarisationService.BuildTranscript`):
+- (6, 9) The cut is now head-plus-tail. The marker, `[... N message(s) from the middle of the conversation omitted ...]`, sits at the elision point.
+- (7, 8) A single message is capped at 1/4 of the transcript budget and marked `[… message truncated …]`. One long message (first or mid-stream) therefore can no longer use the whole budget and stop collection, and no conversation with visible content produces a null prompt. This fixes the defect behind requirement 7 without a literal `break`→`continue` swap. With head-plus-tail, a `continue` would have produced a head with gaps in it.
+- (10) The footer reserve is the footer's actual length.
+- (11) A null prompt (nothing visible) is stored as `SummaryStatus = Skipped`, counted in run results and notifications, and excluded from later bulk runs.
+
+**Single implementation (16).** `SummariseConversationAsync(id | conversation, embedAfter)` and `GenerateRecordAsync(id)`. The bulk run, the import pipeline, the on-demand jobs and chat sessions (049) all use them.
+
+**Ordering and re-embedding (22–25).** Import runs import → digests → embed. A digest generated outside import (bulk or on-demand) re-embeds that conversation straight away (`embedAfter: true`). Every vector store keeps one vector per conversation, built from title + digest + messages, so re-embedding that one conversation is the "targeted upsert" (24); there is no separate digest vector. Conversations whose digest is newer than their embedding (`Summarised` with a digest) are counted by `CountDigestsAwaitingEmbeddingAsync`, reported as `digestsAwaitingEmbedding` plus an issue line on `GET /conversations/diagnostics` (and so in Settings → Diagnostics), and reconciled to zero by an embed run. They're reported on the diagnostics endpoint rather than the embed job-status endpoint because those are per-job and return 204 when no run has happened.
+
+**Background work (14, 15, 19).** `SummaryJobQueue` (singleton, de-duplicated per kind + conversation) and `SummaryProcessingService` (hosted) run on-demand records and digests and the bulk run. `POST /conversations/summarise` now queues the bulk run and returns 202 rather than holding the request open. Import digests run inside `ImportProcessingService`, the import's own hosted service, with progress on `ImportJob` (`SummaryStatus`, `SummarisedConversations`, `SummarySkipped`, `SummaryErrors`). A digest failure is counted and never fails the import (20).
+
+**Export (12–14).** `GET/POST /conversations/{id}/record` and an **Export record** button in the imported-conversation view of `Chat.razor`, with three states: `None` → queue, `Pending` (spinner, polled every 3 s), `Ready` → download. The download is `ConversationRecordExport.BuildMarkdown` (title heading, date, record) saved as `ConversationRecordExport.FileName(title)` (`/ \ : * ? " < > |` and control characters replaced, whitespace collapsed, length capped), through a `downloadTextFile` JS helper.
+
+**Import UI (17, 18).** A **Generate summaries** checkbox on Upload, off by default, with a cost warning and a "Summarising" progress phase. The conversation count isn't known until the file has been parsed server-side, so the warning gives a per-conversation estimate rather than a total. Settings → Conversations also gets a **Generate summaries** action for the bulk run.
+
+**Notifications (26–30).** `Notification` + `INotificationRepository` in Contracts, with Mongo and Postgres implementations. `NotificationPublisher` never throws. `GET /notifications` and `POST /notifications/read`. `NotificationBell` in the nav (both layouts) shows a badge, a list (opening it marks those read) and toasts for new arrivals. Sources: record ready/failed, digest ready/failed, bulk run complete, import completed (with digest counts when requested) or failed, and embed run completed/failed.
+
+**Verification.** Tests: `DigestRecordAndNotificationTests` (25 cases) plus updated `SummarisationServiceTests`. The new repository methods for both backends were also exercised against real Postgres 17 and MongoDB 8 containers. The Blazor UI (bell, toasts, export button, checkbox) builds but has **not** been exercised in a browser.
+
+### Follow-ups found during implementation
+
+- **Chat-session export.** 049 has landed, so sessions have a whole-session summary (`ChatSession.Summary`). The button is still imported-only. A session's projection is rebuilt on each completion (`StoredConversation.FromChatSession`), so a record stored on the projection would be lost; session records need to live on the session.
+- **Re-import overwrites digests and records.** `StoredConversation.From` builds a fresh document and `UpsertAsync` replaces the stored one, so re-importing a conversation discards its `Summary`, `SummaryStatus` and `Record`. This was already true of `Summary`, but it matters more now that records are on-demand LLM work.

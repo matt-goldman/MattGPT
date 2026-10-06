@@ -28,8 +28,31 @@ public interface IConversationRepository
     /// </summary>
     Task<List<StoredConversation>> GetByStatusesAsync(IEnumerable<ConversationProcessingStatus> statuses, int maxCount, IReadOnlyCollection<string>? excludeIds = null, CancellationToken ct = default);
 
-    /// <summary>Update the summary text and processing status of a single conversation.</summary>
-    Task UpdateSummaryAsync(string conversationId, string? summary, ConversationProcessingStatus status, CancellationToken ct = default);
+    /// <summary>
+    /// Update the digest (<see cref="StoredConversation.Summary"/>) and digest status of a single
+    /// conversation, and its processing status unless <paramref name="status"/> is null.
+    /// </summary>
+    Task UpdateSummaryAsync(
+        string conversationId, string? summary, ConversationSummaryStatus summaryStatus,
+        ConversationProcessingStatus? status, CancellationToken ct = default);
+
+    /// <summary>Update the record (<see cref="StoredConversation.Record"/>) of a single conversation. Does not change any status.</summary>
+    Task UpdateRecordAsync(string conversationId, string? record, CancellationToken ct = default);
+
+    /// <summary>
+    /// Return up to <paramref name="maxCount"/> imported conversations (not chat session projections)
+    /// that have no digest and have not been skipped for lack of content, across all users, excluding
+    /// <paramref name="excludeIds"/>. These are what the bulk summarise run processes.
+    /// </summary>
+    Task<List<StoredConversation>> GetUnsummarisedAsync(
+        int maxCount, IReadOnlyCollection<string>? excludeIds = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Count the conversations that have a digest that is not yet reflected in their embedding:
+    /// digest present and status <see cref="ConversationProcessingStatus.Summarised"/>. An embed run
+    /// reconciles them, after which this is zero.
+    /// </summary>
+    Task<long> CountDigestsAwaitingEmbeddingAsync(string? userId = null, CancellationToken ct = default);
 
     /// <summary>
     /// Update the processing status of a single conversation. Embedding vectors are not stored on

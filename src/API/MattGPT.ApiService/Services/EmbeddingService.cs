@@ -90,12 +90,18 @@ public class EmbeddingService(
     /// <summary>Base delay (in seconds) for exponential backoff between retries.</summary>
     private const int BaseDelaySeconds = 2;
 
-    /// <summary>Statuses eligible for embedding — both freshly imported and summarised conversations.</summary>
+    /// <summary>
+    /// Statuses eligible for embedding: freshly imported conversations, conversations whose digest is
+    /// newer than their embedding (Summarised), and earlier embedding failures. SummaryError is a
+    /// legacy status: summarisation failures used to be marked with it, which left the conversation
+    /// never embedded. Digest failures no longer change the processing status.
+    /// </summary>
     private static readonly ConversationProcessingStatus[] EmbeddableStatuses =
     [
         ConversationProcessingStatus.Imported,
         ConversationProcessingStatus.Summarised,
         ConversationProcessingStatus.EmbeddingError,
+        ConversationProcessingStatus.SummaryError,
     ];
 
     /// <summary>

@@ -73,3 +73,14 @@ config is a classic 400/404 cause worth checking first.
 **Pointer:** `src/API/MattGPT.ApiService/Services/EmbeddingService.cs` (`TryGetServerErrorBody`,
 `GetHttpStatusCode`, `LogEmbeddingFailure`), `src/Infrastructure/OpenAIModule/Module.cs:25` (uri build)
 **Tags:** code-path, gotcha, pipeline, embedding, diagnostics, openai
+
+## 2026-10-06 — Digest state vs processing status (048): what each value now means
+
+**Context:** Implementing 048 (digest/record split, opt-in import digests).
+**Observation:** `ProcessingStatus` is now purely "is the vector current?". `Summarised` means "has a digest that is newer than its embedding", which is what `CountDigestsAwaitingEmbeddingAsync` counts, and embed runs pick it up. Digest outcome lives in `SummaryStatus` (`None`/`Generated`/`Skipped`/`Failed`). Failures and skips pass `status: null` to `UpdateSummaryAsync` so they never touch `ProcessingStatus`. `SummaryError` is legacy-only; it's in `EmbeddableStatuses` so old rows finally embed. The bulk run selects on `Summary == null && SummaryStatus != Skipped` (`GetUnsummarisedAsync`), not on status. Chat projections are excluded and owned by 049's pipeline.
+**Gotchas:**
+- `ImportJob.Status = Complete` is set *before* the digest and embed phases. Wait on `CompletedAt` (set in `finally`) for "job fully done"; tests that wait on `Status` race the later phases.
+- The test `FakeConversationRepository.UpsertAsync` now also stores the document (it used to only record it), so code that upserts and then reads back (import → digest by id) works in tests.
+- Re-import replaces the whole document, wiping `Summary`/`SummaryStatus`/`Record` (logged as a follow-up in 048).
+**Pointer:** `src/API/MattGPT.ApiService/Services/SummarisationService.cs` (`SummariseConversationAsync`, `BuildTranscript`), `ImportProcessingService.TrySummariseImportedAsync`, `SummaryProcessingService.cs` (queue + dedup)
+**Tags:** code-path, gotcha, pipeline, summarisation

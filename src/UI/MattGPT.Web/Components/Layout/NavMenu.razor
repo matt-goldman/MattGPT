@@ -58,12 +58,18 @@
                     Settings
                 </NavLink>
             </LumexNavbarItem>
+            <LumexNavbarItem>
+                <NotificationBell />
+            </LumexNavbarItem>
         }
 
         @if (AuthConfig.Value.Enabled)
         {
             <AuthorizeView>
                 <Authorized>
+                    <LumexNavbarItem>
+                        <NotificationBell />
+                    </LumexNavbarItem>
                     <LumexNavbarItem>
                         <span class="text-sm text-default-500">@(context.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? context.User.Identity?.Name)</span>
                     </LumexNavbarItem>

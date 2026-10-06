@@ -31,6 +31,27 @@ public record ConversationDiagnosticRow(
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ConversationProcessingStatus { Imported, Summarised, Embedded, SummaryError, EmbeddingError }
 
+/// <summary>Outcome of the last attempt to generate a conversation's digest (<see cref="StoredConversation.Summary"/>).</summary>
+/// <remarks>
+/// Tracked separately from <see cref="ConversationProcessingStatus"/>, because a digest can now be
+/// generated before or after embedding. A digest failure must not block or undo embedding.
+/// </remarks>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ConversationSummaryStatus
+{
+    /// <summary>No digest has been attempted (or the document predates this field).</summary>
+    None,
+
+    /// <summary>A digest was generated.</summary>
+    Generated,
+
+    /// <summary>The conversation has no visible content to summarise, so no digest can exist. Not retried.</summary>
+    Skipped,
+
+    /// <summary>Digest generation failed. Retried by the bulk summarise run.</summary>
+    Failed,
+}
+
 /// <summary>Where a stored conversation came from.</summary>
 /// <remarks>Serialised as a string in JSON, for the same reason as <see cref="ConversationProcessingStatus"/>.</remarks>
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -358,8 +379,21 @@ public class StoredConversation
     /// <summary>Tracks how far through the RAG pipeline this conversation has been processed.</summary>
     public ConversationProcessingStatus ProcessingStatus { get; set; } = ConversationProcessingStatus.Imported;
 
-    /// <summary>LLM-generated summary of this conversation. Populated after summarisation.</summary>
+    /// <summary>
+    /// The search digest: a short (3–6 sentence) LLM summary used as part of the embedding text, for
+    /// retrieval. Not a human-readable record of the conversation; see <see cref="Record"/>.
+    /// </summary>
     public string? Summary { get; set; }
+
+    /// <summary>Outcome of the last digest attempt.</summary>
+    public ConversationSummaryStatus SummaryStatus { get; set; } = ConversationSummaryStatus.None;
+
+    /// <summary>
+    /// The conversation record: a human-readable Markdown account of the topics, decisions, reversals
+    /// and outputs, generated on demand for export. Never embedded, so generating one never changes
+    /// retrieval. When present, it is the input for digest generation.
+    /// </summary>
+    public string? Record { get; set; }
 
     /// <summary>
     /// The Identity user ID of the owner, or <c>null</c> for data imported/created without authentication.

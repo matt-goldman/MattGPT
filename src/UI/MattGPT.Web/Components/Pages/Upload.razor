@@ -43,6 +43,24 @@
                     </LumexAlert>
                 }
 
+                <div class="rounded-lg border border-default-200 p-3 space-y-1">
+                    <label class="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                        <input type="checkbox" class="h-4 w-4 accent-primary" @bind="_generateSummaries" />
+                        Generate summaries
+                    </label>
+                    <p class="text-xs text-default-500 pl-6">
+                        Writes a short digest of each conversation with the configured LLM before embedding, which can improve search.
+                    </p>
+                    @if (_generateSummaries)
+                    {
+                        <p class="text-xs text-warning pl-6">
+                            This makes the import much slower: one LLM call per conversation, so the time depends on your provider and model.
+                            On a local GPU this is typically a few seconds per conversation, so a full export of a few thousand conversations
+                            can take hours (much longer on CPU). You can also generate summaries later from Settings.
+                        </p>
+                    }
+                </div>
+
                 <div class="flex justify-end">
                     <LumexButton Color="@ThemeColor.Primary"
                                  IsDisabled="@(_selectedFiles.Count == 0)"
@@ -89,6 +107,29 @@
                                     </div>
                                     break;
 
+                                case FileStatus.Summarising:
+                                    <div class="space-y-1">
+                                        <div class="flex items-center gap-2">
+                                            <LumexSpinner Size="@Size.Small" Color="@ThemeColor.Primary" />
+                                            <span class="text-xs text-default-500">
+                                                Summarising… @tracker.SummaryDone / @tracker.ProcessedConversations
+                                                @if (tracker.SummaryErrors > 0)
+                                                {
+                                                    <span class="text-warning">(@tracker.SummaryErrors failed)</span>
+                                                }
+                                            </span>
+                                        </div>
+                                        @{
+                                            var summaryPct = tracker.ProcessedConversations > 0
+                                                ? (int)(100.0 * tracker.SummaryDone / tracker.ProcessedConversations)
+                                                : 0;
+                                        }
+                                        <div class="w-full bg-default-100 rounded-full h-1.5">
+                                            <div class="bg-primary h-1.5 rounded-full transition-all duration-300" style="width: @(summaryPct)%"></div>
+                                        </div>
+                                    </div>
+                                    break;
+
                                 case FileStatus.Embedding:
                                     <div class="space-y-1">
                                         <div class="flex items-center gap-2">
@@ -111,6 +152,10 @@
                                 case FileStatus.Complete:
                                     <p class="text-xs @(tracker.EmbeddingErrors > 0 ? "text-warning" : "text-success")">
                                         @tracker.ProcessedConversations conversation(s) imported, @tracker.EmbeddedConversations embedded.
+                                        @if (tracker.SummariesRequested)
+                                        {
+                                            <span> @tracker.SummarisedConversations summarised@(tracker.SummarySkipped > 0 ? $", {tracker.SummarySkipped} with nothing to summarise" : string.Empty)@(tracker.SummaryErrors > 0 ? $", {tracker.SummaryErrors} summary failure(s)" : string.Empty).</span>
+                                        }
                                         @if (tracker.EmbeddingErrors > 0)
                                         {
                                             <span class="text-warning"> @tracker.EmbeddingErrors failed to embed.</span>
@@ -241,7 +286,7 @@
     private enum PageStatus { Idle, Error, Working, Complete }
 
     // — Per-file status —
-    private enum FileStatus { Pending, Uploading, Processing, Embedding, Complete, UploadFailed, ProcessingFailed, EmbeddingFailed }
+    private enum FileStatus { Pending, Uploading, Processing, Summarising, Embedding, Complete, UploadFailed, ProcessingFailed, EmbeddingFailed }
 
     /// <summary>Tracks the state of a single file upload + processing job.</summary>
     private class FileTracker
@@ -257,6 +302,13 @@
         public int EmbeddingErrors { get; set; }
         public string? ErrorMessage { get; set; }
         public string? EmbeddingErrorMessage { get; set; }
+        public bool SummariesRequested { get; set; }
+        public int SummarisedConversations { get; set; }
+        public int SummarySkipped { get; set; }
+        public int SummaryErrors { get; set; }
+
+        /// <summary>Conversations the digest phase has finished with, whatever the outcome.</summary>
+        public int SummaryDone => SummarisedConversations + SummarySkipped + SummaryErrors;
 
         /// <summary>True when this file has reached a terminal state.</summary>
         public bool IsTerminal => Status is FileStatus.Complete
@@ -266,6 +318,9 @@
     }
 
     private PageStatus _pageStatus = PageStatus.Idle;
+
+    /// <summary>Opt-in digest generation during import. Off by default: it adds an LLM call per conversation.</summary>
+    private bool _generateSummaries;
     private string _selectionError = string.Empty;
     private readonly List<IBrowserFile> _selectedFiles = new();
     private readonly List<FileTracker> _fileTrackers = new();
@@ -347,7 +402,7 @@
         try
         {
             await using var stream = tracker.BrowserFile.OpenReadStream(MaxFileSize);
-            var result = await ConversationService.UploadFileAsync(tracker.FileName, stream);
+            var result = await ConversationService.UploadFileAsync(tracker.FileName, stream, _generateSummaries);
             if (result?.JobId == null)
             {
                 tracker.Status = FileStatus.UploadFailed;
@@ -389,6 +444,10 @@
                     tracker.ErrorCount = job.ErrorCount;
                     tracker.EmbeddedConversations = job.EmbeddedConversations;
                     tracker.EmbeddingErrors = job.EmbeddingErrors;
+                    tracker.SummariesRequested = job.SummaryStatus != "NotRequested";
+                    tracker.SummarisedConversations = job.SummarisedConversations;
+                    tracker.SummarySkipped = job.SummarySkipped;
+                    tracker.SummaryErrors = job.SummaryErrors;
 
                     if (job.Status == "Failed")
                     {
@@ -403,7 +462,13 @@
                         continue;
                     }
 
-                    // Status == "Complete" — check embedding phase
+                    // Status == "Complete": the digest phase (if requested) runs before embedding.
+                    if (job.SummaryStatus is "Pending" or "InProgress")
+                    {
+                        tracker.Status = FileStatus.Summarising;
+                        continue;
+                    }
+
                     switch (job.EmbeddingStatus)
                     {
                         case "NotStarted":
@@ -456,6 +521,7 @@
             FileStatus.Pending => "bg-default-100 text-default-500",
             FileStatus.Uploading => "bg-primary-100 text-primary",
             FileStatus.Processing => "bg-primary-100 text-primary",
+            FileStatus.Summarising => "bg-primary-100 text-primary",
             FileStatus.Embedding => "bg-secondary-100 text-secondary",
             FileStatus.Complete => "bg-success-100 text-success",
             FileStatus.UploadFailed or FileStatus.ProcessingFailed => "bg-danger-100 text-danger",
@@ -470,6 +536,7 @@
             FileStatus.Pending => "Queued",
             FileStatus.Uploading => "Uploading",
             FileStatus.Processing => "Processing",
+            FileStatus.Summarising => "Summarising",
             FileStatus.Embedding => "Embedding",
             FileStatus.Complete => "Complete",
             FileStatus.UploadFailed => "Upload Failed",

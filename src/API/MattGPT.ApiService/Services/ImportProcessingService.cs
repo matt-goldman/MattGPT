@@ -7,13 +7,15 @@ namespace MattGPT.ApiService.Services;
 /// <summary>
 /// Identifies a pending import job and the temp file path containing the uploaded data.
 /// </summary>
-public record ImportJobRequest(string JobId, string TempFilePath, string? UserId = null);
+/// <param name="GenerateSummaries">Whether to generate a digest for each imported conversation before embedding (opt-in; ADR-014).</param>
+public record ImportJobRequest(string JobId, string TempFilePath, string? UserId = null, bool GenerateSummaries = false);
 
 /// <summary>
 /// Background service that dequeues import job requests and processes them using
 /// <see cref="ConversationParser"/>. Progress is tracked in <see cref="ImportJobStore"/>.
-/// After a successful import, automatically triggers embedding generation so that
-/// conversations are immediately available for RAG queries.
+/// After a successful import it optionally generates a digest for each imported conversation, then
+/// automatically embeds, so conversations are available for RAG queries straight away. Digests come
+/// first so they are part of the embedding. When the job ends, the user is notified.
 /// </summary>
 public class ImportProcessingService(
     Channel<ImportJobRequest> channel,
@@ -43,6 +45,7 @@ public class ImportProcessingService(
             {
                 await using var stream = File.OpenRead(request.TempFilePath);
 
+                var importedIds = new List<string>();
                 double? latestProfileCreateTime = null;
                 string? latestProfileText = null;
                 string? latestProfileInstructions = null;
@@ -66,6 +69,7 @@ public class ImportProcessingService(
 
                         // Upsert the conversation into MongoDB, then count it.
                         await repository.UpsertAsync(StoredConversation.From(conversation, request.UserId), stoppingToken);
+                        importedIds.Add(conversation.Id);
                         job.ProcessedConversations++;
                     }
                     catch (Exception ex)
@@ -87,8 +91,15 @@ public class ImportProcessingService(
                     "Import job {JobId} complete: {Count} conversations processed, {Errors} errors.",
                     request.JobId, job.ProcessedConversations, job.ErrorCount);
 
+                // Digests before embedding, so the embedding includes them.
+                if (request.GenerateSummaries)
+                    await TrySummariseImportedAsync(job, importedIds, stoppingToken);
+
                 // Auto-trigger embedding generation for newly imported conversations.
                 await TryAutoEmbedAsync(request.JobId, stoppingToken);
+
+                await NotifyAsync(request.UserId, NotificationKind.ImportCompleted, "Import complete",
+                    DescribeCompletedImport(job));
             }
             catch (OperationCanceledException)
             {
@@ -101,6 +112,9 @@ public class ImportProcessingService(
                 job.Status = ImportJobStatus.Failed;
                 job.ErrorMessage = ex.Message;
                 logger.LogError(ex, "Import job {JobId} failed.", request.JobId);
+
+                await NotifyAsync(request.UserId, NotificationKind.ImportFailed, "Import failed",
+                    $"{job.FileName ?? "The import"} could not be imported: {ex.Message}");
             }
             finally
             {
@@ -108,6 +122,64 @@ public class ImportProcessingService(
                 TryDeleteTempFile(request.TempFilePath);
             }
         }
+    }
+
+    /// <summary>
+    /// Generates a digest for each conversation in this import (opt-in). A failure for one
+    /// conversation is counted and logged, never fails the import, and leaves it to be backfilled by
+    /// the bulk summarise run. Embedding follows in bulk, so nothing is embedded here.
+    /// </summary>
+    private async Task TrySummariseImportedAsync(ImportJob job, IReadOnlyList<string> conversationIds, CancellationToken ct)
+    {
+        job.SummaryStatus = SummaryJobStatus.InProgress;
+        try
+        {
+            using var scope = serviceProvider.CreateScope();
+            var summariser = scope.ServiceProvider.GetRequiredService<SummarisationService>();
+
+            logger.LogInformation("Generating digests for {Count} conversations in job {JobId}.", conversationIds.Count, job.JobId);
+
+            foreach (var id in conversationIds)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                switch (await summariser.SummariseConversationAsync(id, embedAfter: false, ct))
+                {
+                    case DigestOutcome.Generated: job.SummarisedConversations++; break;
+                    case DigestOutcome.Skipped:   job.SummarySkipped++;          break;
+                    case DigestOutcome.Failed:    job.SummaryErrors++;           break;
+                }
+            }
+
+            job.SummaryStatus = SummaryJobStatus.Complete;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // E.g. the summariser couldn't be created. The import itself still succeeded.
+            job.SummaryStatus = SummaryJobStatus.Failed;
+            logger.LogError(ex, "Digest generation failed for job {JobId}; continuing to embedding.", job.JobId);
+        }
+    }
+
+    private static string DescribeCompletedImport(ImportJob job)
+    {
+        var parts = new List<string> { $"{job.FileName ?? "Import"}: {job.ProcessedConversations} conversation(s) imported" };
+        if (job.ErrorCount > 0)
+            parts.Add($"{job.ErrorCount} could not be parsed");
+        if (job.SummaryStatus != SummaryJobStatus.NotRequested)
+            parts.Add($"{job.SummarisedConversations} summarised, {job.SummarySkipped} skipped, {job.SummaryErrors} summary failure(s)");
+        parts.Add(job.EmbeddingStatus == EmbeddingJobStatus.Failed
+            ? "embedding failed"
+            : $"{job.EmbeddedConversations} embedded");
+        return string.Join("; ", parts) + ".";
+    }
+
+    /// <summary>Publishes a notification if notifications are available (they are optional in tests).</summary>
+    private async Task NotifyAsync(string? userId, NotificationKind kind, string title, string message)
+    {
+        var publisher = serviceProvider.GetService<NotificationPublisher>();
+        if (publisher is not null)
+            await publisher.PublishAsync(userId, kind, title, message, link: kind == NotificationKind.ImportCompleted ? "/chat" : "/upload");
     }
 
     /// <summary>

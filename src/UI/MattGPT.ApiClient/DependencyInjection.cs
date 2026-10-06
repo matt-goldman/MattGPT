@@ -33,6 +33,7 @@ public static class MattGptApiClientExtensions
         services.AddScoped<IConversationService, ConversationService>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<ISettingsService, SettingsService>();
+        services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAuthFailureHandler, TFailureHandler>();
 
         return services.AddHttpClient(MattGptApiClientDefaults.ClientName, client =>
@@ -60,6 +61,7 @@ public static class MattGptApiClientExtensions
         services.AddSingleton<IConversationService, ConversationService>();
         services.AddSingleton<ISearchService, SearchService>();
         services.AddSingleton<ISettingsService, SettingsService>();
+        services.AddSingleton<INotificationService, NotificationService>();
 
         services.AddHttpClient(MattGptApiClientDefaults.ClientName, client =>
         {
@@ -92,6 +94,7 @@ public static class MattGptApiClientExtensions
         services.AddSingleton<IConversationService, ConversationService>();
         services.AddSingleton<ISearchService, SearchService>();
         services.AddSingleton<ISettingsService, SettingsService>();
+        services.AddSingleton<INotificationService, NotificationService>();
 
         services.AddHttpClient(MattGptApiClientDefaults.ClientName, client =>
         {

@@ -9,7 +9,7 @@ namespace MattGPT.PostgresModule;
 public static class Module
 {
     /// <summary>
-    /// Registers the Npgsql data source for "mattgptdb" and all five PostgreSQL-backed
+    /// Registers the Npgsql data source for "mattgptdb" and all PostgreSQL-backed
     /// document-store repository implementations.
     /// </summary>
     public static IHostApplicationBuilder AddPostgresDocumentModule(this IHostApplicationBuilder builder)
@@ -20,6 +20,7 @@ public static class Module
         builder.Services.AddSingleton<IUserProfileRepository, PostgresUserProfileRepository>();
         builder.Services.AddSingleton<ISystemConfigRepository, PostgresSystemConfigRepository>();
         builder.Services.AddSingleton<IChatSessionRepository, PostgresChatSessionRepository>();
+        builder.Services.AddSingleton<INotificationRepository, PostgresNotificationRepository>();
         return builder;
     }
 

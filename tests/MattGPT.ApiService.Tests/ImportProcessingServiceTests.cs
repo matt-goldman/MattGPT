@@ -17,7 +17,8 @@ internal sealed class NullCurrentUserService : ICurrentUserService
 /// <summary>No-op repository used in unit tests that do not require MongoDB.</summary>
 internal sealed class FakeConversationRepository : IConversationRepository{
     public List<StoredConversation> Upserted { get; } = new();
-    public List<(string Id, string? Summary, ConversationProcessingStatus Status)> SummaryUpdates { get; } = new();
+    public List<(string Id, string? Summary, ConversationSummaryStatus SummaryStatus, ConversationProcessingStatus? Status)> SummaryUpdates { get; } = new();
+    public List<(string Id, string? Record)> RecordUpdates { get; } = new();
     public List<(string Id, ConversationProcessingStatus Status)> StatusUpdates { get; } = new();
 
     private List<StoredConversation> _conversations = new();
@@ -28,6 +29,8 @@ internal sealed class FakeConversationRepository : IConversationRepository{
     public Task UpsertAsync(StoredConversation conversation, CancellationToken ct = default)
     {
         Upserted.Add(conversation);
+        _conversations.RemoveAll(c => c.ConversationId == conversation.ConversationId);
+        _conversations.Add(conversation);
         return Task.CompletedTask;
     }
 
@@ -54,17 +57,47 @@ internal sealed class FakeConversationRepository : IConversationRepository{
         return Task.FromResult(items);
     }
 
-    public Task UpdateSummaryAsync(string conversationId, string? summary, ConversationProcessingStatus status, CancellationToken ct = default)
+    public Task UpdateSummaryAsync(
+        string conversationId, string? summary, ConversationSummaryStatus summaryStatus,
+        ConversationProcessingStatus? status, CancellationToken ct = default)
     {
-        SummaryUpdates.Add((conversationId, summary, status));
+        SummaryUpdates.Add((conversationId, summary, summaryStatus, status));
         var conv = _conversations.FirstOrDefault(c => c.ConversationId == conversationId);
         if (conv is not null)
         {
             conv.Summary = summary;
-            conv.ProcessingStatus = status;
+            conv.SummaryStatus = summaryStatus;
+            if (status is { } st)
+                conv.ProcessingStatus = st;
         }
         return Task.CompletedTask;
     }
+
+    public Task UpdateRecordAsync(string conversationId, string? record, CancellationToken ct = default)
+    {
+        RecordUpdates.Add((conversationId, record));
+        var conv = _conversations.FirstOrDefault(c => c.ConversationId == conversationId);
+        if (conv is not null)
+            conv.Record = record;
+        return Task.CompletedTask;
+    }
+
+    public Task<List<StoredConversation>> GetUnsummarisedAsync(
+        int maxCount, IReadOnlyCollection<string>? excludeIds = null, CancellationToken ct = default)
+    {
+        var items = _conversations
+            .Where(c => c.Source == ConversationSource.Import
+                && c.Summary is null
+                && c.SummaryStatus != ConversationSummaryStatus.Skipped
+                && (excludeIds is null || !excludeIds.Contains(c.ConversationId)))
+            .Take(maxCount)
+            .ToList();
+        return Task.FromResult(items);
+    }
+
+    public Task<long> CountDigestsAwaitingEmbeddingAsync(string? userId = null, CancellationToken ct = default)
+        => Task.FromResult((long)_conversations.Count(c =>
+            c.ProcessingStatus == ConversationProcessingStatus.Summarised && c.Summary is not null));
 
     public Task UpdateProcessingStatusAsync(string conversationId, ConversationProcessingStatus status, CancellationToken ct = default)
     {

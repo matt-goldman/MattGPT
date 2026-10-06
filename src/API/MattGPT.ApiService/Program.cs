@@ -42,6 +42,7 @@ app.MapSearchEndpoints();
 app.MapChatEndpoints();
 app.MapSettingsEndpoints();
 app.MapDiagnosticsEndpoints();
+app.MapNotificationsEndpoints();
 
 app.MapDefaultEndpoints();
 

@@ -8,8 +8,17 @@ namespace MattGPT.ApiClient.Services;
 /// </summary>
 public interface IConversationService
 {
-    /// <summary>Uploads a conversations JSON file and returns the resulting job ID.</summary>
-    Task<UploadResponse?> UploadFileAsync(string fileName, Stream fileStream, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Uploads a conversations JSON file and returns the resulting job ID. With
+    /// <paramref name="generateSummaries"/>, a digest is generated for each conversation before embedding.
+    /// </summary>
+    Task<UploadResponse?> UploadFileAsync(string fileName, Stream fileStream, bool generateSummaries = false, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the state of a conversation's record (with the Markdown when it is ready), or null if the conversation doesn't exist.</summary>
+    Task<ConversationRecordResponse?> GetRecordAsync(string conversationId, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the conversation's record if it exists, otherwise queues its generation and returns "Pending".</summary>
+    Task<ConversationRecordResponse?> RequestRecordAsync(string conversationId, CancellationToken cancellationToken = default);
 
     /// <summary>Returns the current status of a background import/embedding job.</summary>
     Task<JobStatusResponse?> GetJobStatusAsync(string jobId, CancellationToken cancellationToken = default);
@@ -25,6 +34,9 @@ public interface IConversationService
 
     /// <summary>Sets a user-friendly display name for a project.</summary>
     Task RenameProjectAsync(string templateId, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>Queues digest generation for every conversation without one; the user is notified when it finishes.</summary>
+    Task<SummariseQueuedResponse?> GenerateSummariesAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Queues a background embedding run and returns its job id for polling.</summary>
     Task<EmbedJobResponse?> RunEmbeddingsAsync(CancellationToken cancellationToken = default);

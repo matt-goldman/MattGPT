@@ -87,6 +87,25 @@
                 </div>
             </LumexTab>
             <LumexTab Title="Conversations">
+                @* Summaries (digests) *@
+                <section class="mb-8">
+                    <h2 class="text-lg font-semibold mb-2">Summaries</h2>
+                    <p class="text-sm text-default-400 mb-3">
+                        Generate a short digest for every conversation that doesn't have one, with the configured LLM. Each digest is
+                        embedded as soon as it is written, so it improves search straight away. This makes one LLM call per conversation and
+                        can take hours on a large library; it runs in the background and you'll be notified when it finishes.
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <LumexButton Variant="@Variant.Flat" OnClick="GenerateSummariesAsync" IsDisabled="@_summariesQueuing">
+                            Generate summaries
+                        </LumexButton>
+                        @if (_summariesMessage is not null)
+                        {
+                            <span class="text-sm text-default-500">@_summariesMessage</span>
+                        }
+                    </div>
+                </section>
+
                 @* Embeddings *@
                 <section class="mb-8">
                     <h2 class="text-lg font-semibold mb-2">Embeddings</h2>
@@ -426,6 +445,32 @@
         catch
         {
             // Resuming status is best-effort; failures here shouldn't break the settings page.
+        }
+    }
+
+    private bool _summariesQueuing;
+    private string? _summariesMessage;
+
+    private async Task GenerateSummariesAsync()
+    {
+        _summariesQueuing = true;
+        try
+        {
+            var response = await ConversationService.GenerateSummariesAsync();
+            _summariesMessage = response switch
+            {
+                null => "Couldn't start generating summaries.",
+                { AlreadyRunning: true } => "Summaries are already being generated.",
+                _ => "Generating summaries in the background. You'll be notified when it finishes.",
+            };
+        }
+        catch (Exception ex)
+        {
+            _summariesMessage = $"Couldn't start generating summaries: {ex.Message}";
+        }
+        finally
+        {
+            _summariesQueuing = false;
         }
     }
 

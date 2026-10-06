@@ -5,6 +5,7 @@
 @using LumexUI.Shared.Icons
 @implements IAsyncDisposable
 @inject IChatService ChatService
+@inject IConversationService ConversationService
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
@@ -48,6 +49,31 @@
                 <div class="flex items-center gap-2">
                     <span class="text-xs bg-default-200 text-default-600 rounded px-1.5 py-0.5">Imported</span>
                     <h1 class="text-lg font-semibold truncate">@(_viewingTitle ?? "Imported Conversation")</h1>
+                    <div class="ml-auto shrink-0">
+                        @switch (_recordStatus)
+                        {
+                            case "Ready":
+                                <LumexButton Size="@Size.Small" Variant="@Variant.Outlined" Color="@ThemeColor.Primary"
+                                             OnClick="DownloadRecordAsync"
+                                             title="Download a Markdown record of this conversation">
+                                    Export record
+                                </LumexButton>
+                                break;
+                            case "Pending":
+                                <LumexButton Size="@Size.Small" Variant="@Variant.Outlined" IsDisabled="true"
+                                             title="The record is being generated; you'll be notified when it's ready">
+                                    <LumexSpinner Size="@Size.Small" /> Generating record…
+                                </LumexButton>
+                                break;
+                            case "None":
+                                <LumexButton Size="@Size.Small" Variant="@Variant.Outlined" Color="@ThemeColor.Primary"
+                                             OnClick="RequestRecordAsync"
+                                             title="Generate a Markdown record of this conversation in the background">
+                                    Export record
+                                </LumexButton>
+                                break;
+                        }
+                    </div>
                 </div>
                 <p class="text-default-400 text-xs">Read-only view of an imported conversation</p>
             }
@@ -300,6 +326,7 @@
     {
         _streamCts?.Cancel();
         _streamCts?.Dispose();
+        ResetRecordState();
         if (_jsModule is not null)
         {
             await _jsModule.DisposeAsync();
@@ -321,6 +348,7 @@
     private async Task StartNewChat()
     {
         CancelActiveStream();
+        ResetRecordState();
         _messages.Clear();
         _sessionId = null;
         _sessionTitle = null;
@@ -340,6 +368,7 @@
     private async Task LoadSession(Guid sessionId)
     {
         CancelActiveStream();
+        ResetRecordState();
         _viewingConversationId = null;
         _viewingTitle = null;
         _viewingConversationSummary = null;
@@ -371,6 +400,7 @@
     private async Task LoadImportedConversation(string conversationId)
     {
         CancelActiveStream();
+        ResetRecordState();
         _sessionId = null;
         _sessionTitle = null;
         _messages.Clear();
@@ -390,6 +420,7 @@
             _viewingTitle = conv.Title;
             _viewingConversationSummary = conv.Summary;
             _lastLoadedConversationId = conversationId;
+            await LoadRecordStatusAsync(conv.ConversationId);
 
             foreach (var msg in conv.Messages)
             {
@@ -425,6 +456,112 @@
         }
 
         StateHasChanged();
+    }
+
+    // ── Record export (issue 048) ────────────────────────────────────────────
+
+    /// <summary>"None", "Pending" or "Ready" for the viewed imported conversation; null while unknown.</summary>
+    private string? _recordStatus;
+    private CancellationTokenSource? _recordPollCts;
+    private static readonly TimeSpan RecordPollInterval = TimeSpan.FromSeconds(3);
+
+    private void ResetRecordState()
+    {
+        _recordPollCts?.Cancel();
+        _recordPollCts?.Dispose();
+        _recordPollCts = null;
+        _recordStatus = null;
+    }
+
+    private async Task LoadRecordStatusAsync(string conversationId)
+    {
+        try
+        {
+            _recordStatus = (await ConversationService.GetRecordAsync(conversationId))?.Status;
+        }
+        catch
+        {
+            _recordStatus = null; // Hide the button rather than show a wrong state.
+        }
+
+        if (_recordStatus == "Pending")
+            StartRecordPolling(conversationId);
+    }
+
+    /// <summary>Queues generation of this conversation's record; the button shows it as pending until it's ready.</summary>
+    private async Task RequestRecordAsync()
+    {
+        if (_viewingConversationId is not { } conversationId) return;
+
+        try
+        {
+            _recordStatus = (await ConversationService.RequestRecordAsync(conversationId))?.Status;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Could not request the record: {ex.Message}";
+            return;
+        }
+
+        if (_recordStatus == "Ready")
+            await DownloadRecordAsync();
+        else if (_recordStatus == "Pending")
+            StartRecordPolling(conversationId);
+    }
+
+    /// <summary>Polls until the record is no longer pending (ready, or failed back to none), then updates the button.</summary>
+    private void StartRecordPolling(string conversationId)
+    {
+        _recordPollCts?.Cancel();
+        _recordPollCts?.Dispose();
+        _recordPollCts = new CancellationTokenSource();
+
+        // Not Task.Run: stay on the circuit's context, as the API client's auth handler may rely on it.
+        _ = PollRecordAsync(conversationId, _recordPollCts.Token);
+    }
+
+    private async Task PollRecordAsync(string conversationId, CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(RecordPollInterval, ct);
+                var status = (await ConversationService.GetRecordAsync(conversationId, ct))?.Status;
+                if (status is null or "Pending" || ct.IsCancellationRequested || _viewingConversationId != conversationId)
+                    continue;
+
+                _recordStatus = status;
+                StateHasChanged();
+                return;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away.
+        }
+        catch (Exception)
+        {
+            // Stop polling; reopening the conversation shows the current state.
+        }
+    }
+
+    private async Task DownloadRecordAsync()
+    {
+        if (_viewingConversationId is not { } conversationId || _jsModule is null) return;
+
+        try
+        {
+            var record = await ConversationService.GetRecordAsync(conversationId);
+            if (record is { Status: "Ready", FileName: { } fileName, Markdown: { } markdown })
+                await _jsModule.InvokeVoidAsync("downloadTextFile", fileName, markdown, "text/markdown");
+            else
+                _recordStatus = record?.Status;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Could not download the record: {ex.Message}";
+        }
     }
 
     /// <summary>

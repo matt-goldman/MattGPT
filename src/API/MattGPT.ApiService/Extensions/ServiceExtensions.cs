@@ -38,6 +38,12 @@ public static class ServiceExtensions
 
             builder.Services.AddScoped<SummarisationService>();
 
+            // On-demand records/digests and bulk digest runs, in the background; de-duplicated.
+            builder.Services.AddSingleton<SummaryJobQueue>();
+            builder.Services.AddHostedService<SummaryProcessingService>();
+
+            builder.Services.AddSingleton<NotificationPublisher>();
+
             builder.Services.AddSingleton(TimeProvider.System);
 
             builder.Services.AddScoped<EmbeddingService>();

@@ -166,13 +166,56 @@ public class ConversationRepository : IConversationRepository
 
     /// <inheritdoc/>
     public async Task UpdateSummaryAsync(
-        string conversationId, string? summary, ConversationProcessingStatus status, CancellationToken ct = default)
+        string conversationId, string? summary, ConversationSummaryStatus summaryStatus,
+        ConversationProcessingStatus? status, CancellationToken ct = default)
     {
         var filter = Builders<StoredConversation>.Filter.Eq(x => x.ConversationId, conversationId);
         var update = Builders<StoredConversation>.Update
             .Set(x => x.Summary, summary)
-            .Set(x => x.ProcessingStatus, status);
+            .Set(x => x.SummaryStatus, summaryStatus);
+        if (status is { } st)
+            update = update.Set(x => x.ProcessingStatus, st);
         await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task UpdateRecordAsync(string conversationId, string? record, CancellationToken ct = default)
+    {
+        var filter = Builders<StoredConversation>.Filter.Eq(x => x.ConversationId, conversationId);
+        var update = Builders<StoredConversation>.Update.Set(x => x.Record, record);
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<List<StoredConversation>> GetUnsummarisedAsync(
+        int maxCount, IReadOnlyCollection<string>? excludeIds = null, CancellationToken ct = default)
+    {
+        // Eq(null) also matches a missing Summary, and Ne(Skipped) a missing SummaryStatus, so
+        // documents stored before these fields existed are included.
+        var builder = Builders<StoredConversation>.Filter;
+        var filter = builder.And(
+            NotChatSession,
+            builder.Eq(x => x.Summary, null),
+            builder.Ne(x => x.SummaryStatus, ConversationSummaryStatus.Skipped));
+        if (excludeIds is { Count: > 0 })
+            filter &= builder.Nin(x => x.ConversationId, excludeIds);
+
+        return await _collection
+            .Find(filter)
+            .SortByDescending(x => x.UpdateTime)
+            .Limit(maxCount)
+            .ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<long> CountDigestsAwaitingEmbeddingAsync(string? userId = null, CancellationToken ct = default)
+    {
+        var builder = Builders<StoredConversation>.Filter;
+        var filter = builder.And(
+            builder.Eq(x => x.UserId, userId),
+            builder.Eq(x => x.ProcessingStatus, ConversationProcessingStatus.Summarised),
+            builder.Ne(x => x.Summary, null));
+        return await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
     }
 
     /// <inheritdoc/>

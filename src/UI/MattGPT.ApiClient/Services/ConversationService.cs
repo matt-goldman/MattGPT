@@ -12,7 +12,7 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
     private HttpClient CreateClient() => factory.CreateClient(MattGptApiClientDefaults.ClientName);
 
     /// <inheritdoc/>
-    public async Task<UploadResponse?> UploadFileAsync(string fileName, Stream fileStream, CancellationToken cancellationToken = default)
+    public async Task<UploadResponse?> UploadFileAsync(string fileName, Stream fileStream, bool generateSummaries = false, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
 
@@ -20,6 +20,7 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
         var streamContent = new StreamContent(fileStream);
         streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
         content.Add(streamContent, "file", fileName);
+        content.Add(new StringContent(generateSummaries ? "true" : "false"), "generateSummaries");
 
         using var response = await client.PostAsync("/conversations/upload", content, cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
@@ -36,6 +37,7 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
             var retryStreamContent = new StreamContent(fileStream);
             retryStreamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
             retryContent.Add(retryStreamContent, "file", fileName);
+            retryContent.Add(new StringContent(generateSummaries ? "true" : "false"), "generateSummaries");
             using var retryResponse = await client.PostAsync("/conversations/upload", retryContent, cancellationToken);
             retryResponse.EnsureSuccessStatusCode();
             return await retryResponse.Content.ReadFromJsonAsync<UploadResponse>(JsonOptions, cancellationToken);
@@ -228,6 +230,39 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
         if (!string.IsNullOrWhiteSpace(query)) qs.Add($"q={Uri.EscapeDataString(query)}");
         return GetJsonWithAuthRetryAsync<DiagnosticConversationsResponse>(
             $"/conversations/diagnostics/conversations?{string.Join('&', qs)}", cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public Task<ConversationRecordResponse?> GetRecordAsync(string conversationId, CancellationToken cancellationToken = default)
+        => GetJsonWithAuthRetryAsync<ConversationRecordResponse>(
+            $"/conversations/{Uri.EscapeDataString(conversationId)}/record", cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<SummariseQueuedResponse?> GenerateSummariesAsync(CancellationToken cancellationToken = default)
+        => PostJsonWithAuthRetryAsync<SummariseQueuedResponse>("/conversations/summarise", cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<ConversationRecordResponse?> RequestRecordAsync(string conversationId, CancellationToken cancellationToken = default)
+        => PostJsonWithAuthRetryAsync<ConversationRecordResponse>(
+            $"/conversations/{Uri.EscapeDataString(conversationId)}/record", cancellationToken);
+
+    /// <summary>
+    /// POSTs to <paramref name="url"/> with no body and deserializes the JSON response, retrying once
+    /// after a 401 via <see cref="IAuthFailureHandler"/>. Returns default on any non-success response.
+    /// </summary>
+    private async Task<T?> PostJsonWithAuthRetryAsync<T>(string url, CancellationToken cancellationToken)
+    {
+        var client = CreateClient();
+        using var response = await client.PostAsync(url, null, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (!await authFailureHandler.HandleAsync(cancellationToken)) return default;
+            using var retry = await client.PostAsync(url, null, cancellationToken);
+            if (!retry.IsSuccessStatusCode) return default;
+            return await retry.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken);
+        }
+        if (!response.IsSuccessStatusCode) return default;
+        return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken);
     }
 
     /// <summary>

@@ -25,3 +25,16 @@ export function isNearBottom(elementId, threshold) {
 export function pushState(url) {
     history.replaceState(null, '', url);
 }
+
+// Save text as a file in the browser (e.g. an exported conversation record).
+export function downloadTextFile(fileName, content, mimeType) {
+    const blob = new Blob([content], { type: (mimeType ?? 'text/plain') + ';charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}

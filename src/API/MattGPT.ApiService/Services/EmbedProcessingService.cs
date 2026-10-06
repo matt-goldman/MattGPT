@@ -3,8 +3,8 @@ using MattGPT.Contracts.Models;
 
 namespace MattGPT.ApiService.Services;
 
-/// <summary>Identifies a queued standalone embedding run.</summary>
-public record EmbedJobRequest(string JobId);
+/// <summary>Identifies a queued standalone embedding run, and the user to notify when it ends.</summary>
+public record EmbedJobRequest(string JobId, string? UserId = null);
 
 /// <summary>
 /// Background service that dequeues standalone embedding runs (triggered via
@@ -64,6 +64,9 @@ public class EmbedProcessingService(
                 logger.LogInformation(
                     "Embed job {JobId} complete: {Embedded} embedded, {Errors} errors, {Skipped} skipped.",
                     request.JobId, result.Embedded, result.Errors, result.Skipped);
+
+                await NotifyAsync(request.UserId, NotificationKind.EmbeddingCompleted, "Embedding complete",
+                    $"{result.Embedded} conversation(s) embedded, {result.Skipped} skipped, {result.Errors} failed.");
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -78,8 +81,17 @@ public class EmbedProcessingService(
                 job.EmbeddingErrorMessage = ex.Message;
                 job.CompletedAt = DateTimeOffset.UtcNow;
                 logger.LogError(ex, "Embed job {JobId} failed.", request.JobId);
+
+                await NotifyAsync(request.UserId, NotificationKind.EmbeddingFailed, "Embedding failed", ex.Message);
             }
         }
+    }
+
+    private async Task NotifyAsync(string? userId, NotificationKind kind, string title, string message)
+    {
+        var publisher = serviceProvider.GetService<NotificationPublisher>();
+        if (publisher is not null)
+            await publisher.PublishAsync(userId, kind, title, message, link: "/settings");
     }
 
     private async Task BackfillChatSessionsAsync(IServiceProvider services, CancellationToken ct)

@@ -1,7 +1,7 @@
 # ADR-003: RAG Pipeline v2 — Embed from Content, Fix Prompt & Timeouts
 
 **Date:** 2026-02-26
-**Status:** Accepted
+**Status:** Accepted; decision 1's removal of summarisation from import is superseded by [ADR-014](014-opt-in-digest-generation-on-import.md)
 **Related Issues:** 005, 008, 009, 011, 012
 
 ## Context

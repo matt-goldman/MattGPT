@@ -149,23 +149,88 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
 
     /// <inheritdoc/>
     public async Task UpdateSummaryAsync(
-        string conversationId, string? summary, ConversationProcessingStatus status, CancellationToken ct = default)
+        string conversationId, string? summary, ConversationSummaryStatus summaryStatus,
+        ConversationProcessingStatus? status, CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        // Merge the changed members into the document; processingStatus only when it changes.
+        var patch = new Dictionary<string, object?>
+        {
+            ["summary"] = summary,
+            ["summaryStatus"] = summaryStatus,
+        };
+        if (status is { } st)
+            patch["processingStatus"] = st;
+
+        await using var cmd = dataSource.CreateCommand(
+            $"""
+            UPDATE {TableName}
+            SET processing_status = COALESCE($2, processing_status),
+                data = data || $3::jsonb
+            WHERE conversation_id = $1
+            """);
+        cmd.Parameters.AddWithValue(conversationId);
+        cmd.Parameters.AddWithValue((object?)status?.ToString() ?? DBNull.Value);
+        cmd.Parameters.AddWithValue(JsonSerializer.Serialize(patch, SerializerOptions));
+
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task UpdateRecordAsync(string conversationId, string? record, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
 
         await using var cmd = dataSource.CreateCommand(
-            $$"""
-            UPDATE {{TableName}}
-            SET processing_status = $2,
-                data = jsonb_set(jsonb_set(data, '{summary}', $3::jsonb), '{processingStatus}', $4::jsonb)
-            WHERE conversation_id = $1
-            """);
+            $"UPDATE {TableName} SET data = data || $2::jsonb WHERE conversation_id = $1");
         cmd.Parameters.AddWithValue(conversationId);
-        cmd.Parameters.AddWithValue(status.ToString());
-        cmd.Parameters.AddWithValue(summary is null ? "null" : JsonSerializer.Serialize(summary));
-        cmd.Parameters.AddWithValue(JsonSerializer.Serialize(status.ToString()));
+        cmd.Parameters.AddWithValue(JsonSerializer.Serialize(new { record }, SerializerOptions));
 
         await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<List<StoredConversation>> GetUnsummarisedAsync(
+        int maxCount, IReadOnlyCollection<string>? excludeIds = null, CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        var hasExclusions = excludeIds is { Count: > 0 };
+
+        // Documents written before summaryStatus existed have no member; they read as None.
+        await using var cmd = dataSource.CreateCommand(
+            $"""
+            SELECT data FROM {TableName}
+            WHERE {NotChatSession}
+              AND COALESCE(jsonb_typeof(data->'summary'), 'null') = 'null'
+              AND COALESCE(data->>'summaryStatus', 'None') <> 'Skipped'
+              {(hasExclusions ? "AND conversation_id <> ALL($2)" : string.Empty)}
+            ORDER BY update_time DESC NULLS LAST
+            LIMIT $1
+            """);
+        cmd.Parameters.AddWithValue(maxCount);
+        if (hasExclusions)
+            cmd.Parameters.AddWithValue(excludeIds!.ToArray());
+
+        return await ReadConversationsAsync(cmd, ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<long> CountDigestsAwaitingEmbeddingAsync(string? userId = null, CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        await using var cmd = dataSource.CreateCommand(
+            $"""
+            SELECT COUNT(*) FROM {TableName}
+            WHERE user_id IS NOT DISTINCT FROM $1
+              AND processing_status = 'Summarised'
+              AND jsonb_typeof(data->'summary') = 'string'
+            """);
+        cmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
+
+        return (long)(await cmd.ExecuteScalarAsync(ct))!;
     }
 
     /// <inheritdoc/>

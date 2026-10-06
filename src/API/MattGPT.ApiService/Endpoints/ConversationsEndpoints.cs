@@ -40,9 +40,15 @@ public static class ConversationsEndpoints
                 throw;
             }
 
+            // Opt-in: digest generation adds an LLM call per conversation (ADR-014).
+            var generateSummaries = bool.TryParse(form["generateSummaries"], out var gs) && gs;
+
             var job = jobStore.CreateJob();
             job.FileName = file.FileName;
-            await channel.Writer.WriteAsync(new ImportJobRequest(job.JobId, tempPath, currentUser.UserId));
+            job.UserId = currentUser.UserId;
+            if (generateSummaries)
+                job.SummaryStatus = SummaryJobStatus.Pending;
+            await channel.Writer.WriteAsync(new ImportJobRequest(job.JobId, tempPath, currentUser.UserId, generateSummaries));
 
             return Results.Accepted($"/conversations/status/{job.JobId}", new
             {
@@ -93,26 +99,64 @@ public static class ConversationsEndpoints
         })
         .WithName("GetConversations");
 
-        // Trigger LLM summarisation for all imported conversations.
-        app.MapPost("/conversations/summarise", async (SummarisationService summariser, CancellationToken ct) =>
+        // Queue digest generation for every conversation without a digest. Each digest is embedded as
+        // it is generated. Runs in the background (it can take hours on a large library); the user
+        // is notified when it finishes.
+        app.MapPost("/conversations/summarise", (SummaryJobQueue queue, ICurrentUserService currentUser) =>
         {
-            var result = await summariser.SummariseAsync(ct);
-            return Results.Ok(new
-            {
-                summarised  = result.Summarised,
-                errors      = result.Errors,
-                skipped     = result.Skipped,
-            });
+            var queued = queue.TryEnqueue(new SummaryJobRequest(SummaryJobKind.Bulk, null, currentUser.UserId));
+            return Results.Accepted(value: new { queued, alreadyRunning = !queued });
         })
         .WithName("SummariseConversations");
+
+        // Queue digest generation (and re-embedding) for one conversation.
+        app.MapPost("/conversations/{conversationId}/summarise", async (
+            string conversationId, IConversationRepository repository, SummaryJobQueue queue, ICurrentUserService currentUser) =>
+        {
+            if (await repository.GetByIdAsync(conversationId) is null)
+                return Results.NotFound(new { message = $"Conversation '{conversationId}' not found." });
+
+            var queued = queue.TryEnqueue(new SummaryJobRequest(SummaryJobKind.Digest, conversationId, currentUser.UserId));
+            return Results.Accepted(value: new { queued, alreadyRunning = !queued });
+        })
+        .WithName("SummariseConversation");
+
+        // The conversation's record for export: Ready (with the Markdown file), Pending (being
+        // generated), or None.
+        app.MapGet("/conversations/{conversationId}/record", async (
+            string conversationId, IConversationRepository repository, SummaryJobQueue queue) =>
+        {
+            var conversation = await repository.GetByIdAsync(conversationId);
+            return conversation is null
+                ? Results.NotFound(new { message = $"Conversation '{conversationId}' not found." })
+                : Results.Ok(ToRecordResponse(conversation, queue));
+        })
+        .WithName("GetConversationRecord");
+
+        // Request the conversation's record: returns it if it exists, otherwise queues generation for
+        // this conversation only (de-duplicated) and returns Pending. The user is notified when it's ready.
+        app.MapPost("/conversations/{conversationId}/record", async (
+            string conversationId, IConversationRepository repository, SummaryJobQueue queue, ICurrentUserService currentUser) =>
+        {
+            var conversation = await repository.GetByIdAsync(conversationId);
+            if (conversation is null)
+                return Results.NotFound(new { message = $"Conversation '{conversationId}' not found." });
+
+            if (string.IsNullOrWhiteSpace(conversation.Record))
+                queue.TryEnqueue(new SummaryJobRequest(SummaryJobKind.Record, conversationId, currentUser.UserId));
+
+            return Results.Ok(ToRecordResponse(conversation, queue));
+        })
+        .WithName("RequestConversationRecord");
 
         // Queue a standalone embedding run in the background and return the job id to poll.
         // Embedding a large library can take minutes, so this returns immediately rather than
         // blocking the request; progress is polled via /conversations/status/{jobId}.
-        app.MapPost("/conversations/embed", async (ImportJobStore jobStore, Channel<EmbedJobRequest> channel) =>
+        app.MapPost("/conversations/embed", async (ImportJobStore jobStore, Channel<EmbedJobRequest> channel, ICurrentUserService currentUser) =>
         {
             var job = jobStore.CreateEmbedJob();
-            await channel.Writer.WriteAsync(new EmbedJobRequest(job.JobId));
+            job.UserId = currentUser.UserId;
+            await channel.Writer.WriteAsync(new EmbedJobRequest(job.JobId, currentUser.UserId));
 
             return Results.Accepted($"/conversations/status/{job.JobId}", new { jobId = job.JobId });
         })
@@ -154,6 +198,7 @@ public static class ConversationsEndpoints
         {
             var byStatus = await repository.GetStatusCountsAsync(currentUser.UserId, ct);
             var total = byStatus.Values.Sum();
+            var digestsAwaitingEmbedding = await repository.CountDigestsAwaitingEmbeddingAsync(currentUser.UserId, ct);
 
             long? vectorPoints = null;
             string? vectorError = null;
@@ -172,7 +217,9 @@ public static class ConversationsEndpoints
             if (imported + summarised > 0)
                 issues.Add($"{imported + summarised} conversation(s) not yet embedded.");
             if (summaryErrors > 0)
-                issues.Add($"{summaryErrors} conversation(s) failed summarisation (non-blocking — embedding uses raw content).");
+                issues.Add($"{summaryErrors} conversation(s) failed summarisation before digest status was tracked; the next embed run embeds them from raw content.");
+            if (digestsAwaitingEmbedding > 0)
+                issues.Add($"{digestsAwaitingEmbedding} digest(s) are not yet in their conversation's embedding; run embeddings to reconcile.");
             if (embeddingErrors > 0)
                 issues.Add($"{embeddingErrors} conversation(s) failed embedding; the next embed run retries them.");
             if (vectorError is not null)
@@ -186,6 +233,7 @@ public static class ConversationsEndpoints
                 totalConversations  = total,
                 byStatus            = byStatus.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
                 vectorPoints,
+                digestsAwaitingEmbedding,
                 vectorStoreError    = vectorError,
                 llmProvider         = llm.Provider,
                 llmModelId          = llm.ModelId,
@@ -358,6 +406,27 @@ public static class ConversationsEndpoints
         return app;
     }
 
+    /// <summary>Shapes a conversation's record state for the record endpoints.</summary>
+    private static object ToRecordResponse(StoredConversation conversation, SummaryJobQueue queue)
+    {
+        if (!string.IsNullOrWhiteSpace(conversation.Record))
+        {
+            return new
+            {
+                status      = "Ready",
+                fileName    = ConversationRecordExport.FileName(conversation.Title),
+                markdown    = ConversationRecordExport.BuildMarkdown(conversation),
+            };
+        }
+
+        return new
+        {
+            status      = queue.IsPending(SummaryJobKind.Record, conversation.ConversationId) ? "Pending" : "None",
+            fileName    = (string?)null,
+            markdown    = (string?)null,
+        };
+    }
+
     /// <summary>Shapes an <see cref="ImportJob"/> for the status/latest-embed polling endpoints.</summary>
     private static object ToJobStatusResponse(ImportJob job) => new
     {
@@ -374,6 +443,10 @@ public static class ConversationsEndpoints
         embeddingErrors         = job.EmbeddingErrors,
         embeddingSkipped        = job.EmbeddingSkipped,
         embeddingErrorMessage   = job.EmbeddingErrorMessage,
+        summaryStatus           = job.SummaryStatus.ToString(),
+        summarisedConversations = job.SummarisedConversations,
+        summarySkipped          = job.SummarySkipped,
+        summaryErrors           = job.SummaryErrors,
     };
 }
 

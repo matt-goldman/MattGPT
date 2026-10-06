@@ -3,6 +3,9 @@ namespace MattGPT.ApiClient.Models;
 /// <summary>Response from the file upload endpoint.</summary>
 public record UploadResponse(string JobId);
 
+/// <summary>Response from queuing a background summarise run; <see cref="AlreadyRunning"/> when one was already queued.</summary>
+public record SummariseQueuedResponse(bool Queued, bool AlreadyRunning);
+
 /// <summary>Response from the embeddings endpoint identifying the queued background run.</summary>
 public record EmbedJobResponse(string JobId);
 
@@ -21,7 +24,17 @@ public record JobStatusResponse(
     int EmbeddedConversations,
     int EmbeddingErrors,
     int EmbeddingSkipped,
-    string? EmbeddingErrorMessage);
+    string? EmbeddingErrorMessage,
+    string SummaryStatus = "NotRequested",
+    int SummarisedConversations = 0,
+    int SummarySkipped = 0,
+    int SummaryErrors = 0);
+
+/// <summary>
+/// A conversation's record for export. <see cref="Status"/> is "Ready" (with <see cref="FileName"/> and
+/// <see cref="Markdown"/>), "Pending" (being generated) or "None".
+/// </summary>
+public record ConversationRecordResponse(string Status, string? FileName, string? Markdown);
 
 /// <summary>Summary of an imported conversation as shown in the sidebar.</summary>
 public record ImportedConversationItem(string ConversationId, string? Title, double? CreateTime, double? UpdateTime, int MessageCount);
@@ -44,7 +57,8 @@ public record DiagnosticsSummary(
     string? LlmProvider,
     string? LlmModelId,
     string? EmbeddingModelId,
-    List<string> Issues);
+    List<string> Issues,
+    long DigestsAwaitingEmbedding = 0);
 
 /// <summary>A single conversation's pipeline state in the diagnostics drill-down table.</summary>
 public record ConversationDiagnostic(
