@@ -19,7 +19,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
 
     /// <summary>
     /// The tsvector expression backing keyword search. Built over every string value in the
-    /// JSONB document (titles, summaries, and message parts; the numeric embedding is skipped
+    /// JSONB document (titles, summaries, and message parts; numeric fields are skipped
     /// because of the <c>["string"]</c> filter). The regconfig cast is what makes the
     /// expression IMMUTABLE, which is what lets it be indexed - keep the query and the index
     /// definition character-for-character identical or Postgres will not use the index.
@@ -28,7 +28,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
     private volatile bool _schemaEnsured;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
-    // The UPDATE paths (UpdateSummaryAsync / UpdateEmbeddingAsync) write data.processingStatus into
+    // The UPDATE paths (UpdateSummaryAsync / UpdateProcessingStatusAsync) write data.processingStatus into
     // the JSONB as a string via jsonb_set, while a plain insert serialises the whole document, so
     // the two must agree on the enum's JSON shape. That contract is enforced on the model —
     // ConversationProcessingStatus carries [JsonStringEnumConverter] — so no converter is needed
@@ -95,7 +95,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
         cmd.Parameters.AddWithValue(pageSize);
         cmd.Parameters.AddWithValue((page - 1) * pageSize);
 
-        return (await ReadConversationsAsync(cmd, excludeEmbedding: true, ct), total);
+        return (await ReadConversationsAsync(cmd, ct), total);
     }
 
     /// <inheritdoc/>
@@ -113,7 +113,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
         cmd.Parameters.AddWithValue(status.ToString());
         cmd.Parameters.AddWithValue(maxCount);
 
-        return await ReadConversationsAsync(cmd, excludeEmbedding: false, ct);
+        return await ReadConversationsAsync(cmd, ct);
     }
 
     /// <inheritdoc/>
@@ -137,7 +137,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
         if (hasExclusions)
             cmd.Parameters.AddWithValue(excludeIds!.ToArray());
 
-        return await ReadConversationsAsync(cmd, excludeEmbedding: false, ct);
+        return await ReadConversationsAsync(cmd, ct);
     }
 
     /// <inheritdoc/>
@@ -162,8 +162,8 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
     }
 
     /// <inheritdoc/>
-    public async Task UpdateEmbeddingAsync(
-        string conversationId, float[]? embedding, ConversationProcessingStatus status, CancellationToken ct = default)
+    public async Task UpdateProcessingStatusAsync(
+        string conversationId, ConversationProcessingStatus status, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
 
@@ -171,12 +171,11 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
             $$"""
             UPDATE {{TableName}}
             SET processing_status = $2,
-                data = jsonb_set(jsonb_set(data, '{embedding}', $3::jsonb), '{processingStatus}', $4::jsonb)
+                data = jsonb_set(data, '{processingStatus}', $3::jsonb)
             WHERE conversation_id = $1
             """);
         cmd.Parameters.AddWithValue(conversationId);
         cmd.Parameters.AddWithValue(status.ToString());
-        cmd.Parameters.AddWithValue(embedding is null ? "null" : JsonSerializer.Serialize(embedding));
         cmd.Parameters.AddWithValue(JsonSerializer.Serialize(status.ToString()));
 
         await cmd.ExecuteNonQueryAsync(ct);
@@ -191,7 +190,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
             $"SELECT data FROM {TableName} WHERE conversation_id = $1");
         cmd.Parameters.AddWithValue(conversationId);
 
-        var rows = await ReadConversationsAsync(cmd, excludeEmbedding: true, ct);
+        var rows = await ReadConversationsAsync(cmd, ct);
         return rows.FirstOrDefault();
     }
 
@@ -207,7 +206,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
             $"SELECT data FROM {TableName} WHERE conversation_id = ANY($1)");
         cmd.Parameters.AddWithValue(ids);
 
-        return await ReadConversationsAsync(cmd, excludeEmbedding: false, ct);
+        return await ReadConversationsAsync(cmd, ct);
     }
 
     /// <inheritdoc/>
@@ -439,7 +438,7 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
         cmd.Parameters.AddWithValue(pageSize);
         cmd.Parameters.AddWithValue((page - 1) * pageSize);
 
-        return (await ReadConversationsAsync(cmd, excludeEmbedding: true, ct), total);
+        return (await ReadConversationsAsync(cmd, ct), total);
     }
 
     /// <inheritdoc/>
@@ -471,11 +470,11 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
         cmd.Parameters.AddWithValue(pageSize);
         cmd.Parameters.AddWithValue((page - 1) * pageSize);
 
-        return (await ReadConversationsAsync(cmd, excludeEmbedding: true, ct), total);
+        return (await ReadConversationsAsync(cmd, ct), total);
     }
 
     private async Task<List<StoredConversation>> ReadConversationsAsync(
-        NpgsqlCommand cmd, bool excludeEmbedding, CancellationToken ct)
+        NpgsqlCommand cmd, CancellationToken ct)
     {
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         var results = new List<StoredConversation>();
@@ -491,9 +490,6 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
             {
                 var conv = JsonSerializer.Deserialize<StoredConversation>(json, SerializerOptions);
                 if (conv is null) continue;
-
-                if (excludeEmbedding)
-                    conv.Embedding = null;
 
                 results.Add(conv);
             }
@@ -537,6 +533,23 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
         }
 
         return "(unknown)";
+    }
+
+    /// <summary>
+    /// One-off migration: removes the legacy <c>embedding</c> member from stored documents.
+    /// Embeddings used to be written into the conversation document as well as the vector store;
+    /// nothing reads them any more, but they bloat every row (TOAST) and every full-document read.
+    /// The <c>?</c> test is a no-op scan once all rows are clean. It was never indexed: the
+    /// full-text index only covers string values.
+    /// </summary>
+    private async Task DropLegacyEmbeddingsAsync(CancellationToken ct)
+    {
+        await using var cmd = dataSource.CreateCommand(
+            $"UPDATE {TableName} SET data = data - 'embedding' WHERE data ? 'embedding'");
+        var updated = await cmd.ExecuteNonQueryAsync(ct);
+
+        if (updated > 0)
+            logger.LogInformation("Removed legacy embedding vectors from {Count} conversation documents.", updated);
     }
 
     private async Task EnsureSchemaAsync(CancellationToken ct)
@@ -586,6 +599,8 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
                 """);
 
             await cmd.ExecuteNonQueryAsync(ct);
+
+            await DropLegacyEmbeddingsAsync(ct);
 
             logger.LogInformation("Ensured Postgres conversations table schema.");
             _schemaEnsured = true;

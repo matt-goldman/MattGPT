@@ -81,6 +81,7 @@ This document is the **system of record** for project planning and issue trackin
 | 47 | 047-experiment-with-graph-rag-and-reranking.md | Experiment with Graph RAG and reranking models | In Progress | TODO/ | Reranking prototype in progress (branch `add-reranking`); Graph RAG not started. |
 | 48 | 048-export-summary-and-notifications.md | Export conversation summary and in-app notifications | TODO | TODO/ | Depends on 8, 22. Markdown export with background generation when missing; toast + bell badge notifications, also used for import completion. |
 | 49 | 049-defect-chat-sessions-never-completed-or-embedded.md | Defect: chat sessions are never completed or embedded | TODO | TODO/ | Defect against 19 (embedding criteria ticked but not implemented). Session lifecycle, embedding, whole-session summary; unblocks session export in 48. |
+| 50 | 050-remove-legacy-embeddings-in-conversations.md | Remove legacy embedding storage from the document database | Done | Done/ | Drops `StoredConversation.Embedding` and its writes; startup migration for Mongo and Postgres; vector-store upsert failure now marks `EmbeddingError`. |
 
 ---
 

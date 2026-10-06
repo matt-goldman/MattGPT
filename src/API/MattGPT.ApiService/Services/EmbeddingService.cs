@@ -101,7 +101,7 @@ public class EmbeddingService(
     /// <summary>
     /// Processes all conversations with <see cref="ConversationProcessingStatus.Imported"/> or
     /// <see cref="ConversationProcessingStatus.Summarised"/> status, generates an embedding
-    /// vector from conversation content, and stores it in MongoDB and Qdrant.
+    /// vector from conversation content, and stores it in the configured vector store.
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
     /// <param name="progress">Optional progress reporter, invoked after each conversation.</param>
@@ -175,25 +175,38 @@ public class EmbeddingService(
                 "Conversation {Id} has no embeddable content; marking as Embedded with null vector.",
                 conversation.ConversationId);
 
-            await repository.UpdateEmbeddingAsync(
+            await repository.UpdateProcessingStatusAsync(
                 conversation.ConversationId,
-                embedding: null,
                 ConversationProcessingStatus.Embedded,
                 ct);
             return EmbedOutcome.Skipped;
         }
 
+        float[] vector;
         try
         {
-            var vector = await GenerateChunkedEmbeddingAsync(conversation, embeddingText, ct);
+            vector = await GenerateChunkedEmbeddingAsync(conversation, embeddingText, ct);
+        }
+        catch (Exception ex)
+        {
+            LogEmbeddingFailure(ex, conversation, embeddingText.Length);
 
-            await repository.UpdateEmbeddingAsync(
+            await TryMarkErrorAsync(conversation.ConversationId, ct);
+            return EmbedOutcome.Error;
+        }
+
+        // The vector store is the only place the vector lives, so the conversation is only
+        // Embedded once the upsert succeeds. A failed upsert is marked EmbeddingError so the
+        // next run retries it, rather than leaving an "Embedded" conversation that search
+        // can never find.
+        try
+        {
+            await vectorStore.UpsertAsync(conversation, vector, ct);
+
+            await repository.UpdateProcessingStatusAsync(
                 conversation.ConversationId,
-                vector,
                 ConversationProcessingStatus.Embedded,
                 ct);
-
-            await TryUpsertVectorStoreAsync(conversation, vector, ct);
 
             logger.LogDebug(
                 "Embedded conversation {Id} ({Title}), dimensions: {Dims}, text length: {TextLen}.",
@@ -203,7 +216,10 @@ public class EmbeddingService(
         }
         catch (Exception ex)
         {
-            LogEmbeddingFailure(ex, conversation, embeddingText.Length);
+            logger.LogWarning(
+                ex,
+                "Failed to store the embedding for conversation {Id}; marking it EmbeddingError for retry.",
+                conversation.ConversationId);
 
             await TryMarkErrorAsync(conversation.ConversationId, ct);
             return EmbedOutcome.Error;
@@ -543,28 +559,12 @@ public class EmbeddingService(
         return chunks;
     }
 
-    private async Task TryUpsertVectorStoreAsync(StoredConversation conversation, float[] vector, CancellationToken ct)
-    {
-        try
-        {
-            await vectorStore.UpsertAsync(conversation, vector, ct);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(
-                ex,
-                "Failed to upsert conversation {Id} into vector store; the embedding is stored in MongoDB.",
-                conversation.ConversationId);
-        }
-    }
-
     private async Task TryMarkErrorAsync(string conversationId, CancellationToken ct)
     {
         try
         {
-            await repository.UpdateEmbeddingAsync(
+            await repository.UpdateProcessingStatusAsync(
                 conversationId,
-                embedding: null,
                 ConversationProcessingStatus.EmbeddingError,
                 ct);
         }

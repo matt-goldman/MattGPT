@@ -6,7 +6,7 @@ namespace MattGPT.Contracts.Models;
 
 /// <summary>
 /// A lightweight projection of a conversation's pipeline state, for the diagnostics view.
-/// Deliberately excludes message content and the embedding vector so it can be built from
+/// Deliberately excludes message content so it can be built from
 /// promoted columns / a field projection without deserializing the whole document.
 /// </summary>
 public record ConversationDiagnosticRow(
@@ -344,9 +344,6 @@ public class StoredConversation
 
     /// <summary>LLM-generated summary of this conversation. Populated after summarisation.</summary>
     public string? Summary { get; set; }
-
-    /// <summary>Embedding vector generated from the summary. Populated after embedding generation.</summary>
-    public float[]? Embedding { get; set; }
 
     /// <summary>
     /// The Identity user ID of the owner, or <c>null</c> for data imported/created without authentication.

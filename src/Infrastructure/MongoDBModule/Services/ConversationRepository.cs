@@ -44,6 +44,27 @@ public class ConversationRepository : IConversationRepository
         ]);
 
         CreateTextIndex();
+        DropLegacyEmbeddings();
+    }
+
+    /// <summary>
+    /// One-off migration: unsets the legacy <c>Embedding</c> field. Embeddings used to be written
+    /// into the conversation document as well as the vector store; nothing reads them any more.
+    /// The field was never indexed. Once every document is clean this matches nothing.
+    /// </summary>
+    /// <remarks>
+    /// Documents that still carry the field also deserialize safely, because the class map ignores
+    /// extra elements (see <c>Module.AddMongoDBModule</c>) — this just reclaims the space.
+    /// </remarks>
+    private void DropLegacyEmbeddings()
+    {
+        const string legacyField = "Embedding";
+        var result = _collection.UpdateMany(
+            Builders<StoredConversation>.Filter.Exists(legacyField),
+            Builders<StoredConversation>.Update.Unset(legacyField));
+
+        if (result.ModifiedCount > 0)
+            _logger.LogInformation("Removed legacy embedding vectors from {Count} conversation documents.", result.ModifiedCount);
     }
 
     /// <summary>
@@ -146,12 +167,11 @@ public class ConversationRepository : IConversationRepository
     }
 
     /// <inheritdoc/>
-    public async Task UpdateEmbeddingAsync(
-        string conversationId, float[]? embedding, ConversationProcessingStatus status, CancellationToken ct = default)
+    public async Task UpdateProcessingStatusAsync(
+        string conversationId, ConversationProcessingStatus status, CancellationToken ct = default)
     {
         var filter = Builders<StoredConversation>.Filter.Eq(x => x.ConversationId, conversationId);
         var update = Builders<StoredConversation>.Update
-            .Set(x => x.Embedding, embedding)
             .Set(x => x.ProcessingStatus, status);
         await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
     }
@@ -160,9 +180,7 @@ public class ConversationRepository : IConversationRepository
     public async Task<StoredConversation?> GetByIdAsync(string conversationId, CancellationToken ct = default)
     {
         var filter = Builders<StoredConversation>.Filter.Eq(x => x.ConversationId, conversationId);
-        // Exclude the Embedding field — it's a large float[] not needed by UI consumers.
-        var projection = Builders<StoredConversation>.Projection.Exclude(x => x.Embedding);
-        return await _collection.Find(filter).Project<StoredConversation>(projection).FirstOrDefaultAsync(ct);
+        return await _collection.Find(filter).FirstOrDefaultAsync(ct);
     }
 
     /// <inheritdoc/>
@@ -258,8 +276,7 @@ public class ConversationRepository : IConversationRepository
 
         var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
 
-        // Project only the fields the diagnostic row needs — never the message bodies or the
-        // embedding vector — so the listing stays cheap over a large collection.
+        // Project only the fields the diagnostic row needs — never the message bodies — so the listing stays cheap over a large collection.
         var projected = await _collection
             .Find(filter)
             .SortByDescending(x => x.UpdateTime)
@@ -312,11 +329,9 @@ public class ConversationRepository : IConversationRepository
             Builders<StoredConversation>.Filter.Eq(x => x.GizmoType, "snorlax"),
             Builders<StoredConversation>.Filter.Eq(x => x.ConversationTemplateId, templateId),
             Builders<StoredConversation>.Filter.Eq(x => x.UserId, userId));
-        var projection = Builders<StoredConversation>.Projection.Exclude(x => x.Embedding);
         var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
         var items = await _collection
             .Find(filter)
-            .Project<StoredConversation>(projection)
             .SortByDescending(x => x.UpdateTime)
             .Skip((page - 1) * pageSize)
             .Limit(pageSize)
@@ -335,11 +350,9 @@ public class ConversationRepository : IConversationRepository
                 Builders<StoredConversation>.Filter.Ne(x => x.GizmoType, "snorlax"),
                 Builders<StoredConversation>.Filter.Eq(x => x.ConversationTemplateId, null)),
             Builders<StoredConversation>.Filter.Eq(x => x.UserId, userId));
-        var projection = Builders<StoredConversation>.Projection.Exclude(x => x.Embedding);
         var total = await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
         var items = await _collection
             .Find(filter)
-            .Project<StoredConversation>(projection)
             .SortByDescending(x => x.UpdateTime)
             .Skip((page - 1) * pageSize)
             .Limit(pageSize)

@@ -18,7 +18,7 @@ internal sealed class NullCurrentUserService : ICurrentUserService
 internal sealed class FakeConversationRepository : IConversationRepository{
     public List<StoredConversation> Upserted { get; } = new();
     public List<(string Id, string? Summary, ConversationProcessingStatus Status)> SummaryUpdates { get; } = new();
-    public List<(string Id, float[]? Embedding, ConversationProcessingStatus Status)> EmbeddingUpdates { get; } = new();
+    public List<(string Id, ConversationProcessingStatus Status)> StatusUpdates { get; } = new();
 
     private List<StoredConversation> _conversations = new();
 
@@ -66,15 +66,12 @@ internal sealed class FakeConversationRepository : IConversationRepository{
         return Task.CompletedTask;
     }
 
-    public Task UpdateEmbeddingAsync(string conversationId, float[]? embedding, ConversationProcessingStatus status, CancellationToken ct = default)
+    public Task UpdateProcessingStatusAsync(string conversationId, ConversationProcessingStatus status, CancellationToken ct = default)
     {
-        EmbeddingUpdates.Add((conversationId, embedding, status));
+        StatusUpdates.Add((conversationId, status));
         var conv = _conversations.FirstOrDefault(c => c.ConversationId == conversationId);
         if (conv is not null)
-        {
-            conv.Embedding = embedding;
             conv.ProcessingStatus = status;
-        }
         return Task.CompletedTask;
     }
 

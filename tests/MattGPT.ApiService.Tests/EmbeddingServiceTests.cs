@@ -178,10 +178,10 @@ public class EmbeddingServiceTests
         Assert.Equal(1, result.Embedded);
         Assert.Equal(0, result.Errors);
         Assert.Equal(0, result.Skipped);
-        Assert.Single(repository.EmbeddingUpdates);
-        Assert.Equal("c1", repository.EmbeddingUpdates[0].Id);
-        Assert.Equal(ConversationProcessingStatus.Embedded, repository.EmbeddingUpdates[0].Status);
-        Assert.Equal(TestVector, repository.EmbeddingUpdates[0].Embedding);
+        Assert.Single(repository.StatusUpdates);
+        Assert.Equal("c1", repository.StatusUpdates[0].Id);
+        Assert.Equal(ConversationProcessingStatus.Embedded, repository.StatusUpdates[0].Status);
+        Assert.Equal(TestVector, qdrant.Upserted[0].Vector);
         Assert.Single(qdrant.Upserted);
         Assert.Equal("c1", qdrant.Upserted[0].Conversation.ConversationId);
     }
@@ -215,8 +215,8 @@ public class EmbeddingServiceTests
 
         Assert.Equal(0, result.Embedded);
         Assert.Equal(1, result.Errors);
-        Assert.Single(repository.EmbeddingUpdates);
-        Assert.Equal(ConversationProcessingStatus.EmbeddingError, repository.EmbeddingUpdates[0].Status);
+        Assert.Single(repository.StatusUpdates);
+        Assert.Equal(ConversationProcessingStatus.EmbeddingError, repository.StatusUpdates[0].Status);
     }
 
     [Fact]
@@ -233,8 +233,8 @@ public class EmbeddingServiceTests
         var result = await service.EmbedAsync();
 
         Assert.Equal(1, result.Embedded);
-        Assert.Single(repository.EmbeddingUpdates);
-        Assert.Equal(ConversationProcessingStatus.Embedded, repository.EmbeddingUpdates[0].Status);
+        Assert.Single(repository.StatusUpdates);
+        Assert.Equal(ConversationProcessingStatus.Embedded, repository.StatusUpdates[0].Status);
     }
 
     [Fact]
@@ -257,9 +257,9 @@ public class EmbeddingServiceTests
         Assert.Equal(0, result.Embedded);
         Assert.Equal(count, result.Errors);
         // Exactly one update per conversation — proof each was attempted once and the loop ended.
-        Assert.Equal(count, repository.EmbeddingUpdates.Count);
-        Assert.Equal(count, repository.EmbeddingUpdates.Select(u => u.Id).Distinct().Count());
-        Assert.All(repository.EmbeddingUpdates, u => Assert.Equal(ConversationProcessingStatus.EmbeddingError, u.Status));
+        Assert.Equal(count, repository.StatusUpdates.Count);
+        Assert.Equal(count, repository.StatusUpdates.Select(u => u.Id).Distinct().Count());
+        Assert.All(repository.StatusUpdates, u => Assert.Equal(ConversationProcessingStatus.EmbeddingError, u.Status));
     }
 
     [Fact]
@@ -277,9 +277,8 @@ public class EmbeddingServiceTests
         Assert.Equal(0, result.Embedded);
         Assert.Equal(0, result.Errors);
         Assert.Equal(1, result.Skipped);
-        Assert.Single(repository.EmbeddingUpdates);
-        Assert.Equal(ConversationProcessingStatus.Embedded, repository.EmbeddingUpdates[0].Status);
-        Assert.Null(repository.EmbeddingUpdates[0].Embedding);
+        Assert.Single(repository.StatusUpdates);
+        Assert.Equal(ConversationProcessingStatus.Embedded, repository.StatusUpdates[0].Status);
     }
 
     [Fact]
@@ -368,7 +367,7 @@ public class EmbeddingServiceTests
         Assert.Equal(2, result.Embedded);
         Assert.Equal(1, result.Errors);
         Assert.Equal(3, callCount);
-        Assert.Equal(3, repository.EmbeddingUpdates.Count);
+        Assert.Equal(3, repository.StatusUpdates.Count);
     }
 
     [Fact]
@@ -403,7 +402,7 @@ public class EmbeddingServiceTests
     }
 
     [Fact]
-    public async Task EmbedAsync_QdrantFails_StillMarksEmbedded()
+    public async Task EmbedAsync_VectorStoreFails_MarksEmbeddingErrorForRetry()
     {
         var repository = new FakeConversationRepository();
         repository.Seed([MakeConversation("c1")]);
@@ -413,11 +412,12 @@ public class EmbeddingServiceTests
 
         var result = await service.EmbedAsync();
 
-        // The MongoDB embedding should still be stored even if Qdrant fails.
-        Assert.Equal(1, result.Embedded);
-        Assert.Equal(0, result.Errors);
-        Assert.Single(repository.EmbeddingUpdates);
-        Assert.Equal(ConversationProcessingStatus.Embedded, repository.EmbeddingUpdates[0].Status);
+        // The vector store is the only place the vector is kept, so a failed upsert must not
+        // leave the conversation marked Embedded (it would never be retried or found).
+        Assert.Equal(0, result.Embedded);
+        Assert.Equal(1, result.Errors);
+        Assert.Single(repository.StatusUpdates);
+        Assert.Equal(ConversationProcessingStatus.EmbeddingError, repository.StatusUpdates[0].Status);
     }
 
     [Fact]
@@ -695,7 +695,7 @@ public class EmbeddingServiceTests
 
         Assert.Equal(0, result.Embedded);
         Assert.Equal(1, result.Errors);
-        Assert.Equal(ConversationProcessingStatus.EmbeddingError, repository.EmbeddingUpdates[0].Status);
+        Assert.Equal(ConversationProcessingStatus.EmbeddingError, repository.StatusUpdates[0].Status);
     }
 
     [Fact]
@@ -738,7 +738,7 @@ public class EmbeddingServiceTests
 
         Assert.Equal(0, result.Embedded);
         Assert.Equal(1, result.Errors);
-        Assert.Equal(ConversationProcessingStatus.EmbeddingError, repository.EmbeddingUpdates[0].Status);
+        Assert.Equal(ConversationProcessingStatus.EmbeddingError, repository.StatusUpdates[0].Status);
     }
 
     [Fact]

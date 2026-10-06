@@ -14,7 +14,9 @@ public static class Module
     public static IHostApplicationBuilder AddMongoDBModule(this IHostApplicationBuilder builder)
     {
         // Map domain model id properties to MongoDB _id without annotating the Contracts models.
-        BsonClassMap.RegisterClassMap<StoredConversation>(cm => { cm.AutoMap(); cm.MapIdProperty(c => c.ConversationId); });
+        // Ignore extra elements so fields removed from the model (e.g. the legacy Embedding) don't
+        // break deserialization of documents written before the removal.
+        BsonClassMap.RegisterClassMap<StoredConversation>(cm => { cm.AutoMap(); cm.MapIdProperty(c => c.ConversationId); cm.SetIgnoreExtraElements(true); });
         BsonClassMap.RegisterClassMap<ChatSession>(cm => { cm.AutoMap(); cm.MapIdProperty(c => c.SessionId).SetSerializer(new GuidSerializer(BsonType.String)); });
         BsonClassMap.RegisterClassMap<ProjectName>(cm => { cm.AutoMap(); cm.MapIdProperty(c => c.TemplateId); });
         BsonClassMap.RegisterClassMap<UserProfile>(cm => { cm.AutoMap(); cm.MapIdProperty(c => c.Id); });
