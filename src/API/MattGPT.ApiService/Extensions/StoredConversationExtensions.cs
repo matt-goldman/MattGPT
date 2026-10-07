@@ -21,8 +21,7 @@ public static class StoredConversationExtensions
     /// nothing, so the embedding window is dedicated to actual conversational content.
     /// </summary>
     public static bool IsEmbeddable(this StoredMessage message)
-        => !message.IsHidden
-        && message.Weight != 0.0
+        => message.IsConversational
         && !string.IsNullOrWhiteSpace(string.Join(" ", message.Parts));
 
     /// <param name="conversation">The conversation to render.</param>
@@ -115,7 +114,11 @@ public static class StoredConversationExtensions
         public string ToExcerpt(int maxChars = DefaultExcerptChars)
         {
             var sb = new StringBuilder();
-            foreach (var msg in conversation.LinearisedMessages)
+
+            // Only dialogue reaches the model. Tool traffic and scaffolding are excluded here as
+            // well as in ToEmbeddingText, so a conversation retrieved as memory reads the same way
+            // it was indexed.
+            foreach (var msg in conversation.ConversationalMessages)
             {
                 var role = DisplayRole(msg.Role);
 
@@ -157,12 +160,10 @@ public static class StoredConversationExtensions
         for (var i = from; i <= to; i++)
         {
             var msg = messages[i];
-            if (msg.IsHidden || msg.Weight == 0.0)
+            if (!msg.IsEmbeddable())
                 continue;
 
             var content = string.Join(" ", msg.Parts);
-            if (string.IsNullOrWhiteSpace(content))
-                continue;
 
             var line = $"{msg.Role}: {content}\n";
 

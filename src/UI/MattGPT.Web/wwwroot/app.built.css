@@ -548,6 +548,9 @@
   .right-4 {
     right: calc(var(--spacing) * 4);
   }
+  .right-6 {
+    right: calc(var(--spacing) * 6);
+  }
   .right-\[10\%\] {
     right: 10%;
   }
@@ -1066,6 +1069,9 @@
   }
   .max-h-\[calc\(100\%_-_8rem\)\] {
     max-height: calc(100% - 8rem);
+  }
+  .min-h-0 {
+    min-height: calc(var(--spacing) * 0);
   }
   .min-h-3 {
     min-height: calc(var(--spacing) * 3);
@@ -4839,6 +4845,13 @@
     &:hover {
       @media (hover: hover) {
         background-color: var(--lumex-default-100);
+      }
+    }
+  }
+  .hover\:bg-default-200 {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--lumex-default-200);
       }
     }
   }

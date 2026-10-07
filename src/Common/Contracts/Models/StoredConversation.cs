@@ -128,6 +128,14 @@ public class StoredMessage
     /// </summary>
     public bool IsHidden { get; set; }
 
+    /// <summary>
+    /// Who this message was addressed to: <c>"all"</c> for the other party in the conversation, or
+    /// a tool name for one half of a tool exchange. Null on documents imported before this field
+    /// existed, and on chat-session projections, both of which are treated as <c>"all"</c>.
+    /// </summary>
+    /// <seealso cref="StoredMessageFilters"/>
+    public string? Recipient { get; set; }
+
     /// <summary>Citations parsed from message metadata. Null if none were present.</summary>
     public List<StoredCitation>? Citations { get; set; }
 
@@ -146,6 +154,7 @@ public class StoredMessage
             CreateTime  = message.CreateTime,
             Weight      = message.Weight,
             IsHidden    = message.Metadata?.IsVisuallyHiddenFromConversation == true,
+            Recipient   = message.Recipient,
         };
 
         ExtractContent(message.Content, stored);
@@ -445,6 +454,7 @@ public class StoredConversation
             Parts       = [m.Content],
             CreateTime  = m.Timestamp.ToUnixTimeMilliseconds() / 1000.0,
             Weight      = 1.0,
+            Recipient   = StoredMessageFilters.DialogueRecipient,
         })],
         ImportTimestamp = DateTimeOffset.UtcNow,
         ProcessingStatus = ConversationProcessingStatus.Summarised,

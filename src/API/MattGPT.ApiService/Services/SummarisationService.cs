@@ -194,6 +194,11 @@ public class SummarisationService(
         return DigestOutcome.Generated;
     }
 
+    // TODO: these need to be configurable, either globally or per request (i.e. choose in the ui, probably for record more than digest)
+    private static readonly ChatOptions DigestOptions = new ChatOptions()
+    {
+        Reasoning = new ReasoningOptions { Effort = ReasoningEffort.Low }
+    };
     /// <summary>
     /// Generates a digest for one conversation without storing it, from the record when there is one
     /// and from the messages otherwise. Returns null when there is no visible content to summarise.
@@ -207,10 +212,14 @@ public class SummarisationService(
         if (prompt is null)
             return null;
 
-        var response = await chatClient.GetResponseAsync(prompt, cancellationToken: ct);
+        var response = await chatClient.GetResponseAsync(prompt, options: DigestOptions, cancellationToken: ct);
         return response.Text;
     }
 
+    private static readonly ChatOptions SummarisationOptions = new ChatOptions()
+    {
+        Reasoning = new ReasoningOptions { Effort = ReasoningEffort.Medium }
+    };
     /// <summary>
     /// Generates and stores one conversation's record. Changes nothing else: the record is never
     /// embedded, so this cannot shift retrieval.
@@ -225,7 +234,7 @@ public class SummarisationService(
         var prompt = BuildRecordPrompt(conversation)
             ?? throw new InvalidOperationException("The conversation has no visible content to record.");
 
-        var response = await chatClient.GetResponseAsync(prompt, cancellationToken: ct);
+        var response = await chatClient.GetResponseAsync(prompt, options: SummarisationOptions,  cancellationToken: ct);
         var record = response.Text;
         if (string.IsNullOrWhiteSpace(record))
             throw new InvalidOperationException("The model returned an empty record.");
@@ -325,10 +334,10 @@ public class SummarisationService(
     /// </remarks>
     internal static string? BuildTranscript(IEnumerable<StoredMessage> messages, int budget)
     {
-        // Skip hidden and zero-weight messages (system scaffolding, custom instructions), and empty
-        // ones, to focus on actual conversational content.
+        // Only dialogue is summarised: tool traffic and scaffolding are excluded, along with
+        // empty messages, to focus the digest on actual conversational content.
         var lines = messages
-            .Where(m => !m.IsHidden && m.Weight != 0.0)
+            .Where(m => m.IsConversational)
             .Select(m => (m.Role, Content: string.Join(" ", m.Parts)))
             .Where(m => !string.IsNullOrWhiteSpace(m.Content))
             .Select(m => $"{m.Role}: {m.Content}\n")
