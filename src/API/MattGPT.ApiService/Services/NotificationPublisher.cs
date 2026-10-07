@@ -17,11 +17,11 @@ public class NotificationPublisher(INotificationRepository repository, ILogger<N
         {
             await repository.CreateAsync(new Notification
             {
-                UserId = userId,
-                Kind = kind,
-                Title = title,
+                UserId  = userId,
+                Kind    = kind,
+                Title   = title,
                 Message = message,
-                Link = link,
+                Link    = link,
             }, ct);
         }
         catch (Exception ex)

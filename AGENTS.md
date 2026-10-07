@@ -100,6 +100,7 @@ MattGPT/
 - Use `System.Text.Json` for JSON handling (not Newtonsoft).
 - Prefer streaming APIs for large data (the conversation export is ~148 MB).
 - Use dependency injection consistently — register services in `Program.cs`.
+- Use table spacing for object initializers
 
 ### Testing
 
@@ -111,6 +112,10 @@ MattGPT/
 
 - Commit early and often with clear, descriptive messages.
 - One logical change per commit where practical.
+
+### UI
+
+- The UI uses a library called LumexUI. When working on UI tasks, use LumexUI components where possible. Consult the [llms.txt](src/UI/MattGPT.Web/llms.txt) file for specific guidance on using LumexUI.
 
 ## Nuggets
 

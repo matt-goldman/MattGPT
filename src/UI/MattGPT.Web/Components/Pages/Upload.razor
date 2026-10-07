@@ -44,10 +44,7 @@
                 }
 
                 <div class="rounded-lg border border-default-200 p-3 space-y-1">
-                    <label class="flex items-center gap-2 text-sm font-medium cursor-pointer">
-                        <input type="checkbox" class="h-4 w-4 accent-primary" @bind="_generateSummaries" />
-                        Generate summaries
-                    </label>
+                    <LumexCheckbox Value="@_generateSummaries">Generate summaries</LumexCheckbox>
                     <p class="text-xs text-default-500 pl-6">
                         Writes a short digest of each conversation with the configured LLM before embedding, which can improve search.
                     </p>

@@ -2620,9 +2620,6 @@
     -webkit-font-smoothing: auto;
     -moz-osx-font-smoothing: auto;
   }
-  .accent-primary {
-    accent-color: var(--lumex-primary);
-  }
   .opacity-0 {
     opacity: 0%;
   }

@@ -7,11 +7,14 @@ namespace MattGPT.QdrantModule;
 
 public static class Module
 {
-    public static IHostApplicationBuilder AddQdrantModule(this IHostApplicationBuilder builder)
+    extension(IHostApplicationBuilder builder)
     {
-        builder.AddQdrantClient("qdrant");
-        builder.Services.AddSingleton<IVectorStore, QdrantVectorStore>();
-        return builder;
+        public IHostApplicationBuilder AddQdrantModule()
+        {
+            builder.AddQdrantClient("qdrant");
+            builder.Services.AddSingleton<IVectorStore, QdrantVectorStore>();
+            return builder;
+        }
     }
 
     // TODO:    No-op for this module but retained for the pattern.
