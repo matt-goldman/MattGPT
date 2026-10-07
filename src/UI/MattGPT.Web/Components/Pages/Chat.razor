@@ -39,41 +39,45 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
         </button>
+        @if (_viewingConversationId is not null)
+        {
+            <div class="ml-auto shrink-0">
+                @switch (_recordStatus)
+                {
+                    case "Ready":
+                        <LumexButton Size="@Size.Small" Variant="@Variant.Outlined" Color="@ThemeColor.Primary"
+                                     OnClick="DownloadRecordAsync"
+                                     title="Download a Markdown record of this conversation">
+                            Export record
+                        </LumexButton>
+                        break;
+                    case "Pending":
+                        <LumexButton Size="@Size.Small" Variant="@Variant.Outlined" IsDisabled="true"
+                                     title="The record is being generated; you'll be notified when it's ready">
+                            <LumexSpinner Size="@Size.Small" /> Generating record…
+                        </LumexButton>
+                        break;
+                    case "None":
+                        <LumexButton Size="@Size.Small" Variant="@Variant.Outlined" Color="@ThemeColor.Primary"
+                                     OnClick="RequestRecordAsync"
+                                     title="Generate a Markdown record of this conversation in the background">
+                            Generate record
+                        </LumexButton>
+                        break;
+                }
+            </div>
+        }
     </div>
 
     @* Message history *@
-    <div class="flex-1 overflow-y-auto px-4 py-4" id="chat-messages">
+    <div class="relative flex-1 min-h-0">
+    <div class="h-full overflow-y-auto px-4 py-4" id="chat-messages">
         <div class="max-w-4xl mx-auto space-y-4">
             @if (_viewingConversationId is not null)
             {
                 <div class="flex items-center gap-2">
                     <span class="text-xs bg-default-200 text-default-600 rounded px-1.5 py-0.5">Imported</span>
                     <h1 class="text-lg font-semibold truncate">@(_viewingTitle ?? "Imported Conversation")</h1>
-                    <div class="ml-auto shrink-0">
-                        @switch (_recordStatus)
-                        {
-                            case "Ready":
-                                <LumexButton Size="@Size.Small" Variant="@Variant.Outlined" Color="@ThemeColor.Primary"
-                                             OnClick="DownloadRecordAsync"
-                                             title="Download a Markdown record of this conversation">
-                                    Export record
-                                </LumexButton>
-                                break;
-                            case "Pending":
-                                <LumexButton Size="@Size.Small" Variant="@Variant.Outlined" IsDisabled="true"
-                                             title="The record is being generated; you'll be notified when it's ready">
-                                    <LumexSpinner Size="@Size.Small" /> Generating record…
-                                </LumexButton>
-                                break;
-                            case "None":
-                                <LumexButton Size="@Size.Small" Variant="@Variant.Outlined" Color="@ThemeColor.Primary"
-                                             OnClick="RequestRecordAsync"
-                                             title="Generate a Markdown record of this conversation in the background">
-                                    Generate record
-                                </LumexButton>
-                                break;
-                        }
-                    </div>
                 </div>
                 <p class="text-default-400 text-xs">Read-only view of an imported conversation</p>
             }
@@ -218,6 +222,18 @@
         </div>
     </div>
 
+    @* Scroll-to-top button — chat.js shows it once the list is scrolled down *@
+    <button id="chat-scroll-top"
+            class="hidden absolute bottom-4 right-6 z-10 p-2 rounded-full bg-default-100 border border-default-200 shadow-md hover:bg-default-200 transition-colors"
+            @onclick="ScrollToTop"
+            title="Scroll to top"
+            aria-label="Scroll to top">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-default-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+        </svg>
+    </button>
+    </div>
+
     @* Input area — hidden when viewing imported conversation *@
     @if (_viewingConversationId is null)
     {
@@ -313,6 +329,7 @@
         {
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/chat.js");
             await _jsModule.InvokeVoidAsync("preventEnterNewline", _textareaRef);
+            await _jsModule.InvokeVoidAsync("toggleOnScroll", "chat-messages", "chat-scroll-top", 300);
         }
 
         // Auto-scroll: scroll to bottom if user is near bottom (issue 035)
@@ -334,6 +351,14 @@
     }
 
     private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+
+    private async Task ScrollToTop()
+    {
+        // Stop the next render from snapping back to the bottom.
+        _autoScroll = false;
+        if (_jsModule is not null)
+            await _jsModule.InvokeVoidAsync("scrollToTop", "chat-messages");
+    }
 
     private void CancelActiveStream()
     {
