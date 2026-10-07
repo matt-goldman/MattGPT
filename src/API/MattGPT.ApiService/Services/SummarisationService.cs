@@ -325,10 +325,10 @@ public class SummarisationService(
     /// </remarks>
     internal static string? BuildTranscript(IEnumerable<StoredMessage> messages, int budget)
     {
-        // Skip hidden and zero-weight messages (system scaffolding, custom instructions), and empty
-        // ones, to focus on actual conversational content.
+        // Only dialogue is summarised: tool traffic and scaffolding are excluded, along with
+        // empty messages, to focus the digest on actual conversational content.
         var lines = messages
-            .Where(m => !m.IsHidden && m.Weight != 0.0)
+            .Where(m => m.IsConversational)
             .Select(m => (m.Role, Content: string.Join(" ", m.Parts)))
             .Where(m => !string.IsNullOrWhiteSpace(m.Content))
             .Select(m => $"{m.Role}: {m.Content}\n")

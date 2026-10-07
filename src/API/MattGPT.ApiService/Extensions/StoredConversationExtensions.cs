@@ -38,14 +38,10 @@ public static class StoredConversationExtensions
             if (!string.IsNullOrWhiteSpace(conversation.Summary))
                 sb.Append("Summary: ").AppendLine(conversation.Summary);
 
-            // Append message content up to the character limit.
-            // Skip hidden and zero-weight messages (system scaffolding, custom instructions)
-            // to dedicate the embedding window to actual conversational content.
-            foreach (var msg in conversation.LinearisedMessages)
+            // Append message content up to the character limit. Only dialogue is embedded:
+            // tool traffic and scaffolding would otherwise consume the whole embedding window.
+            foreach (var msg in conversation.ConversationalMessages)
             {
-                if (msg.IsHidden || msg.Weight == 0.0)
-                    continue;
-
                 var content = string.Join(" ", msg.Parts);
                 if (string.IsNullOrWhiteSpace(content))
                     continue;
@@ -90,14 +86,16 @@ public static class StoredConversationExtensions
         public string ToExcerpt(int maxChars = DefaultExcerptChars)
         {
             var sb = new StringBuilder();
-            foreach (var msg in conversation.LinearisedMessages)
+
+            // Only dialogue reaches the model. Tool traffic and scaffolding are excluded here as
+            // well as in ToEmbeddingText, so a conversation retrieved as memory reads the same way
+            // it was indexed.
+            foreach (var msg in conversation.ConversationalMessages)
             {
                 var role = msg.Role switch
                 {
                     "user" => "User",
                     "assistant" => "Assistant",
-                    "system" => "System",
-                    "tool" => "Tool",
                     _ => msg.Role,
                 };
 

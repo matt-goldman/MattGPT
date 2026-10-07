@@ -285,9 +285,12 @@ public static class ConversationsEndpoints
         })
         .WithName("GetConversationDiagnosticsList");
 
-        // Get a single imported conversation with full message history.
-        // Hidden/scaffolding messages (e.g. user profile prompts) are excluded by default.
-        // Pass ?includeHidden=true to include them.
+        // Get a single imported conversation with its message history.
+        // Only dialogue is returned by default: tool traffic (file_search results, browser
+        // fetches, python output) and scaffolding are excluded, because they are vastly longer
+        // than the dialogue and make the conversation view unreadable.
+        // Pass ?includeHidden=true to include every stored message, which is how tool results
+        // remain reachable for diagnostics and for the planned file/tool-result views.
         app.MapGet("/conversations/{conversationId}", async (string conversationId, bool? includeHidden, IConversationRepository repository) =>
         {
             var conversation = await repository.GetByIdAsync(conversationId);
@@ -297,7 +300,7 @@ public static class ConversationsEndpoints
             var messages = conversation.LinearisedMessages.AsEnumerable();
             if (includeHidden != true)
             {
-                messages = messages.Where(m => !m.IsHidden && m.Weight != 0.0);
+                messages = messages.Where(m => m.IsConversational);
             }
 
             return Results.Ok(new

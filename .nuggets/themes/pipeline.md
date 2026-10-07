@@ -84,3 +84,58 @@ config is a classic 400/404 cause worth checking first.
 - Re-import replaces the whole document, wiping `Summary`/`SummaryStatus`/`Record` (logged as a follow-up in 048).
 **Pointer:** `src/API/MattGPT.ApiService/Services/SummarisationService.cs` (`SummariseConversationAsync`, `BuildTranscript`), `ImportProcessingService.TrySummariseImportedAsync`, `SummaryProcessingService.cs` (queue + dedup)
 **Tags:** code-path, gotcha, pipeline, summarisation
+
+## 2026-10-07 — Weight/hidden filtering does NOT exclude tool traffic; role is the only thing that does
+
+**Context:** Investigating context blowouts / poor retrieval (defect 051). Hypothesis was that
+ChatGPT export tool results (uploaded files, web fetches, python output) were being embedded.
+
+**Observation — the arithmetic that settles it.** Four read paths filtered with the hand-copied
+predicate `!m.IsHidden && m.Weight != 0.0`, which *looks* like it handles scaffolding. It does not
+touch tool traffic. From `docs/TechnicalReference/export-analysis-raw.md`: 79,910 messages total,
+of which `weight: 0.0` = **7,884**, but `role: tool` = **11,719** and `role: system` = **9,035**
+(20,754 combined). So most tool/system messages carry `weight: 1.0` and no hidden flag and sail
+straight through. Don't trust the `is_visually_hidden_from_conversation` count (17,107) as a
+counter-argument — that figure is *key presence*, counted by `tools/analyse-export.py`, not
+`== true`, and the doc's prose overstates it.
+
+**Empirical confirmation, which is cheaper than the arithmetic:** `GET /conversations/{id}` already
+applied the weight/hidden filter, and the conversation view was still unreadable. Anything visible
+there is by definition passing that filter.
+
+**The real trap:** `StoredConversationExtensions.ToExcerpt()` applied **no filter at all** — and it
+is the method that renders a retrieved conversation into the model prompt (`RagService.BuildMessages`
+~line 740) and into `search_memories` results (`SearchMemoriesTool` ~line 141). So the path with the
+most direct effect on tokens and answer quality was the unfiltered one, and it disagreed with
+`ToEmbeddingText`: conversations were indexed on dialogue, then served to the model as dialogue plus
+every file they ever touched. When auditing "what reaches the model", check `ToExcerpt`, not just
+`ToEmbeddingText` — they are adjacent in the same file and easy to conflate.
+
+**Fix shape:** one predicate, `StoredMessageFilters.IsConversational` /
+`StoredConversation.ConversationalMessages` in Contracts, used by all five read paths (embedding,
+excerpt, digest transcript, conversation endpoint, `ConversationTextSnippets.Build`). Deliberately
+**extension members**, not an instance property: `StoredMessage` is serialised to Postgres JSONB and
+Mongo BSON, and a get-only property would widen that contract for no reason (see the enum
+serialisation nugget above for why that contract is load-bearing).
+
+**Gotchas:**
+- `Role` is a bare `string` with no validation anywhere; the schema pins it to
+  `system|user|assistant|tool` but nothing enforces it.
+- `author.name` (which tool produced a result) and `recipient` (which tool was called) are **not**
+  on `StoredMessage`. `author.name` is parsed into `Message` but dropped in `StoredMessage.From`;
+  `recipient` isn't in the model at all. Issue 024 covers both, and issue 052 is blocked on it.
+- **Assistant tool *calls* are still unfiltered** — `role: assistant` + `recipient: python`/`bio` is
+  scaffolding but indistinguishable until `recipient` is captured.
+- Issue 024 requirement 5 ("prefix tool messages with the tool name in embedding text") would
+  reintroduce this defect; 024 has been annotated, but check that annotation survived if 024 is
+  picked up.
+- Changing `ToEmbeddingText` invalidates existing vectors — `POST /conversations/embed` to rebuild.
+  Pre-existing digests also summarised tool output.
+- Not every non-dialogue role is a clear cut: `thoughts` / `reasoning_recap` content types are
+  `assistant`-role reasoning traces and are still included, deliberately undecided.
+
+**Pointer:** `src/Common/Contracts/Models/StoredMessageFilters.cs` (the predicate),
+`src/API/MattGPT.ApiService/Extensions/StoredConversationExtensions.cs` (both render paths),
+`docs/TechnicalReference/export-analysis-raw.md` (role/weight/author-name counts),
+`docs/Backlog/Done/051-defect-tool-results-pollute-embeddings-and-ui.md`
+**Tags:** code-path, gotcha, pipeline, embedding, summarisation, retrieval, import

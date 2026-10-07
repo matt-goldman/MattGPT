@@ -35,7 +35,13 @@ File attachment names are particularly valuable for RAG: knowing a conversation 
 
 4. **Include attachment filenames in embedding text.** When building embedding text in `EmbeddingService.BuildEmbeddingText()`, include attachment names (e.g. `[Attached: PrismCodeBlockRenderer.cs (text/x-csharp)]`).
 
-5. **Include tool context in embedding text.** When `author.name` is non-null (tool messages), prefix with the tool name for clarity.
+5. ~~**Include tool context in embedding text.** When `author.name` is non-null (tool messages), prefix with the tool name for clarity.~~
+   **Superseded by issue 051 — do not implement as written.** 051 established that `tool` and
+   `system` messages must never reach embedding text, a digest, a prompt or the conversation view:
+   they are 26% of all messages and dwarf the dialogue by character count. Adding them back with a
+   tool-name prefix would reintroduce that defect. Capture `author.name` and `recipient` as per
+   requirement 3 — they are needed to *identify* tool results — but leave embedding text to the
+   dialogue only. Surfacing tool results is issue 052, which depends on this issue.
 
 6. **Unit tests** for attachment parsing, including both camelCase and snake_case MIME type fields.
 
@@ -44,10 +50,14 @@ File attachment names are particularly valuable for RAG: knowing a conversation 
 - [ ] File attachments (name, MIME type, size) are stored on `StoredMessage`.
 - [ ] Both `mimeType` and `mime_type` field variants are handled.
 - [ ] `author.name` and `recipient` are captured on `StoredMessage`.
-- [ ] Attachment filenames appear in embedding text.
+- [ ] Attachment filenames appear in embedding text. (Attachment *names* on user messages only — not tool message content; see requirement 5.)
 - [ ] Existing tests pass; new tests for attachment parsing.
 
 ## Notes
+
+- **This issue is a hard blocker for issue 052** (surface tool results: files tab and on-demand LLM
+  tool). Without `author.name` and `recipient`, a `role: tool` message cannot be classified as a
+  file-search result versus python output versus a DALL·E call.
 
 - Attachment file content is not available (file IDs reference OpenAI's internal file service). Only metadata is captured.
 - `video/mp2t` MIME type (140 items) is likely misidentified TypeScript `.ts` files.

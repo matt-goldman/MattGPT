@@ -78,7 +78,8 @@ public static class ConversationTextSnippets
 
         foreach (var msg in conversation.LinearisedMessages)
         {
-            if (msg.IsHidden || msg.Weight == 0.0)
+            // Snippets come from dialogue only, so a search hit is never a slab of tool output.
+            if (!msg.IsConversational)
                 continue;
 
             var content = string.Join(" ", msg.Parts);
