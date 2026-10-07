@@ -4,6 +4,7 @@
 **Sequence:** 51
 **Type:** Defect (against 004, 009, 022)
 **Dependencies:** 004 (ChatGPT JSON parser), 009 (embeddings), 017 (export content analysis), 022 (summarisation)
+**Supersedes part of:** `024-capture-attachments-and-tool-metadata.md` (index Seq 27) — captures `recipient`, which that issue had listed
 
 ---
 
@@ -53,11 +54,37 @@ Tool results are **deliberately retained** in `StoredConversation.LinearisedMess
 only record of which files and sources a conversation involved, and issue 052 builds on them.
 Filtering happens on **read**, not on import, so nothing is lost.
 
-1. **Single shared definition.** New `StoredMessageFilters` (`src/Common/Contracts/Models/`) defines
-   `StoredMessage.IsConversational` (`role` is `user` or `assistant`, not hidden, non-zero weight)
-   and `StoredConversation.ConversationalMessages`. Implemented as extension members so the
-   serialised shape of `StoredMessage` is unchanged — important because the enum/JSONB
-   serialisation contract on these documents is load-bearing for the Postgres backend.
+1. **Single shared definition, stated positively.** The rule is: **only messages the user sent to
+   the assistant, or the assistant sent to the user, are conversational.** New
+   `StoredMessageFilters` (`src/Common/Contracts/Models/`) defines
+   `StoredMessage.IsConversational` and `StoredConversation.ConversationalMessages`:
+
+   ```
+   (Role is "user" or "assistant")
+       && (Recipient is null or "all")
+       && !IsReasoning            // thoughts, reasoning_recap
+       && !IsHidden && Weight != 0.0
+   ```
+
+   Two fields are needed because each misses what the other catches:
+   - **Role** excludes tool results and system scaffolding (20,754 messages).
+   - **Recipient** excludes the *other half* of a tool exchange — an `assistant` message addressed
+     to `python` or `bio` is a tool call, not a reply to the user, and the role cannot distinguish
+     them. 4,469 messages have a non-`all` recipient.
+   - **Reasoning content types** (`thoughts` 1,042, `reasoning_recap` 788) are `assistant`-role
+     with `recipient: all`, so neither of the above catches them; they are the assistant's private
+     deliberation, not what it said.
+
+   `Weight`/`IsHidden` are retained as secondary guards only.
+
+   Implemented as extension members so the serialised shape of `StoredMessage` is unchanged for the
+   predicate itself — important because the enum/JSONB serialisation contract on these documents is
+   load-bearing for the Postgres backend.
+
+   **`recipient` is now captured** on `Message` and `StoredMessage` (it was parsed nowhere before).
+   A null recipient counts as dialogue, so documents imported before this field existed fall back
+   to the role check rather than filtering out every message. `FromChatSession` sets `"all"`, since
+   MattGPT's own sessions are dialogue by construction.
 2. **All five read paths now use it**, replacing the hand-copied predicate:
    - `ToEmbeddingText` — what gets embedded
    - `ToExcerpt` — what reaches the model (previously unfiltered)
@@ -67,18 +94,18 @@ Filtering happens on **read**, not on import, so nothing is lost.
 3. **Escape hatch preserved.** `GET /conversations/{id}?includeHidden=true` still returns every
    stored message, which is how 052 will reach tool results.
 
-## Residual Gaps (deliberately not fixed here)
+## Scope Notes
 
-- **Assistant tool *calls* are still included.** A message with `role: assistant` and
-  `recipient: python` (1,020 messages have `recipient: assistant`, 824 `python`, 602 `bio`) is
-  scaffolding, not dialogue, but `recipient` is not captured by the parser at all. Capturing it is
-  issue **024**, which must land before these can be filtered.
-- **Reasoning traces** (`thoughts`, 1,042; `reasoning_recap`, 788) are `assistant`-role and remain
-  included. Arguably they should not be embedded; deferred as a separate judgement call.
-- **Issue 024 requirement 5 conflicts with this fix** — it says to "include tool context in
+- **`author.name` is not needed for filtering.** The role is the discriminator for tool *results*
+  and the recipient for tool *calls*; which specific tool was involved is irrelevant to the
+  decision. `author.name` is only needed to *classify* tool results for issue 052, so it stays in
+  `024-capture-attachments-and-tool-metadata.md` (index Seq 27).
+- **`024`'s requirement 5 conflicts with this fix** — it says to "include tool context in
   embedding text" by prefixing tool messages with `author.name`. That would reintroduce the defect.
-  024 has been annotated accordingly: capture `author.name`, but do not add tool messages to
-  embedding text.
+  024 has been annotated accordingly, and its `recipient` requirement is now done here.
+- **`channel`** (`final` 2,479, `commentary` 233) looks like a related discriminator but is
+  populated on only ~3% of messages in this export, so it is not usable. Noted in case a future
+  export format populates it consistently.
 
 ## Operational Note
 
@@ -86,8 +113,20 @@ Filtering happens on **read**, not on import, so nothing is lost.
 from polluted text and will not match on the same terms until rebuilt. Run `POST /conversations/embed`.
 Digests generated before this fix also summarised tool output and should be regenerated.
 
+**Re-import is needed for the recipient half only.** `recipient` was never stored, so documents
+already imported have it null and fall back to the role check. That still excludes the bulk — all
+20,754 tool/system messages — and reasoning filtering works immediately because `ContentType` was
+already stored. Re-importing additionally excludes the ~3,449 assistant→tool call messages. Role and
+reasoning filtering need no re-import.
+
 ## Acceptance Criteria
 
+- [x] Only messages the user sent to the assistant, or the assistant sent to the user, are treated
+      as conversational.
+- [x] `recipient` is captured on `Message` and `StoredMessage`; a null value falls back to the role
+      check so pre-existing documents are not emptied.
+- [x] Assistant messages addressed to a tool (`recipient != "all"`) are excluded.
+- [x] Assistant reasoning traces (`thoughts`, `reasoning_recap`) are excluded.
 - [x] `tool` and `system` messages are excluded from embedding text.
 - [x] `tool` and `system` messages are excluded from digests/summaries.
 - [x] `tool` and `system` messages are excluded from anything sent to a model (`ToExcerpt`, used by
@@ -98,13 +137,15 @@ Digests generated before this fix also summarised tool output and should be rege
 - [x] Tool results are still stored and not dropped on import.
 - [x] The filter is defined in exactly one place, so the five paths cannot drift again.
 - [x] Tests cover the role filter, each of the five paths, and the retention of tool messages.
-- [x] All tests pass (`dotnet test`: 358 passed, 0 failed).
+- [x] All tests pass (`dotnet test`: 371 passed, 0 failed).
 
 ## Files Changed
 
 - `src/Common/Contracts/Models/StoredMessageFilters.cs` (new)
+- `src/Common/Contracts/Models/ChatGptExport.cs` (capture `recipient`)
+- `src/Common/Contracts/Models/StoredConversation.cs` (`StoredMessage.Recipient`, mapping, chat-session projection)
 - `src/API/MattGPT.ApiService/Extensions/StoredConversationExtensions.cs`
 - `src/API/MattGPT.ApiService/Services/SummarisationService.cs`
 - `src/API/MattGPT.ApiService/Endpoints/ConversationsEndpoints.cs`
 - `src/Common/Contracts/Models/ConversationTextSearchResult.cs`
-- `tests/MattGPT.ApiService.Tests/ToolTrafficFilterTests.cs` (new, 13 tests)
+- `tests/MattGPT.ApiService.Tests/ToolTrafficFilterTests.cs` (new, 26 tests)

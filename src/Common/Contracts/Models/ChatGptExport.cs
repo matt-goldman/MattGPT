@@ -95,6 +95,18 @@ public class Message
     public double? Weight { get; set; }
 
     /// <summary>
+    /// Who this message was addressed to. <c>"all"</c> means the other party in the conversation
+    /// (the user, or the assistant replying to them); any other value is a tool name, which makes
+    /// the message part of a tool exchange rather than dialogue.
+    /// </summary>
+    /// <remarks>
+    /// Present on every message in the reference export, but typed nullable because the schema
+    /// permits null. Consumers treat a missing value as <c>"all"</c>.
+    /// </remarks>
+    [JsonPropertyName("recipient")]
+    public string? Recipient { get; set; }
+
+    /// <summary>
     /// Message-level metadata containing model info, visibility flags, citations, etc.
     /// </summary>
     [JsonPropertyName("metadata")]

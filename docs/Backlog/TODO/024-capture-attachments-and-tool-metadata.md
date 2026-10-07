@@ -14,7 +14,8 @@ Capture file attachment metadata and tool identification fields (`author.name`, 
 The export analysis (issue 017, `docs/export-analysis.md` §4, §6) found:
 - **7,999 file attachments** across 2,210 messages with filenames, MIME types, and sizes — completely invisible to the current pipeline.
 - **11,719 messages** with `author.name` identifying the tool (python, dalle, browser, etc.) — not captured.
-- **79,910 messages** with `recipient` indicating tool dispatch targets — not captured.
+- ~~**79,910 messages** with `recipient` indicating tool dispatch targets — not captured.~~ Captured
+  in issue 051.
 
 File attachment names are particularly valuable for RAG: knowing a conversation involved `PrismCodeBlockRenderer.cs` or `Episode_36.vtt` makes it searchable by filename.
 
@@ -30,7 +31,8 @@ File attachment names are particularly valuable for RAG: knowing a conversation 
 
 3. **Add fields to `StoredMessage`:**
    - `AuthorName` (string?) — from `message.author.name`
-   - `Recipient` (string?) — from `message.recipient`
+   - ~~`Recipient` (string?) — from `message.recipient`~~ **Done in issue 051**, which needed it to
+     exclude assistant→tool calls from embeddings, digests and prompts.
    - `Attachments` (List<StoredAttachment>) — from `message.metadata.attachments`
 
 4. **Include attachment filenames in embedding text.** When building embedding text in `EmbeddingService.BuildEmbeddingText()`, include attachment names (e.g. `[Attached: PrismCodeBlockRenderer.cs (text/x-csharp)]`).
@@ -55,9 +57,14 @@ File attachment names are particularly valuable for RAG: knowing a conversation 
 
 ## Notes
 
-- **This issue is a hard blocker for issue 052** (surface tool results: files tab and on-demand LLM
-  tool). Without `author.name` and `recipient`, a `role: tool` message cannot be classified as a
-  file-search result versus python output versus a DALL·E call.
+- **Remaining scope after issue 051:** `author.name` and attachment metadata. `recipient` is done.
+- **`author.name` is not needed for filtering** — issue 051 established that the author *role*
+  discriminates tool results and the *recipient* discriminates tool calls; which specific tool was
+  involved does not affect the decision. `author.name` is needed to **classify** tool results for
+  issue 052 (is this a file-search result, python output, or a DALL·E call?), which is a cleaner
+  discriminator than inferring from content type and URL presence.
+- Attachment metadata (7,999 attachments: filenames, MIME types, sizes) has standalone value
+  regardless of 052: it makes conversations searchable by the names of the files they involved.
 
 - Attachment file content is not available (file IDs reference OpenAI's internal file service). Only metadata is captured.
 - `video/mp2t` MIME type (140 items) is likely misidentified TypeScript `.ts` files.

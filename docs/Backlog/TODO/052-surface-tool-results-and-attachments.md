@@ -3,7 +3,11 @@
 **Status:** TODO
 **Sequence:** 52
 **Type:** Feature
-**Dependencies:** 024 (capture attachments and author/tool metadata) — **hard blocker**; 051 (tool-result filtering); 030 (search_memories tool)
+**Dependencies:** `024-capture-attachments-and-tool-metadata.md` (index Seq 27 — capture attachments and `author.name`); 051 (tool-result filtering, which captured `recipient`); 030 (search_memories tool)
+
+> **Note on numbering:** the backlog index's Seq column and issue filenames diverge mid-table. The
+> attachments/tool-metadata issue is **file `024`, index Seq 27**. Sequencing is by the index table
+> (see AGENTS.md), so pick it up as Seq 27.
 
 ---
 
@@ -23,16 +27,21 @@ export, `file_search` (5,909 messages) and `myfiles_browser` (1,840) carry the t
 uploaded to conversations and projects, plus 7,999 attachment records and 5,161 `tether_quote` /
 1,244 `tether_browsing_display` web results.
 
-## Why 024 Blocks This
+## Why File 024 (Seq 27) Comes First
 
-Tool results cannot currently be attributed. `StoredMessage` keeps `Role` but **not**
-`author.name` (which tool produced the result) or `recipient` (which tool was called). Both are
-parsed into the `Message` model but dropped in `StoredMessage.From`, and `recipient` is not in the
-model at all. Without them, a `role: tool` message cannot be classified as a file-search result
-versus a Python output versus a DALL·E call. **024 must land first.**
+Tool results cannot currently be **attributed**. `StoredMessage` keeps `Role` and (since 051)
+`Recipient`, but not `author.name` — which tool produced a given result. It is parsed into the
+`Message` model and dropped in `StoredMessage.From`.
 
-Note that 024's requirement 5 ("include tool context in embedding text") conflicts with 051 and
-must not be implemented as written — capture the metadata, but do not feed tool messages into
+Without it a `role: tool` message cannot be cleanly classified as a file-search result versus
+Python output versus a DALL·E call. It could be *inferred* — a `tether_quote` with no `Url`/`Domain`
+is probably a file quote, and `StoredCitation.Name` already carries cited file names — but that is
+fragile where `author.name` is exact (`file_search` 5,909, `myfiles_browser` 1,840, `browser` 302).
+Do file 024's `author.name` and attachment metadata first; it is a small change and makes this
+issue straightforward.
+
+Note that file 024's requirement 5 ("include tool context in embedding text") conflicts with 051
+and must not be implemented as written — capture the metadata, but do not feed tool messages into
 embedding text.
 
 ## Phasing
@@ -116,7 +125,8 @@ Design constraints:
 
 ## Acceptance Criteria
 
-- [ ] 024 has landed: `author.name`, `recipient` and attachment metadata are on `StoredMessage`.
+- [ ] File 024 (Seq 27) has landed: `author.name` and attachment metadata are on `StoredMessage`
+      (`recipient` came with 051).
 - [ ] Tool results are classified by kind, with `file_search` / `myfiles_browser` identified and an
       `Other` fallback that loses nothing.
 - [ ] An endpoint projects a conversation's referenced files, de-duplicated, with metadata.

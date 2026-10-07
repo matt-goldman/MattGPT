@@ -118,14 +118,32 @@ excerpt, digest transcript, conversation endpoint, `ConversationTextSnippets.Bui
 Mongo BSON, and a get-only property would widen that contract for no reason (see the enum
 serialisation nugget above for why that contract is load-bearing).
 
+**Final rule (after review):** only messages the user sent to the assistant, or the assistant sent
+to the user. `(Role is user|assistant) && (Recipient is null or "all") && !IsReasoning && !IsHidden
+&& Weight != 0`. Role alone is not enough: it excludes tool *results* but not tool *calls*
+(`role: assistant` + `recipient: python`), and neither catches reasoning traces, which are
+`assistant` + `recipient: all`. `author.name` is **not** needed for filtering — which tool was
+involved doesn't change the decision; it's only needed to *classify* results for 052.
+
+**`recipient` is non-null on every message in the real export** — the Recipient Values table in
+`export-analysis-raw.md` sums to exactly 79,910 (= total messages) with no `(null)` row, so
+`== "all"` is safe. The schema still types it nullable, and `StoredMessage.Recipient` is null on
+documents imported before it was captured, so the predicate treats null as `"all"` and falls back
+to the role check. Treating null as not-dialogue would empty every pre-existing document.
+
 **Gotchas:**
 - `Role` is a bare `string` with no validation anywhere; the schema pins it to
-  `system|user|assistant|tool` but nothing enforces it.
-- `author.name` (which tool produced a result) and `recipient` (which tool was called) are **not**
-  on `StoredMessage`. `author.name` is parsed into `Message` but dropped in `StoredMessage.From`;
-  `recipient` isn't in the model at all. Issue 024 covers both, and issue 052 is blocked on it.
-- **Assistant tool *calls* are still unfiltered** — `role: assistant` + `recipient: python`/`bio` is
-  scaffolding but indistinguishable until `recipient` is captured.
+  `system|user|assistant|tool` but nothing enforces it. Same for `Recipient`.
+- `author.name` is parsed into `Message` but still dropped in `StoredMessage.From`. Needed by 052
+  to tell a `file_search` result from python output; file 024 covers it.
+- **Re-import is needed for the recipient half only.** Role + reasoning filtering work on existing
+  data immediately (`ContentType` was already stored); excluding the ~3,449 assistant→tool calls
+  needs a re-import.
+- `channel` (`final` 2,479, `commentary` 233) looks like a related discriminator but is populated on
+  only ~3% of messages here — not usable.
+- **Backlog numbering trap:** the index's Seq column and issue filenames diverge mid-table. The
+  attachments/tool-metadata issue is file `024` but **index Seq 27**; index Seq 24 is file `025`.
+  AGENTS.md says sequencing is by the index table, so grep the filename, don't trust the number.
 - Issue 024 requirement 5 ("prefix tool messages with the tool name in embedding text") would
   reintroduce this defect; 024 has been annotated, but check that annotation survived if 024 is
   picked up.
@@ -136,6 +154,7 @@ serialisation nugget above for why that contract is load-bearing).
 
 **Pointer:** `src/Common/Contracts/Models/StoredMessageFilters.cs` (the predicate),
 `src/API/MattGPT.ApiService/Extensions/StoredConversationExtensions.cs` (both render paths),
+`tests/MattGPT.ApiService.Tests/ToolTrafficFilterTests.cs` (26 tests covering all five paths),
 `docs/TechnicalReference/export-analysis-raw.md` (role/weight/author-name counts),
 `docs/Backlog/Done/051-defect-tool-results-pollute-embeddings-and-ui.md`
 **Tags:** code-path, gotcha, pipeline, embedding, summarisation, retrieval, import
