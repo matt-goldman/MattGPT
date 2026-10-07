@@ -262,7 +262,10 @@ public class MemoryRetriever(
             return [];
 
         var cap = Math.Max(limit, _options.RetainedConversations);
-        var topScore = ranked[0].Best.Score;
+
+        // The best score, not the first one: the order is the ranker's business, and a reranker that
+        // returns its results unsorted must not make the floor meaningless.
+        var topScore = ranked.Max(c => c.Best.Score);
         var applyThreshold = _options.RetainedRelativeScore > 0f && topScore > 0f;
         var floor = topScore * _options.RetainedRelativeScore;
 
@@ -270,13 +273,13 @@ public class MemoryRetriever(
 
         foreach (var candidate in ranked)
         {
-            if (retained.Count >= cap)
-                break;
-
             if (applyThreshold && candidate.Best.Score < floor)
-                break;
+                continue;
 
             retained.Add(candidate);
+
+            if (retained.Count >= cap)
+                break;
         }
 
         if (retained.Count < ranked.Count)
