@@ -164,7 +164,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         PrepareTools(session);
 
         // 1. Automatic retrieval (full, light, or none depending on mode).
-        var (relevant, conversationLookup, autoRetrievalRan) = await AutoRetrieveAsync(query, session, ct);
+        var (memories, autoRetrievalRan) = await AutoRetrieveAsync(query, session, ct);
 
         // 2. Fetch user profile and system prompt for context.
         var userProfile = userProfileRepository is not null
@@ -175,8 +175,8 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
             : null;
 
         // 3. Build the augmented prompt, adding the diagnostic instruction if enabled.
-        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt,
-            autoRetrievalRan: autoRetrievalRan);
+        var messages = BuildMessages(query, memories.Results, memories.Conversations, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt,
+            autoRetrievalRan: autoRetrievalRan, matchingChunks: memories.MatchingChunks);
         if (_options.DiagnosticMode)
             AppendDiagnosticInstruction(messages);
 
@@ -196,7 +196,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
             : rawText;
 
         // 6. Merge sources from auto-retrieval and any tool invocations.
-        var sources = CollectAllSources(relevant, conversationLookup);
+        var sources = CollectAllSources(memories.Results, memories.Conversations);
 
         return new RagChatResponse(answerText, sources);
     }
@@ -228,7 +228,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         PrepareTools(session);
 
         // 1. Automatic retrieval (full, light, or none depending on mode).
-        var (relevant, conversationLookup, autoRetrievalRan) = await AutoRetrieveAsync(query, session, ct);
+        var (memories, autoRetrievalRan) = await AutoRetrieveAsync(query, session, ct);
 
         // 2. Fetch user profile and system prompt for context.
         var userProfile = userProfileRepository is not null
@@ -239,8 +239,8 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
             : null;
 
         // 3. Build the augmented prompt, adding the diagnostic instruction if enabled.
-        var messages = BuildMessages(query, relevant, conversationLookup, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt,
-            autoRetrievalRan: autoRetrievalRan);
+        var messages = BuildMessages(query, memories.Results, memories.Conversations, session, _chatOptions.RecentMessageCount, userProfile, systemConfig?.SystemPrompt,
+            autoRetrievalRan: autoRetrievalRan, matchingChunks: memories.MatchingChunks);
         if (_options.DiagnosticMode)
             AppendDiagnosticInstruction(messages);
 
@@ -278,7 +278,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         // Fire-and-forget producer: streams LLM tokens (and tool events via callbacks)
         // into the channel. The consumer below reads and yields them.
         var producerTask = ProduceStreamChunksAsync(
-            channel.Writer, messages, chatOptions, relevant, conversationLookup, query, ct);
+            channel.Writer, messages, chatOptions, memories, query, ct);
 
         // Consumer: yield chunks to the caller (SSE endpoint) as they arrive.
         await foreach (var chunk in channel.Reader.ReadAllAsync(ct))
@@ -301,8 +301,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         ChannelWriter<RagStreamChunk> writer,
         List<AIChatMessage> messages,
         ChatOptions? chatOptions,
-        IReadOnlyList<VectorSearchResult> relevant,
-        IReadOnlyDictionary<string, StoredConversation> conversationLookup,
+        MemoryRetrievalResult memories,
         string query,
         CancellationToken ct)
     {
@@ -358,7 +357,7 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
             }
 
             // Final chunk carries the merged sources.
-            var sources = CollectAllSources(relevant, conversationLookup);
+            var sources = CollectAllSources(memories.Results, memories.Conversations);
             writer.TryWrite(new RagStreamChunk(null, sources));
 
             writer.Complete();
@@ -438,21 +437,24 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
     /// only runs for the first user message of a session when the search tools are available
     /// (see <see cref="ShouldAutoRetrieve"/>).
     /// </summary>
-    /// <returns>The hits, their conversations, and whether retrieval ran at all.</returns>
-    private async Task<(IReadOnlyList<VectorSearchResult> Relevant, IReadOnlyDictionary<string, StoredConversation> ConversationLookup, bool Ran)> AutoRetrieveAsync(
+    /// <returns>
+    /// The retained conversations, their stored conversations, the chunks of each that matched, and
+    /// whether retrieval ran at all.
+    /// </returns>
+    private async Task<(MemoryRetrievalResult Memories, bool Ran)> AutoRetrieveAsync(
         string query, ChatSession? session, CancellationToken ct)
     {
         if (!ShouldAutoRetrieve(session))
-            return ([], new Dictionary<string, StoredConversation>(), false);
+            return (MemoryRetrievalResult.Empty, false);
 
         var topK = EffectiveTopK;
 
         logger.LogDebug("RAG auto-retrieval (Mode={Mode}): TopK={TopK}, MinScore={MinScore:F2}.",
             _options.Mode, topK, EffectiveMinScore);
 
-        var (relevant, conversationLookup) = await retriever.RetrieveAsync(
+        var memories = await retriever.RetrieveAsync(
             query, topK, EffectiveMinScore, CurrentSessionConversationId(session), ct);
-        return (relevant, conversationLookup, true);
+        return (memories, true);
     }
 
     /// <summary>
@@ -670,6 +672,69 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
     private sealed record DiagnosticLlmResponse(string? Reasoning, string? Response);
 
     /// <summary>
+    /// Maximum characters of a conversation's record included per memory. The record is the resolved
+    /// account of what the conversation concluded, so it is worth its space, but several retained
+    /// conversations each contributing an unbounded Markdown document would crowd out the verbatim
+    /// excerpts that anchor the citation.
+    /// </summary>
+    private const int MaxRecordChars = 2_000;
+
+    /// <summary>
+    /// Maximum characters of matching-chunk excerpts included per memory.
+    /// </summary>
+    private const int MaxChunkExcerptChars = 3_000;
+
+    /// <summary>
+    /// Appends one retained conversation's body: its record where it has one, plus the excerpts the
+    /// query matched.
+    /// </summary>
+    /// <remarks>
+    /// Both, not either (ADR-016): the record gives resolved context but is a generated paraphrase, so
+    /// it cannot anchor a citation; the matching excerpts are verbatim but lose what the conversation
+    /// settled on. With no chunk information — a conversation chunked whole, or one retrieved by a path
+    /// that does not carry chunks — the excerpt falls back to the start of the conversation, which is
+    /// what it has always been.
+    /// </remarks>
+    private static void AppendMemoryBody(
+        StringBuilder system, StoredConversation conversation, IReadOnlyList<ConversationChunk>? chunks)
+    {
+        if (!string.IsNullOrWhiteSpace(conversation.Record))
+        {
+            system.AppendLine("Record of the conversation:");
+            system.AppendLine(conversation.Record.Length > MaxRecordChars
+                ? conversation.Record[..MaxRecordChars] + "…"
+                : conversation.Record);
+        }
+
+        if (conversation.LinearisedMessages.Count == 0)
+            return;
+
+        // A whole-conversation chunk carries no location, so there is nothing to excerpt more precisely
+        // than the conversation itself.
+        var located = chunks?.Where(c => c.Strategy != ChunkingStrategy.WholeConversation).ToList();
+
+        if (located is not { Count: > 0 })
+        {
+            system.AppendLine("Conversation excerpt:");
+            system.AppendLine(conversation.ToExcerpt());
+            return;
+        }
+
+        var budget = Math.Max(1, MaxChunkExcerptChars / located.Count);
+
+        system.AppendLine("Matching excerpts:");
+        foreach (var chunk in located)
+        {
+            var excerpt = conversation.ToRangeExcerpt(chunk.StartMessageIndex, chunk.EndMessageIndex, budget);
+            if (string.IsNullOrWhiteSpace(excerpt))
+                continue;
+
+            system.AppendLine($"[messages {chunk.StartMessageIndex + 1}-{chunk.EndMessageIndex + 1}]");
+            system.AppendLine(excerpt);
+        }
+    }
+
+    /// <summary>
     /// Builds the chat message list with a system prompt that frames retrieved conversations
     /// as the assistant's own memory, includes full conversation excerpts from MongoDB,
     /// and inserts session context (rolling summary + recent messages) for multi-turn support.
@@ -679,6 +744,11 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
     /// says so. When it did not (<see cref="RagMode.ToolsOnly"/>), the prompt says nothing about
     /// memories, so the model isn't told there are none before it has had a chance to search.
     /// </param>
+    /// <param name="matchingChunks">
+    /// Per conversation, the chunks that matched the query (plus their neighbours). Supplied, these are
+    /// the excerpt the model sees, so it reads the part of the conversation the query actually hit
+    /// rather than the opening of it.
+    /// </param>
     public static List<AIChatMessage> BuildMessages(
         string query,
         IReadOnlyList<VectorSearchResult> context,
@@ -687,7 +757,8 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
         int recentMessageCount = 6,
         UserProfile? userProfile = null,
         string? systemPromptOverride = null,
-        bool autoRetrievalRan = true)
+        bool autoRetrievalRan = true,
+        IReadOnlyDictionary<string, IReadOnlyList<ConversationChunk>>? matchingChunks = null)
     {
         var messages = new List<AIChatMessage>();
 
@@ -731,14 +802,19 @@ You MUST respond with a single JSON object and nothing else — no markdown fenc
                 if (!string.IsNullOrWhiteSpace(c.Summary))
                     system.AppendLine($"Summary: {c.Summary}");
 
-                // Include full conversation excerpt from MongoDB if available.
-                if (fullConversations is not null
-                    && fullConversations.TryGetValue(c.ConversationId, out var full)
-                    && full.LinearisedMessages.Count > 0)
+                var full = fullConversations is not null
+                    && fullConversations.TryGetValue(c.ConversationId, out var loaded)
+                        ? loaded
+                        : null;
+
+                if (full is not null)
                 {
-                    system.AppendLine("Conversation excerpt:");
-                    var excerpt = full.ToExcerpt();
-                    system.AppendLine(excerpt);
+                    AppendMemoryBody(
+                        system,
+                        full,
+                        matchingChunks is not null && matchingChunks.TryGetValue(c.ConversationId, out var chunks)
+                            ? chunks
+                            : null);
                 }
 
                 system.AppendLine();

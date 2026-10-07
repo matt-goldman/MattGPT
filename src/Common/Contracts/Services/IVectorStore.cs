@@ -1,47 +1,61 @@
-﻿using MattGPT.Contracts.Models;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using MattGPT.Contracts.Models;
 
 namespace MattGPT.Contracts.Services;
 
 /// <summary>
-/// Represents a vector store for conversation embeddings, allowing upsert and similarity search operations.
+/// Represents a vector store for conversation chunk embeddings, allowing upsert and similarity search
+/// operations.
 /// </summary>
+/// <remarks>
+/// A conversation is stored as one or more chunks (<see cref="ConversationChunk"/>), each with its own
+/// vector. Search returns chunk-level hits; pooling them to the conversation is the caller's job
+/// (ADR-016). Score semantics differ by implementation — Weaviate converts a distance, Qdrant returns
+/// raw cosine, Azure AI Search and Pinecone return their own scores — so scores are comparable within
+/// one configured store and not across stores.
+/// </remarks>
 public interface IVectorStore
 {
     /// <summary>
-    /// Inserts a new conversation or updates an existing one in the storage asynchronously, associating it with the
-    /// specified vector.
+    /// Replaces the stored vectors for a conversation with <paramref name="chunks"/>.
     /// </summary>
-    /// <remarks>This method performs an upsert operation: if the specified conversation does not exist in the
-    /// storage, it is inserted; otherwise, the existing conversation is updated. Ensure that the conversation object is
-    /// properly initialized and the vector is valid before calling this method.</remarks>
-    /// <param name="conversation">The conversation to insert or update. Cannot be null.</param>
-    /// <param name="vector">An array of floating-point values representing the vector to associate with the conversation. The array must not
-    /// be empty.</param>
-    /// <param name="ct">A cancellation token that can be used to cancel the asynchronous operation. The default value is <see
-    /// cref="CancellationToken.None"/>.</param>
-    /// <returns>A task that represents the asynchronous upsert operation.</returns>
-    Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default);
+    /// <remarks>
+    /// This is a replace, not a merge: every vector previously stored for the conversation is removed
+    /// first, so a conversation re-embedded under a different chunking strategy (or into a different
+    /// number of chunks) cannot leave stale chunks behind to be matched against.
+    /// </remarks>
+    /// <param name="conversation">The conversation the chunks belong to. Cannot be null.</param>
+    /// <param name="chunks">The conversation's chunks and their vectors. An empty list just clears the conversation.</param>
+    /// <param name="ct">A cancellation token that can be used to cancel the asynchronous operation.</param>
+    Task UpsertAsync(StoredConversation conversation, IReadOnlyList<ChunkVector> chunks, CancellationToken ct = default);
 
     /// <summary>
-    /// Searches for vector-based results that are most similar to the specified query vector.
+    /// Removes every vector stored for a conversation. A conversation with no stored vectors is not
+    /// an error.
     /// </summary>
-    /// <remarks>An exception is thrown if the input parameters are invalid or if the operation is
-    /// canceled.</remarks>
+    Task DeleteAsync(string conversationId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Searches for the chunk vectors most similar to the specified query vector.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="limit"/> counts <em>chunks</em>, not conversations: several hits may belong to
+    /// the same conversation, and a caller that wants a number of conversations must ask for enough
+    /// chunks to yield them. An exception is thrown if the input parameters are invalid or if the
+    /// operation is canceled.
+    /// </remarks>
     /// <param name="queryVector">The vector representation of the query to use for similarity search. This array must not be null and should
     /// contain valid floating-point values.</param>
-    /// <param name="limit">The maximum number of results to return. Must be a positive integer. The default value is 5.</param>
+    /// <param name="limit">The maximum number of chunk hits to return. Must be a positive integer. The default value is 5.</param>
     /// <param name="userId">An optional identifier for the user making the request. This can be used to provide user-specific search results
     /// or context.</param>
     /// <param name="ct">A cancellation token that can be used to cancel the asynchronous operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains a read-only list of vector search
-    /// results that match the query vector.</returns>
+    /// results that match the query vector, most similar first.</returns>
     Task<IReadOnlyList<VectorSearchResult>> SearchAsync(float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default);
 
     /// <summary>
-    /// Asynchronously retrieves the total number of points available in the vector store.
+    /// Asynchronously retrieves the total number of points (chunk vectors, not conversations)
+    /// available in the vector store.
     /// </summary>
     /// <remarks>This method may throw an exception if the operation is canceled or if an error occurs during
     /// the retrieval process.</remarks>

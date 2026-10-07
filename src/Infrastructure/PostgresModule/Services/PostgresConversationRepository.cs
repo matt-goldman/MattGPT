@@ -254,6 +254,93 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
     }
 
     /// <inheritdoc/>
+    public async Task UpdateEmbeddingStateAsync(
+        string conversationId,
+        ConversationProcessingStatus status,
+        ChunkingStrategy? strategy,
+        int? chunkCount,
+        CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        // jsonb_set on each key, like UpdateProcessingStatusAsync: the promoted column and the document
+        // must agree, and rewriting the whole document here would lose concurrent writes to it.
+        await using var cmd = dataSource.CreateCommand(
+            $$"""
+            UPDATE {{TableName}}
+            SET processing_status = $2,
+                data = jsonb_set(
+                           jsonb_set(
+                               jsonb_set(data, '{processingStatus}', $3::jsonb),
+                               '{embeddedChunkingStrategy}', $4::jsonb),
+                           '{embeddedChunkCount}', $5::jsonb)
+            WHERE conversation_id = $1
+            """);
+        cmd.Parameters.AddWithValue(conversationId);
+        cmd.Parameters.AddWithValue(status.ToString());
+        cmd.Parameters.AddWithValue(JsonSerializer.Serialize(status.ToString()));
+        cmd.Parameters.AddWithValue(JsonSerializer.Serialize(strategy?.ToString()));
+        cmd.Parameters.AddWithValue(JsonSerializer.Serialize(chunkCount));
+
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<Dictionary<string, long>> GetEmbeddedChunkingStrategyCountsAsync(
+        string? userId = null, string unknownKey = "Unknown", CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        await using var cmd = dataSource.CreateCommand(
+            $"""
+            SELECT COALESCE(data->>'embeddedChunkingStrategy', $2) AS strategy, COUNT(*)
+            FROM {TableName}
+            WHERE user_id IS NOT DISTINCT FROM $1
+              AND processing_status = 'Embedded'
+            GROUP BY 1
+            """);
+        cmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue(unknownKey);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var counts = new Dictionary<string, long>();
+
+        while (await reader.ReadAsync(ct))
+            counts[reader.GetString(0)] = reader.GetInt64(1);
+
+        return counts;
+    }
+
+    /// <inheritdoc/>
+    public async Task<long> ResetEmbeddingStateAsync(string? userId = null, CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        // The status a conversation returns to depends on whether it has a digest, which is what keeps
+        // the bulk summariser from redoing work the embed run needs.
+        await using var cmd = dataSource.CreateCommand(
+            $$"""
+            UPDATE {{TableName}}
+            SET processing_status = CASE WHEN jsonb_typeof(data->'summary') = 'string'
+                                        THEN 'Summarised' ELSE 'Imported' END,
+                data = jsonb_set(
+                           jsonb_set(
+                               jsonb_set(
+                                   data,
+                                   '{processingStatus}',
+                                   CASE WHEN jsonb_typeof(data->'summary') = 'string'
+                                        THEN '"Summarised"'::jsonb ELSE '"Imported"'::jsonb END),
+                               '{embeddedChunkingStrategy}', 'null'::jsonb),
+                           '{embeddedChunkCount}', 'null'::jsonb)
+            WHERE user_id IS NOT DISTINCT FROM $1
+              AND processing_status = 'Embedded'
+            """);
+        cmd.Parameters.AddWithValue((object?)userId ?? DBNull.Value);
+
+        return await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <inheritdoc/>
     public async Task<StoredConversation?> GetByIdAsync(string conversationId, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);

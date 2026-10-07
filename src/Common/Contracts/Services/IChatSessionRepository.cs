@@ -69,6 +69,18 @@ public interface IChatSessionRepository
         Guid sessionId, string? summary, ChatSessionEmbeddingStatus status, int expectedMessageCount,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Return every embedded session to <see cref="ChatSessionEmbeddingStatus.Pending"/>, so the next
+    /// memory sweep projects and embeds it again. Returns the number of sessions reset.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart of <see cref="IConversationRepository.ResetEmbeddingStateAsync"/> for session
+    /// projections, which the bulk embed run deliberately leaves alone (ADR-013). A full re-embed has to
+    /// cover both, or the corpus is left embedded under two chunking strategies at once. Does not change
+    /// <see cref="ChatSession.UpdatedAt"/>, so it does not disturb the idle sweep.
+    /// </remarks>
+    Task<long> ResetEmbeddingStateAsync(CancellationToken ct = default);
+
     /// <summary>Return the most recent sessions ordered by <see cref="ChatSession.UpdatedAt"/> descending, scoped to the given user.</summary>
     Task<List<ChatSession>> ListRecentAsync(int limit = 50, string? userId = null, CancellationToken ct = default);
 }

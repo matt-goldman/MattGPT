@@ -16,8 +16,11 @@ namespace MattGPT.ApiService.Tests;
 /// </summary>
 internal sealed class FakeSearchVectorStore(IReadOnlyList<VectorSearchResult> results) : IVectorStore
 {
-    public Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
+    public Task UpsertAsync(
+        StoredConversation conversation, IReadOnlyList<ChunkVector> chunks, CancellationToken ct = default)
         => Task.CompletedTask;
+
+    public Task DeleteAsync(string conversationId, CancellationToken ct = default) => Task.CompletedTask;
 
     public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
@@ -257,6 +260,73 @@ public class RagServiceTests
         Assert.Contains("Conversation excerpt:", systemText);
         Assert.Contains("User:", systemText);
         Assert.Contains("Assistant:", systemText);
+    }
+
+    [Fact]
+    public void BuildMessages_WithMatchingChunks_IncludesThoseExcerptsRatherThanTheStartOfTheConversation()
+    {
+        var conversation = MakeConversation("c1", "Coding Help", "Helped with Python", messageCount: 8);
+        var context = new List<VectorSearchResult> { new("c1", 0.9f, "Coding Help", "Helped with Python") };
+        var fullConversations = new Dictionary<string, StoredConversation> { ["c1"] = conversation };
+
+        // The query matched messages 4 and 5, not the opening of the conversation.
+        var chunks = new Dictionary<string, IReadOnlyList<ConversationChunk>>
+        {
+            ["c1"] =
+            [
+                new ConversationChunk("c1", 4, 4, 5, "irrelevant", ChunkingStrategy.Exchange),
+            ],
+        };
+
+        var systemText = RagService
+            .BuildMessages("query", context, fullConversations, matchingChunks: chunks)[0].Text!;
+
+        Assert.Contains("Matching excerpts:", systemText);
+        Assert.Contains("[messages 5-6]", systemText);
+        Assert.Contains("Message content 4 from Coding Help", systemText);
+        Assert.DoesNotContain("Message content 0 from Coding Help", systemText);
+    }
+
+    [Fact]
+    public void BuildMessages_WithARecord_IncludesTheRecordAndTheMatchingExcerpts()
+    {
+        var conversation = MakeConversation("c1", "Coding Help", "Helped with Python", messageCount: 4);
+        conversation.Record = "## What was decided\nThe 65W brick is enough.";
+
+        var context = new List<VectorSearchResult> { new("c1", 0.9f, "Coding Help", "Helped with Python") };
+        var fullConversations = new Dictionary<string, StoredConversation> { ["c1"] = conversation };
+        var chunks = new Dictionary<string, IReadOnlyList<ConversationChunk>>
+        {
+            ["c1"] = [new ConversationChunk("c1", 1, 2, 3, "irrelevant", ChunkingStrategy.Exchange)],
+        };
+
+        var systemText = RagService
+            .BuildMessages("query", context, fullConversations, matchingChunks: chunks)[0].Text!;
+
+        // Both: the record resolves what the conversation concluded, the excerpt anchors the citation.
+        Assert.Contains("Record of the conversation:", systemText);
+        Assert.Contains("The 65W brick is enough.", systemText);
+        Assert.Contains("Matching excerpts:", systemText);
+        Assert.Contains("Message content 2 from Coding Help", systemText);
+    }
+
+    [Fact]
+    public void BuildMessages_WholeConversationChunk_FallsBackToTheConversationExcerpt()
+    {
+        var conversation = MakeConversation("c1", "Coding Help", "Helped with Python", messageCount: 4);
+        var context = new List<VectorSearchResult> { new("c1", 0.9f, "Coding Help", "Helped with Python") };
+        var fullConversations = new Dictionary<string, StoredConversation> { ["c1"] = conversation };
+        var chunks = new Dictionary<string, IReadOnlyList<ConversationChunk>>
+        {
+            // A whole-conversation chunk carries no location, so there is nothing to excerpt.
+            ["c1"] = [new ConversationChunk("c1", 0, 0, 3, "irrelevant", ChunkingStrategy.WholeConversation)],
+        };
+
+        var systemText = RagService
+            .BuildMessages("query", context, fullConversations, matchingChunks: chunks)[0].Text!;
+
+        Assert.Contains("Conversation excerpt:", systemText);
+        Assert.DoesNotContain("Matching excerpts:", systemText);
     }
 
     [Fact]

@@ -67,8 +67,8 @@ public class ChatSessionMemoryTests
         vectorStore ??= new FakeVectorStore();
 
         var embedder = new EmbeddingService(
-            conversations, new FakeEmbeddingGenerator(TestVector), vectorStore, ZeroDelayTimeProvider.Instance,
-            Options.Create(new RagOptions()), NullLogger<EmbeddingService>.Instance);
+            conversations, new FakeEmbeddingGenerator(TestVector), vectorStore, TestChunker.For(),
+            ZeroDelayTimeProvider.Instance, Options.Create(new RagOptions()), NullLogger<EmbeddingService>.Instance);
         var summariser = new SummarisationService(
             conversations, chatClient ?? new FakeChatClient("The user planned a vegetable garden."),
             NullLogger<SummarisationService>.Instance);
@@ -297,7 +297,8 @@ public class ChatSessionMemoryTests
         repo.Seed([projection, import]);
         var vectorStore = new FakeVectorStore();
         var service = new EmbeddingService(repo, new FakeEmbeddingGenerator(TestVector), vectorStore,
-            ZeroDelayTimeProvider.Instance, Options.Create(new RagOptions()), NullLogger<EmbeddingService>.Instance);
+            TestChunker.For(), ZeroDelayTimeProvider.Instance, Options.Create(new RagOptions()),
+            NullLogger<EmbeddingService>.Instance);
 
         var result = await service.EmbedAsync();
 
@@ -381,7 +382,7 @@ public class ChatSessionMemoryTests
         var store = new UserRecordingVectorStore();
         var retriever = new MemoryRetriever(
             new FakeEmbeddingGenerator(TestVector), store, new FakeConversationRepository(),
-            new FixedCurrentUserService("user-1"), Options.Create(new RagOptions()),
+            new FixedCurrentUserService("user-1"), TestChunker.For(), Options.Create(new RagOptions()),
             NullLogger<MemoryRetriever>.Instance);
 
         await retriever.RetrieveAsync("query", 5, 0.5f);
@@ -393,8 +394,11 @@ public class ChatSessionMemoryTests
     {
         public string? LastUserId { get; private set; }
 
-        public Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
+        public Task UpsertAsync(
+            StoredConversation conversation, IReadOnlyList<ChunkVector> chunks, CancellationToken ct = default)
             => Task.CompletedTask;
+
+        public Task DeleteAsync(string conversationId, CancellationToken ct = default) => Task.CompletedTask;
 
         public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
             float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)

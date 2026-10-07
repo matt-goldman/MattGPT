@@ -62,8 +62,8 @@ public class DigestRecordAndNotificationTests
     }
 
     private static EmbeddingService Embedder(IConversationRepository repo, IVectorStore store)
-        => new(repo, new FakeEmbeddingGenerator(TestVector), store, ZeroDelayTimeProvider.Instance,
-            Options.Create(new RagOptions()), NullLogger<EmbeddingService>.Instance);
+        => new(repo, new FakeEmbeddingGenerator(TestVector), store, TestChunker.For(),
+            ZeroDelayTimeProvider.Instance, Options.Create(new RagOptions()), NullLogger<EmbeddingService>.Instance);
 
     // ── BuildPrompt faults (regressions) ────────────────────────────────────
 
@@ -285,6 +285,7 @@ public class DigestRecordAndNotificationTests
         services.AddSingleton<TimeProvider>(ZeroDelayTimeProvider.Instance);
         services.AddSingleton(Options.Create(new RagOptions()));
         services.AddSingleton(chatClient);
+        services.AddSingleton<ConversationChunker>();
         services.AddScoped<EmbeddingService>();
         services.AddScoped<SummarisationService>();
         services.AddSingleton<NotificationPublisher>();

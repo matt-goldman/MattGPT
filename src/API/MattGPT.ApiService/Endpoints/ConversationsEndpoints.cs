@@ -162,6 +162,43 @@ public static class ConversationsEndpoints
         })
         .WithName("EmbedConversations");
 
+        // Full re-embed: the path out of a corpus embedded under more than one chunking strategy, and
+        // what has to be run after changing RAG:ChunkingStrategy or the embedding model. Marks every
+        // embedded conversation (and chat session projection) as needing embedding again, then queues an
+        // ordinary embed run. Stored vectors stay until each conversation is rewritten, so retrieval
+        // keeps working — under mixed strategies — while the run is in flight.
+        app.MapPost("/conversations/reembed", async (
+            IConversationRepository repository,
+            IChatSessionRepository sessions,
+            ImportJobStore jobStore,
+            Channel<EmbedJobRequest> channel,
+            ICurrentUserService currentUser,
+            IOptions<RagOptions> ragOptions,
+            ILogger<Program> logger,
+            CancellationToken ct) =>
+        {
+            var conversationsReset = await repository.ResetEmbeddingStateAsync(currentUser.UserId, ct);
+            var sessionsReset = await sessions.ResetEmbeddingStateAsync(ct);
+
+            logger.LogInformation(
+                "Re-embed requested: {Conversations} conversation(s) and {Sessions} chat session(s) reset; "
+                + "embedding again under the {Strategy} chunking strategy.",
+                conversationsReset, sessionsReset, ragOptions.Value.ChunkingStrategy);
+
+            var job = jobStore.CreateEmbedJob();
+            job.UserId = currentUser.UserId;
+            await channel.Writer.WriteAsync(new EmbedJobRequest(job.JobId, currentUser.UserId), ct);
+
+            return Results.Accepted($"/conversations/status/{job.JobId}", new
+            {
+                jobId = job.JobId,
+                conversationsReset,
+                sessionsReset,
+                chunkingStrategy = ragOptions.Value.ChunkingStrategy.ToString(),
+            });
+        })
+        .WithName("ReembedConversations");
+
         // Returns the status of the most recent embedding run, or 204 if none has run this session.
         // Lets the UI resume showing progress after a page reload.
         app.MapGet("/conversations/embed/latest", (ImportJobStore jobStore) =>
@@ -193,12 +230,14 @@ public static class ConversationsEndpoints
             IConversationRepository repository,
             IVectorStore vectorStore,
             IOptions<LlmOptions> llmOptions,
+            IOptions<RagOptions> ragOptions,
             ICurrentUserService currentUser,
             CancellationToken ct) =>
         {
             var byStatus = await repository.GetStatusCountsAsync(currentUser.UserId, ct);
             var total = byStatus.Values.Sum();
             var digestsAwaitingEmbedding = await repository.CountDigestsAwaitingEmbeddingAsync(currentUser.UserId, ct);
+            var byChunkingStrategy = await repository.GetEmbeddedChunkingStrategyCountsAsync(currentUser.UserId, ct: ct);
 
             long? vectorPoints = null;
             string? vectorError = null;
@@ -224,8 +263,30 @@ public static class ConversationsEndpoints
                 issues.Add($"{embeddingErrors} conversation(s) failed embedding; the next embed run retries them.");
             if (vectorError is not null)
                 issues.Add($"Vector store unreachable: {vectorError}");
-            else if (vectorPoints is not null && embedded > vectorPoints)
-                issues.Add($"{embedded} embedded conversation(s) but only {vectorPoints} vector(s) stored — mismatch.");
+            else if (vectorPoints is 0 && embedded > 0)
+                issues.Add($"{embedded} embedded conversation(s) but no vectors stored — mismatch.");
+
+            // A conversation is embedded as one or more chunks, and chunks built under different
+            // strategies are not comparable, so a corpus with more than one strategy in it is ranking
+            // against incomparable vectors. "Unknown" is a conversation embedded before the strategy was
+            // recorded, which is the same problem.
+            var configuredStrategy = ragOptions.Value.ChunkingStrategy.ToString();
+
+            if (byChunkingStrategy.Count > 1)
+            {
+                issues.Add(
+                    "Conversations are embedded under more than one chunking strategy ("
+                    + string.Join(", ", byChunkingStrategy.Select(kv => $"{kv.Key}: {kv.Value}"))
+                    + $"); their scores are not comparable. Re-embed the corpus under {configuredStrategy} "
+                    + "via POST /conversations/reembed.");
+            }
+            else if (byChunkingStrategy.Count == 1 && !byChunkingStrategy.ContainsKey(configuredStrategy))
+            {
+                issues.Add(
+                    $"Conversations are embedded under the {byChunkingStrategy.Keys.First()} chunking strategy "
+                    + $"but the configured strategy is {configuredStrategy}. Re-embed via "
+                    + "POST /conversations/reembed.");
+            }
 
             var llm = llmOptions.Value;
             return Results.Ok(new
@@ -238,6 +299,8 @@ public static class ConversationsEndpoints
                 llmProvider         = llm.Provider,
                 llmModelId          = llm.ModelId,
                 embeddingModelId    = llm.EmbeddingModelId,
+                chunkingStrategy    = configuredStrategy,
+                byChunkingStrategy,
                 issues,
             });
         })

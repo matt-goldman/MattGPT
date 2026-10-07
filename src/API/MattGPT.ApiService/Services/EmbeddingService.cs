@@ -24,10 +24,18 @@ public record EmbeddingProgress(int Embedded, int Errors, int Skipped);
 /// NOT required before embedding. Conversations with a summary use the summary as part of
 /// the embedding text for better quality; conversations without one are still embedded.
 /// </summary>
+/// <remarks>
+/// A conversation is embedded as one or more chunks, decided by <see cref="ConversationChunker"/> from
+/// the configured <see cref="ChunkingStrategy"/>. Each chunk gets its own vector, all of a
+/// conversation's chunks are written in one replace (so a re-embed cannot leave chunks of a previous
+/// strategy behind), and the strategy and chunk count are recorded on the conversation so a corpus
+/// embedded under mixed strategies is detectable.
+/// </remarks>
 public class EmbeddingService(
     IConversationRepository repository,
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
     IVectorStore vectorStore,
+    ConversationChunker chunker,
     TimeProvider timeProvider,
     IOptions<RagOptions> ragOptions,
     ILogger<EmbeddingService> logger)
@@ -54,22 +62,22 @@ public class EmbeddingService(
     /// Standard maximum characters of conversation content to include for embedding. Also the size the
     /// text is trimmed to when a longer text is rejected for exceeding the model's context window.
     /// </summary>
-    internal const int MaxEmbeddingTextChars = 8_000;
+    internal const int MaxEmbeddingTextChars = RagOptions.DefaultMaxEmbeddingChars;
 
     /// <summary>
     /// Default maximum characters of conversation content to include for embedding when
     /// <see cref="RagOptions.UseReranking"/> is enabled, which is paired with a long-context
     /// embedding model (~8k tokens).
     /// </summary>
-    internal const int LongContextMaxEmbeddingTextChars = 32_000;
+    internal const int LongContextMaxEmbeddingTextChars = RagOptions.LongContextMaxEmbeddingChars;
 
     /// <summary>
-    /// Effective maximum embedding text length: <see cref="RagOptions.MaxEmbeddingChars"/> when set,
-    /// otherwise <see cref="LongContextMaxEmbeddingTextChars"/> with reranking or
-    /// <see cref="MaxEmbeddingTextChars"/> without.
+    /// Number of chunk texts sent to the embedding model in one request. Batching matters once a
+    /// conversation is many chunks: a per-message corpus is an order of magnitude more requests than a
+    /// per-conversation one. A batch that fails falls back to embedding its chunks one at a time, where
+    /// the context-length fallbacks below apply.
     /// </summary>
-    private readonly int maxEmbeddingChars = ragOptions.Value.MaxEmbeddingChars
-        ?? (ragOptions.Value.UseReranking ? LongContextMaxEmbeddingTextChars : MaxEmbeddingTextChars);
+    private const int EmbeddingBatchSize = 16;
 
     /// <summary>
     /// Fallback chunk size (in characters) used when the embedding model rejects the full
@@ -188,50 +196,58 @@ public class EmbeddingService(
     private async Task<EmbedOutcome> EmbedConversationAsync(
         StoredConversation conversation, CancellationToken ct)
     {
-        var embeddingText = conversation.ToEmbeddingText(maxEmbeddingChars);
+        var chunks = chunker.Chunk(conversation);
 
-        if (string.IsNullOrWhiteSpace(embeddingText))
+        if (chunks.Count == 0)
         {
             logger.LogDebug(
-                "Conversation {Id} has no embeddable content; marking as Embedded with null vector.",
+                "Conversation {Id} has no embeddable content; marking as Embedded with no vectors.",
                 conversation.ConversationId);
 
-            await repository.UpdateProcessingStatusAsync(
+            await repository.UpdateEmbeddingStateAsync(
                 conversation.ConversationId,
                 ConversationProcessingStatus.Embedded,
+                chunker.Strategy,
+                chunkCount: 0,
                 ct);
             return EmbedOutcome.Skipped;
         }
 
-        float[] vector;
+        var totalChars = chunks.Sum(c => c.EmbeddingText.Length);
+
+        List<ChunkVector> vectors;
         try
         {
-            vector = await GenerateChunkedEmbeddingAsync(conversation, embeddingText, ct);
+            vectors = await GenerateChunkVectorsAsync(conversation, chunks, ct);
         }
         catch (Exception ex)
         {
-            LogEmbeddingFailure(ex, conversation, embeddingText.Length);
+            LogEmbeddingFailure(ex, conversation, totalChars);
 
             await TryMarkErrorAsync(conversation.ConversationId, ct);
             return EmbedOutcome.Error;
         }
 
-        // The vector store is the only place the vector lives, so the conversation is only
+        // The vector store is the only place the vectors live, so the conversation is only
         // Embedded once the upsert succeeds. A failed upsert is marked EmbeddingError so the
         // next run retries it, rather than leaving an "Embedded" conversation that search
         // can never find.
         try
         {
-            await vectorStore.UpsertAsync(conversation, vector, ct);
+            await vectorStore.UpsertAsync(conversation, vectors, ct);
 
-            await repository.UpdateProcessingStatusAsync(
+            await repository.UpdateEmbeddingStateAsync(
                 conversation.ConversationId,
                 ConversationProcessingStatus.Embedded,
+                chunker.Strategy,
+                vectors.Count,
                 ct);
 
             logger.LogDebug(
-                "Embedded conversation {Id} ({Title}), dimensions: {Dims}, text length: {TextLen}.",
-                conversation.ConversationId, conversation.Title, vector.Length, embeddingText.Length);
+                "Embedded conversation {Id} ({Title}) as {Chunks} {Strategy} chunk(s), "
+                + "dimensions: {Dims}, text length: {TextLen}.",
+                conversation.ConversationId, conversation.Title, vectors.Count, chunker.Strategy,
+                vectors.Count > 0 ? vectors[0].Vector.Length : 0, totalChars);
 
             return EmbedOutcome.Success;
         }
@@ -248,22 +264,70 @@ public class EmbeddingService(
     }
 
     /// <summary>
-    /// Generates an embedding for <paramref name="text"/> (built from <paramref name="conversation"/>).
-    /// Tries to embed the full text first; if the model reports a context-length error and the text
-    /// is longer than <see cref="MaxEmbeddingTextChars"/>, retries with the conversation rebuilt to
-    /// that length. If that is still too long, falls back to chunking the (trimmed) text into
-    /// <see cref="FallbackChunkChars"/>-sized pieces and averaging the resulting vectors.
-    /// This keeps quality high for models with large context windows while still working
-    /// with smaller models, and bounds the number of chunk requests. Transient failures are
-    /// retried with exponential backoff.
+    /// Embeds every chunk of a conversation. Chunks are sent in batches of
+    /// <see cref="EmbeddingBatchSize"/>; a batch that fails for any reason is retried chunk by chunk,
+    /// where the context-length fallbacks in <see cref="GenerateChunkEmbeddingAsync"/> apply. A single
+    /// chunk goes straight down the single-chunk path.
     /// </summary>
-    private async Task<float[]> GenerateChunkedEmbeddingAsync(
-        StoredConversation conversation, string text, CancellationToken ct)
+    private async Task<List<ChunkVector>> GenerateChunkVectorsAsync(
+        StoredConversation conversation, IReadOnlyList<ConversationChunk> chunks, CancellationToken ct)
     {
+        var vectors = new List<ChunkVector>(chunks.Count);
+
+        for (var offset = 0; offset < chunks.Count; offset += EmbeddingBatchSize)
+        {
+            var batch = chunks.Skip(offset).Take(EmbeddingBatchSize).ToList();
+
+            if (batch.Count > 1)
+            {
+                try
+                {
+                    var generated = await GenerateWithRetryAsync([.. batch.Select(c => c.EmbeddingText)], ct);
+
+                    if (generated.Count == batch.Count)
+                    {
+                        vectors.AddRange(batch.Select((c, i) => new ChunkVector(c, generated[i].Vector.ToArray())));
+                        continue;
+                    }
+
+                    logger.LogDebug(
+                        "Embedding model returned {Returned} vectors for a batch of {Sent}; "
+                        + "falling back to per-chunk embedding.",
+                        generated.Count, batch.Count);
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    logger.LogDebug(
+                        ex, "Batch embedding of {Count} chunk(s) failed; falling back to per-chunk embedding.",
+                        batch.Count);
+                }
+            }
+
+            foreach (var chunk in batch)
+                vectors.Add(new ChunkVector(chunk, await GenerateChunkEmbeddingAsync(conversation, chunk, ct)));
+        }
+
+        return vectors;
+    }
+
+    /// <summary>
+    /// Generates the embedding for one chunk. Tries the chunk's text first; if the model reports a
+    /// context-length error on a whole-conversation chunk longer than
+    /// <see cref="MaxEmbeddingTextChars"/>, retries with the conversation rebuilt to that length. If
+    /// that is still too long, falls back to splitting the text into <see cref="FallbackChunkChars"/>
+    /// pieces and averaging the resulting vectors. This keeps quality high for models with large
+    /// context windows while still working with smaller models, and bounds the number of requests.
+    /// Transient failures are retried with exponential backoff.
+    /// </summary>
+    private async Task<float[]> GenerateChunkEmbeddingAsync(
+        StoredConversation conversation, ConversationChunk chunk, CancellationToken ct)
+    {
+        var text = chunk.EmbeddingText;
+
         // Fast path — try the full text first.
         try
         {
-            var result = await GenerateWithRetryAsync(text, ct);
+            var result = await GenerateWithRetryAsync([text], ct);
             return result[0].Vector.ToArray();
         }
         catch (Exception ex) when (IsContextLengthError(ex))
@@ -275,14 +339,16 @@ public class EmbeddingService(
 
         // Trim path — long-context text was too long for the model; retry at the standard length,
         // trimmed on message boundaries. Chunking below then works from the trimmed text, so a very
-        // long conversation can't fan out into hundreds of chunk requests.
-        if (text.Length > MaxEmbeddingTextChars)
+        // long conversation can't fan out into hundreds of chunk requests. Only meaningful for a
+        // whole-conversation chunk: a per-unit chunk is already bounded by the chunk budget, so there
+        // is no shorter rendering of it to fall back to.
+        if (chunk.Strategy == ChunkingStrategy.WholeConversation && text.Length > MaxEmbeddingTextChars)
         {
             text = conversation.ToEmbeddingText(MaxEmbeddingTextChars);
 
             try
             {
-                var result = await GenerateWithRetryAsync(text, ct);
+                var result = await GenerateWithRetryAsync([text], ct);
                 return result[0].Vector.ToArray();
             }
             catch (Exception ex) when (IsContextLengthError(ex))
@@ -293,17 +359,17 @@ public class EmbeddingService(
             }
         }
 
-        // Slow path — chunk, embed each piece, and average.
-        var chunks = ChunkText(text, FallbackChunkChars);
+        // Slow path — split, embed each piece, and average.
+        var pieces = ChunkText(text, FallbackChunkChars);
         logger.LogDebug(
-            "Splitting text ({Len} chars) into {Chunks} chunks of ~{ChunkSize} chars.",
-            text.Length, chunks.Count, FallbackChunkChars);
+            "Splitting text ({Len} chars) into {Pieces} pieces of ~{PieceSize} chars.",
+            text.Length, pieces.Count, FallbackChunkChars);
 
         float[]? averaged = null;
 
-        foreach (var chunk in chunks)
+        foreach (var piece in pieces)
         {
-            var result = await GenerateWithRetryAsync(chunk, ct);
+            var result = await GenerateWithRetryAsync([piece], ct);
             var vec = result[0].Vector.ToArray();
 
             averaged ??= new float[vec.Length];
@@ -318,7 +384,7 @@ public class EmbeddingService(
             var norm = 0f;
             for (var i = 0; i < averaged.Length; i++)
             {
-                averaged[i] /= chunks.Count;
+                averaged[i] /= pieces.Count;
                 norm += averaged[i] * averaged[i];
             }
 
@@ -336,16 +402,16 @@ public class EmbeddingService(
     /// Wraps <see cref="IEmbeddingGenerator{TInput,TEmbedding}.GenerateAsync"/> with
     /// exponential-backoff retry for transient failures (HTTP errors, timeouts).
     /// Context-length errors are never retried — they are rethrown immediately so the
-    /// caller can fall back to chunking.
+    /// caller can fall back to a shorter text or to per-chunk requests.
     /// </summary>
     private async Task<GeneratedEmbeddings<Embedding<float>>> GenerateWithRetryAsync(
-        string text, CancellationToken ct)
+        IReadOnlyList<string> texts, CancellationToken ct)
     {
         for (var attempt = 0; ; attempt++)
         {
             try
             {
-                return await embeddingGenerator.GenerateAsync([text], cancellationToken: ct);
+                return await embeddingGenerator.GenerateAsync(texts, cancellationToken: ct);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested
                                        && !IsContextLengthError(ex)

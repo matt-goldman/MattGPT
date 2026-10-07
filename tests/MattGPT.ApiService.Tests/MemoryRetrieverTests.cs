@@ -27,6 +27,7 @@ internal static class TestRetriever
             vectorStore,
             repository ?? new FakeConversationRepository(),
             new NullCurrentUserService(),
+            TestChunker.For(options),
             Options.Create(options ?? new RagOptions()),
             NullLogger<MemoryRetriever>.Instance,
             reranker);
@@ -86,13 +87,174 @@ public class MemoryRetrieverTests
     }
 
     [Fact]
-    public async Task RetrieveAsync_PassesLimitToVectorStore()
+    public async Task RetrieveAsync_AsksTheStoreForSeveralChunksPerConversationWanted()
     {
         var store = new RecordingVectorStore();
 
-        await TestRetriever.Create(store).RetrieveAsync("query", limit: 7, minScore: 0.5f);
+        await TestRetriever.Create(store, options: new RagOptions { ChunkCandidateMultiplier = 4 })
+            .RetrieveAsync("query", limit: 7, minScore: 0.5f);
 
-        Assert.Equal(7, store.LastLimit);
+        // The store's limit counts chunks, so a conversation whose chunks all match cannot crowd the
+        // others out of the candidate set.
+        Assert.Equal(28, store.LastLimit);
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_RequestedLimitBelowRetainedBreadth_AsksForBreadth()
+    {
+        var store = new RecordingVectorStore();
+
+        await TestRetriever.Create(store,
+                options: new RagOptions { RetainedConversations = 6, ChunkCandidateMultiplier = 2 })
+            .RetrieveAsync("query", limit: 1, minScore: 0.5f);
+
+        Assert.Equal(12, store.LastLimit);
+    }
+
+    // ── Pooling, breadth and neighbour expansion ──
+
+    /// <summary>A conversation of alternating turns, each message naming its index.</summary>
+    private static StoredConversation MakeConversation(string id, int messageCount) => new()
+    {
+        ConversationId = id,
+        Title = id,
+        ProcessingStatus = ConversationProcessingStatus.Embedded,
+        LinearisedMessages = [.. Enumerable.Range(0, messageCount).Select(i => new StoredMessage
+        {
+            Id = $"m{i}",
+            Role = i % 2 == 0 ? "user" : "assistant",
+            ContentType = "text",
+            Parts = [$"{id} message {i}"],
+        })],
+    };
+
+    /// <summary>A chunk-level hit, as a store holding chunk vectors returns one.</summary>
+    private static VectorSearchResult ChunkHit(string conversationId, float score, int ordinal, int chunkCount = 6)
+        => new(conversationId, score, conversationId, null,
+            new ChunkHit(ordinal, chunkCount, ordinal, ordinal, ChunkingStrategy.Message));
+
+    private static RagOptions MessageChunking(
+        int retained = 4, float relative = 0.6f, int window = 1) => new()
+    {
+        ChunkingStrategy = ChunkingStrategy.Message,
+        RetainedConversations = retained,
+        RetainedRelativeScore = relative,
+        NeighbourWindow = window,
+    };
+
+    [Fact]
+    public async Task RetrieveAsync_PoolsChunkScoresToTheConversationByMaximum()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", 6), MakeConversation("c2", 6)]);
+
+        // c1 matches weakly three times (sum 1.27); c2 matches strongly once. Max pooling puts c2 first;
+        // sum pooling would put c1 first, which is the length bias this avoids.
+        var store = new FakeSearchVectorStore(
+        [
+            new VectorSearchResult("c2", 0.80f, "c2", null, new ChunkHit(0, 6, 0, 0, ChunkingStrategy.Message)),
+            ChunkHit("c1", 0.45f, 1),
+            ChunkHit("c1", 0.42f, 2),
+            ChunkHit("c1", 0.40f, 3),
+        ]);
+
+        var result = await TestRetriever.Create(store, repo, options: MessageChunking(relative: 0f))
+            .RetrieveAsync("query", limit: 5, minScore: 0.3f);
+
+        Assert.Equal(["c2", "c1"], result.Results.Select(r => r.ConversationId));
+        Assert.Equal([0.80f, 0.45f], result.Results.Select(r => r.Score));
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_ReturnsOneResultPerConversation_NotPerChunk()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", 6)]);
+
+        var store = new FakeSearchVectorStore([ChunkHit("c1", 0.9f, 0), ChunkHit("c1", 0.8f, 2), ChunkHit("c1", 0.7f, 4)]);
+
+        var result = await TestRetriever.Create(store, repo, options: MessageChunking())
+            .RetrieveAsync("query", limit: 5, minScore: 0.5f);
+
+        var hit = Assert.Single(result.Results);
+        Assert.Equal(0, hit.Chunk!.Ordinal); // the best-matching chunk
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_RetainsSeveralConversations_EvenWhenTheCallerAsksForOne()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([.. new[] { "c1", "c2", "c3", "c4" }.Select(id => MakeConversation(id, 2))]);
+
+        var store = new FakeSearchVectorStore(
+        [
+            ChunkHit("c1", 0.90f, 0), ChunkHit("c2", 0.85f, 0),
+            ChunkHit("c3", 0.80f, 0), ChunkHit("c4", 0.75f, 0),
+        ]);
+
+        var result = await TestRetriever.Create(store, repo, options: MessageChunking(retained: 4))
+            .RetrieveAsync("query", limit: 1, minScore: 0.5f);
+
+        Assert.Equal(["c1", "c2", "c3", "c4"], result.Results.Select(r => r.ConversationId));
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_DropsConversationsBelowTheRelativeScoreFloor()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("dominant", 2), MakeConversation("weak", 2)]);
+
+        // 0.5 clears MinScore but not 60% of the dominant conversation's 0.9, so breadth does not pad
+        // the context with it.
+        var store = new FakeSearchVectorStore([ChunkHit("dominant", 0.90f, 0), ChunkHit("weak", 0.50f, 0)]);
+
+        var result = await TestRetriever.Create(store, repo, options: MessageChunking(relative: 0.6f))
+            .RetrieveAsync("query", limit: 5, minScore: 0.4f);
+
+        Assert.Equal(["dominant"], result.Results.Select(r => r.ConversationId));
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_ReturnsMatchingChunksExpandedToTheirNeighbours()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", 6)]);
+
+        var store = new FakeSearchVectorStore([ChunkHit("c1", 0.9f, 2)]);
+
+        var result = await TestRetriever.Create(store, repo, options: MessageChunking(window: 1))
+            .RetrieveAsync("query", limit: 5, minScore: 0.5f);
+
+        var chunks = result.MatchingChunks["c1"];
+        Assert.Equal([1, 2, 3], chunks.Select(c => c.Ordinal));
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_TwoNearbyMatches_ContributeEachChunkOnce()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", 6)]);
+
+        var store = new FakeSearchVectorStore([ChunkHit("c1", 0.9f, 2), ChunkHit("c1", 0.8f, 3)]);
+
+        var result = await TestRetriever.Create(store, repo, options: MessageChunking(window: 1))
+            .RetrieveAsync("query", limit: 5, minScore: 0.5f);
+
+        Assert.Equal([1, 2, 3, 4], result.MatchingChunks["c1"].Select(c => c.Ordinal));
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_WithNeighbourExpansionDisabled_ReturnsOnlyTheMatchedChunks()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", 6)]);
+
+        var store = new FakeSearchVectorStore([ChunkHit("c1", 0.9f, 2)]);
+
+        var result = await TestRetriever.Create(store, repo, options: MessageChunking(window: 0))
+            .RetrieveAsync("query", limit: 5, minScore: 0.5f);
+
+        Assert.Equal([2], result.MatchingChunks["c1"].Select(c => c.Ordinal));
     }
 
     // ── Reranking ──
@@ -117,13 +279,13 @@ public class MemoryRetrieverTests
     {
         var (repo, store) = ThreeCandidates();
         // The reranker prefers c3, which vector search ranked last and below MinScore.
-        var reranker = new ScriptedReranker((_, _, _) => [new RerankResult(2, 0.95f), new RerankResult(0, 0.40f)]);
+        var reranker = new ScriptedReranker((_, _, _) => [new RerankResult(2, 0.95f), new RerankResult(0, 0.80f)]);
 
         var result = await TestRetriever.Create(store, repo, options: RerankingOptions, reranker: reranker)
             .RetrieveAsync("query", limit: 2, minScore: 0.5f);
 
         Assert.Equal(["c3", "c1"], result.Results.Select(r => r.ConversationId));
-        Assert.Equal([0.95f, 0.40f], result.Results.Select(r => r.Score));
+        Assert.Equal([0.95f, 0.80f], result.Results.Select(r => r.Score));
         Assert.Equal(["c1", "c3"], result.Conversations.Keys.Order());
     }
 
@@ -137,7 +299,8 @@ public class MemoryRetrieverTests
             .RetrieveAsync("the query", limit: 2, minScore: 0.5f);
 
         Assert.Equal("the query", reranker.LastQuery);
-        Assert.Equal(2, reranker.LastTopN);
+        // Retained breadth, not the caller's top-k: a small limit must not narrow the context below it.
+        Assert.Equal(4, reranker.LastTopN);
         // Every candidate is sent, including the one below MinScore, as conversation text.
         Assert.Equal(3, reranker.LastDocuments!.Count);
         Assert.Contains("Content of c3", reranker.LastDocuments[2]);
@@ -169,11 +332,17 @@ public class MemoryRetrieverTests
     {
         var store = new RecordingVectorStore();
 
-        await TestRetriever.Create(store, options: new RagOptions { UseReranking = true, RerankCandidateCount = 25 },
+        await TestRetriever.Create(store,
+                options: new RagOptions
+                {
+                    UseReranking = true,
+                    RerankCandidateCount = 25,
+                    ChunkCandidateMultiplier = 2,
+                },
                 reranker: new ScriptedReranker((_, _, _) => []))
             .RetrieveAsync("query", limit: 5, minScore: 0.5f);
 
-        Assert.Equal(25, store.LastLimit);
+        Assert.Equal(50, store.LastLimit);
     }
 
     [Fact]
@@ -181,7 +350,13 @@ public class MemoryRetrieverTests
     {
         var store = new RecordingVectorStore();
 
-        await TestRetriever.Create(store, options: new RagOptions { UseReranking = true, RerankCandidateCount = 3 },
+        await TestRetriever.Create(store,
+                options: new RagOptions
+                {
+                    UseReranking = true,
+                    RerankCandidateCount = 3,
+                    ChunkCandidateMultiplier = 1,
+                },
                 reranker: new ScriptedReranker((_, _, _) => []))
             .RetrieveAsync("query", limit: 10, minScore: 0.5f);
 
@@ -242,6 +417,68 @@ public class MemoryRetrieverTests
         Assert.Empty(result.Conversations);
     }
 
+    [Fact]
+    public async Task RetrieveAsync_WithReranking_PrefersTheRecordAsTheCandidateDocument()
+    {
+        var conversation = MakeConversation("c1", 4);
+        conversation.Summary = "A digest.";
+        conversation.Record = "The record of what was decided.";
+        var repo = new FakeConversationRepository();
+        repo.Seed([conversation]);
+
+        var store = new FakeSearchVectorStore([ChunkHit("c1", 0.9f, 0, chunkCount: 4)]);
+        var reranker = new ScriptedReranker((_, _, _) => []);
+
+        await TestRetriever.Create(store, repo,
+                options: new RagOptions { UseReranking = true, ChunkingStrategy = ChunkingStrategy.Message },
+                reranker: reranker)
+            .RetrieveAsync("query", limit: 1, minScore: 0.5f);
+
+        Assert.Contains("The record of what was decided.", reranker.LastDocuments![0]);
+        Assert.DoesNotContain("A digest.", reranker.LastDocuments[0]);
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_WithReranking_NoRecord_UsesTheDigest()
+    {
+        var conversation = MakeConversation("c1", 4);
+        conversation.Summary = "A digest.";
+        var repo = new FakeConversationRepository();
+        repo.Seed([conversation]);
+
+        var store = new FakeSearchVectorStore([ChunkHit("c1", 0.9f, 0, chunkCount: 4)]);
+        var reranker = new ScriptedReranker((_, _, _) => []);
+
+        await TestRetriever.Create(store, repo,
+                options: new RagOptions { UseReranking = true, ChunkingStrategy = ChunkingStrategy.Message },
+                reranker: reranker)
+            .RetrieveAsync("query", limit: 1, minScore: 0.5f);
+
+        Assert.Contains("A digest.", reranker.LastDocuments![0]);
+        Assert.Contains("Title: c1", reranker.LastDocuments[0]);
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_WithReranking_NoRecordOrDigest_StitchesTheMatchingChunks()
+    {
+        var repo = new FakeConversationRepository();
+        repo.Seed([MakeConversation("c1", 6)]);
+
+        var store = new FakeSearchVectorStore([ChunkHit("c1", 0.9f, 3)]);
+        var reranker = new ScriptedReranker((_, _, _) => []);
+
+        await TestRetriever.Create(store, repo,
+                options: new RagOptions { UseReranking = true, ChunkingStrategy = ChunkingStrategy.Message },
+                reranker: reranker)
+            .RetrieveAsync("query", limit: 1, minScore: 0.5f);
+
+        // The chunk that matched, not the opening of the conversation, and not its neighbours: this
+        // document decides relevance.
+        Assert.Contains("c1 message 3", reranker.LastDocuments![0]);
+        Assert.DoesNotContain("c1 message 0", reranker.LastDocuments[0]);
+        Assert.DoesNotContain("c1 message 2", reranker.LastDocuments[0]);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -257,6 +494,7 @@ public class MemoryRetrieverTests
         services.AddSingleton<IVectorStore>(new FakeSearchVectorStore([]));
         services.AddSingleton<IConversationRepository>(new FakeConversationRepository());
         services.AddSingleton<ICurrentUserService>(new NullCurrentUserService());
+        services.AddSingleton<ConversationChunker>();
         services.AddScoped<MemoryRetriever>();
         if (registerReranker)
             services.AddHttpClient<IReranker, CohereCompatibleReranker>();
@@ -292,8 +530,11 @@ public class MemoryRetrieverTests
     {
         public int? LastLimit { get; private set; }
 
-        public Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
+        public Task UpsertAsync(
+            StoredConversation conversation, IReadOnlyList<ChunkVector> chunks, CancellationToken ct = default)
             => Task.CompletedTask;
+
+        public Task DeleteAsync(string conversationId, CancellationToken ct = default) => Task.CompletedTask;
 
         public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
             float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)

@@ -20,6 +20,7 @@ internal sealed class FakeConversationRepository : IConversationRepository{
     public List<(string Id, string? Summary, ConversationSummaryStatus SummaryStatus, ConversationProcessingStatus? Status)> SummaryUpdates { get; } = new();
     public List<(string Id, string? Record)> RecordUpdates { get; } = new();
     public List<(string Id, ConversationProcessingStatus Status)> StatusUpdates { get; } = new();
+    public List<(string Id, ConversationProcessingStatus Status, ChunkingStrategy? Strategy, int? ChunkCount)> EmbeddingStateUpdates { get; } = new();
 
     private List<StoredConversation> _conversations = new();
 
@@ -106,6 +107,47 @@ internal sealed class FakeConversationRepository : IConversationRepository{
         if (conv is not null)
             conv.ProcessingStatus = status;
         return Task.CompletedTask;
+    }
+
+    public Task UpdateEmbeddingStateAsync(
+        string conversationId, ConversationProcessingStatus status, ChunkingStrategy? strategy, int? chunkCount,
+        CancellationToken ct = default)
+    {
+        StatusUpdates.Add((conversationId, status));
+        EmbeddingStateUpdates.Add((conversationId, status, strategy, chunkCount));
+        var conv = _conversations.FirstOrDefault(c => c.ConversationId == conversationId);
+        if (conv is not null)
+        {
+            conv.ProcessingStatus = status;
+            conv.EmbeddedChunkingStrategy = strategy;
+            conv.EmbeddedChunkCount = chunkCount;
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task<Dictionary<string, long>> GetEmbeddedChunkingStrategyCountsAsync(
+        string? userId = null, string unknownKey = "Unknown", CancellationToken ct = default)
+        => Task.FromResult(_conversations
+            .Where(c => c.ProcessingStatus == ConversationProcessingStatus.Embedded)
+            .GroupBy(c => c.EmbeddedChunkingStrategy?.ToString() ?? unknownKey)
+            .ToDictionary(g => g.Key, g => (long)g.Count()));
+
+    public Task<long> ResetEmbeddingStateAsync(string? userId = null, CancellationToken ct = default)
+    {
+        var embedded = _conversations
+            .Where(c => c.ProcessingStatus == ConversationProcessingStatus.Embedded)
+            .ToList();
+
+        foreach (var conv in embedded)
+        {
+            conv.ProcessingStatus = conv.Summary is not null
+                ? ConversationProcessingStatus.Summarised
+                : ConversationProcessingStatus.Imported;
+            conv.EmbeddedChunkingStrategy = null;
+            conv.EmbeddedChunkCount = null;
+        }
+
+        return Task.FromResult((long)embedded.Count);
     }
 
     public Task<List<StoredConversation>> GetByIdsAsync(IEnumerable<string> conversationIds, CancellationToken ct = default)

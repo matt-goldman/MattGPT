@@ -206,8 +206,11 @@ public class SearchMemoriesToolTests
 /// </summary>
 internal sealed class ThrowingSearchVectorStore : IVectorStore
 {
-    public Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
+    public Task UpsertAsync(
+        StoredConversation conversation, IReadOnlyList<ChunkVector> chunks, CancellationToken ct = default)
         => Task.CompletedTask;
+
+    public Task DeleteAsync(string conversationId, CancellationToken ct = default) => Task.CompletedTask;
 
     public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
@@ -225,8 +228,11 @@ internal sealed class SequenceSearchVectorStore(params IReadOnlyList<VectorSearc
 {
     private int _next;
 
-    public Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
+    public Task UpsertAsync(
+        StoredConversation conversation, IReadOnlyList<ChunkVector> chunks, CancellationToken ct = default)
         => Task.CompletedTask;
+
+    public Task DeleteAsync(string conversationId, CancellationToken ct = default) => Task.CompletedTask;
 
     public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)

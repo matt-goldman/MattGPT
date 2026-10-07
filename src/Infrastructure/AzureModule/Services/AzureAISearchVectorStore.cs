@@ -24,13 +24,24 @@ public class AzureAISearchVectorStore(
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
     /// <inheritdoc/>
-    public async Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
+    public async Task UpsertAsync(
+        StoredConversation conversation, IReadOnlyList<ChunkVector> chunks, CancellationToken ct = default)
     {
-        await EnsureIndexAsync((int)vector.Length, ct);
-
-        var doc = new SearchDocument
+        if (chunks.Count == 0)
         {
-            ["id"] = conversation.ConversationId,
+            await DeleteAsync(conversation.ConversationId, ct);
+            return;
+        }
+
+        await EnsureIndexAsync(chunks[0].Vector.Length, ct);
+
+        // Replace, not merge: a conversation re-embedded into fewer chunks (or under another strategy)
+        // must not leave the previous documents behind to be matched against.
+        await DeleteAsync(conversation.ConversationId, ct);
+
+        var docs = chunks.Select(c => new SearchDocument
+        {
+            ["id"] = ChunkPointId.Key(conversation.ConversationId, c.Chunk.Ordinal),
             ["conversation_id"] = conversation.ConversationId,
             ["title"] = conversation.Title ?? string.Empty,
             ["summary"] = conversation.Summary ?? string.Empty,
@@ -40,14 +51,55 @@ public class AzureAISearchVectorStore(
             ["gizmo_id"] = conversation.GizmoId ?? string.Empty,
             ["is_archived"] = conversation.IsArchived ?? false,
             ["user_id"] = conversation.UserId ?? string.Empty,
-            ["vector"] = vector
-        };
+            ["chunk_ordinal"] = c.Chunk.Ordinal,
+            ["chunk_count"] = chunks.Count,
+            ["chunk_start_message"] = c.Chunk.StartMessageIndex,
+            ["chunk_end_message"] = c.Chunk.EndMessageIndex,
+            ["chunk_strategy"] = c.Chunk.Strategy.ToString(),
+            ["vector"] = c.Vector
+        }).ToList();
 
-        await searchClient.MergeOrUploadDocumentsAsync(new[] { doc }, cancellationToken: ct);
+        await searchClient.MergeOrUploadDocumentsAsync(docs, cancellationToken: ct);
 
         logger.LogDebug(
-            "Upserted conversation {Id} ({Title}) to Azure AI Search.",
-            conversation.ConversationId, conversation.Title);
+            "Upserted conversation {Id} ({Title}) to Azure AI Search as {Chunks} chunk(s).",
+            conversation.ConversationId, conversation.Title, docs.Count);
+    }
+
+    /// <inheritdoc/>
+    public async Task DeleteAsync(string conversationId, CancellationToken ct = default)
+    {
+        // Azure AI Search deletes by key, so the keys have to be found first: the previous chunk count
+        // is not known here, and deriving keys from ordinals would guess at it.
+        var escaped = conversationId.Replace("'", "''");
+        var options = new SearchOptions
+        {
+            Filter = $"conversation_id eq '{escaped}'",
+            Select = { "id" },
+            Size = 1000,
+        };
+
+        List<string> keys;
+        try
+        {
+            var response = await searchClient.SearchAsync<SearchDocument>("*", options, ct);
+            keys = [];
+            await foreach (var result in response.Value.GetResultsAsync())
+            {
+                if (result.Document.GetString("id") is { Length: > 0 } key)
+                    keys.Add(key);
+            }
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            // No index yet, so nothing to delete.
+            return;
+        }
+
+        if (keys.Count == 0)
+            return;
+
+        await searchClient.DeleteDocumentsAsync("id", keys, cancellationToken: ct);
     }
 
     /// <inheritdoc/>
@@ -70,7 +122,11 @@ public class AzureAISearchVectorStore(
                 }
             },
             Size = limit,
-            Select = { "conversation_id", "title", "summary" }
+            Select =
+            {
+                "conversation_id", "title", "summary",
+                "chunk_ordinal", "chunk_count", "chunk_start_message", "chunk_end_message", "chunk_strategy",
+            }
         };
 
         if (userId is not null)
@@ -93,7 +149,8 @@ public class AzureAISearchVectorStore(
                 ConversationId: conversationId ?? string.Empty,
                 Score: (float)(result.Score ?? 0.0),
                 Title: title,
-                Summary: summary));
+                Summary: summary,
+                Chunk: ReadChunk(result.Document)));
         }
 
         return results;
@@ -112,6 +169,34 @@ public class AzureAISearchVectorStore(
             return null;
         }
     }
+
+    /// <summary>
+    /// The chunk address stored on a document, or null for a document written before chunking existed
+    /// (which is treated as the whole conversation).
+    /// </summary>
+    private static ChunkHit? ReadChunk(SearchDocument document)
+    {
+        if (ReadInt(document, "chunk_ordinal") is not { } ordinal)
+            return null;
+
+        var strategyName = document.TryGetValue("chunk_strategy", out var s) ? s?.ToString() : null;
+        var strategy = Enum.TryParse<ChunkingStrategy>(strategyName, out var parsed)
+            ? parsed
+            : ChunkingStrategy.WholeConversation;
+
+        return new ChunkHit(
+            Ordinal:           ordinal,
+            ChunkCount:        ReadInt(document, "chunk_count") ?? 1,
+            StartMessageIndex: ReadInt(document, "chunk_start_message") ?? 0,
+            EndMessageIndex:   ReadInt(document, "chunk_end_message") ?? -1,
+            Strategy:          strategy);
+    }
+
+    private static int? ReadInt(SearchDocument document, string field)
+        => document.TryGetValue(field, out var value) && value is not null
+        && int.TryParse(value.ToString(), out var parsed)
+            ? parsed
+            : null;
 
     /// <summary>
     /// Ensures the Azure AI Search index exists with the correct schema and vector configuration.
@@ -140,6 +225,11 @@ public class AzureAISearchVectorStore(
                     new SimpleField("gizmo_id", SearchFieldDataType.String) { IsFilterable = true },
                     new SimpleField("is_archived", SearchFieldDataType.Boolean) { IsFilterable = true },
                     new SimpleField("user_id", SearchFieldDataType.String) { IsFilterable = true },
+                    new SimpleField("chunk_ordinal", SearchFieldDataType.Int32) { IsFilterable = true, IsSortable = true },
+                    new SimpleField("chunk_count", SearchFieldDataType.Int32) { IsFilterable = true },
+                    new SimpleField("chunk_start_message", SearchFieldDataType.Int32) { IsFilterable = true },
+                    new SimpleField("chunk_end_message", SearchFieldDataType.Int32) { IsFilterable = true },
+                    new SimpleField("chunk_strategy", SearchFieldDataType.String) { IsFilterable = true },
                     new SearchField("vector", SearchFieldDataType.Collection(SearchFieldDataType.Single))
                     {
                         IsSearchable = true,

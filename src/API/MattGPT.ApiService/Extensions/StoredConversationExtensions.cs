@@ -15,6 +15,16 @@ public static class StoredConversationExtensions
     /// </summary>
     public const int DefaultExcerptChars = 4_000;
 
+    /// <summary>
+    /// Whether a message contributes to embedding and chunking. Hidden and zero-weight messages are
+    /// system scaffolding (custom instructions and the like), and messages with no text contribute
+    /// nothing, so the embedding window is dedicated to actual conversational content.
+    /// </summary>
+    public static bool IsEmbeddable(this StoredMessage message)
+        => !message.IsHidden
+        && message.Weight != 0.0
+        && !string.IsNullOrWhiteSpace(string.Join(" ", message.Parts));
+
     /// <param name="conversation">The conversation to render.</param>
     extension(StoredConversation conversation)
     {
@@ -38,49 +48,64 @@ public static class StoredConversationExtensions
             if (!string.IsNullOrWhiteSpace(conversation.Summary))
                 sb.Append("Summary: ").AppendLine(conversation.Summary);
 
-            // Append message content up to the character limit.
-            // Skip hidden and zero-weight messages (system scaffolding, custom instructions)
-            // to dedicate the embedding window to actual conversational content.
-            foreach (var msg in conversation.LinearisedMessages)
+            AppendMessageLines(sb, conversation.LinearisedMessages, 0, conversation.LinearisedMessages.Count - 1, maxChars);
+
+            return sb.ToString().Trim();
+        }
+
+        /// <summary>
+        /// Builds the embeddable text for a range of this conversation's messages — the same rendering
+        /// <see cref="ToEmbeddingText"/> uses, without the title and digest, so a chunk's body is
+        /// comparable with a whole conversation's.
+        /// </summary>
+        /// <param name="startIndex">Index of the first message in the range.</param>
+        /// <param name="endIndex">Index of the last message in the range (inclusive).</param>
+        /// <param name="maxChars">Maximum characters to render.</param>
+        public string ToRangeEmbeddingText(int startIndex, int endIndex, int maxChars)
+        {
+            var sb = new StringBuilder();
+            AppendMessageLines(sb, conversation.LinearisedMessages, startIndex, endIndex, maxChars);
+            return sb.ToString().Trim();
+        }
+
+        /// <summary>
+        /// Builds a human-readable excerpt of a range of this conversation's messages, for including in
+        /// an LLM prompt as the verbatim grounding behind a citation. Unlike <see cref="ToExcerpt"/>,
+        /// which renders the conversation from the beginning, this renders exactly the messages a
+        /// retrieved chunk covers.
+        /// </summary>
+        /// <param name="startIndex">Index of the first message in the range.</param>
+        /// <param name="endIndex">Index of the last message in the range (inclusive).</param>
+        /// <param name="maxChars">Maximum characters to render.</param>
+        public string ToRangeExcerpt(int startIndex, int endIndex, int maxChars = DefaultExcerptChars)
+        {
+            var messages = conversation.LinearisedMessages;
+            var from = Math.Max(0, startIndex);
+            var to = Math.Min(endIndex, messages.Count - 1);
+
+            var sb = new StringBuilder();
+
+            for (var i = from; i <= to; i++)
             {
-                if (msg.IsHidden || msg.Weight == 0.0)
+                var msg = messages[i];
+                if (!msg.IsEmbeddable())
                     continue;
 
-                var content = string.Join(" ", msg.Parts);
-                if (string.IsNullOrWhiteSpace(content))
-                    continue;
+                var line = $"{DisplayRole(msg.Role)}: {string.Join(" ", msg.Parts)}";
 
-                var line = $"{msg.Role}: {content}\n";
-
-                if (sb.Length + line.Length > maxChars)
+                if (sb.Length + line.Length + 1 > maxChars)
                 {
-                    // Fit as much as we can.
-                    var remaining = maxChars - sb.Length;
-                    if (remaining > 20)
-                        sb.Append(line.AsSpan(0, remaining));
+                    var remaining = maxChars - sb.Length - 20;
+                    if (remaining > 0)
+                        sb.AppendLine(line[..remaining] + "...");
+                    sb.AppendLine("[excerpt truncated]");
                     break;
                 }
 
-                sb.Append(line);
-
-                // Include citation context (file names and web source titles/URLs).
-                if (msg.Citations is { Count: > 0 })
-                {
-                    foreach (var citation in msg.Citations)
-                    {
-                        var citName = !string.IsNullOrWhiteSpace(citation.Name) ? citation.Name
-                            : citation.Source;
-                        if (citName is not null)
-                        {
-                            var citLine = $"[Cited: {citName}]\n";
-                            if (sb.Length + citLine.Length <= maxChars)
-                                sb.Append(citLine);
-                        }
-                    }
-                }
+                sb.AppendLine(line);
             }
 
-            return sb.ToString().Trim();
+            return sb.ToString().TrimEnd();
         }
 
         /// <summary>
@@ -92,14 +117,7 @@ public static class StoredConversationExtensions
             var sb = new StringBuilder();
             foreach (var msg in conversation.LinearisedMessages)
             {
-                var role = msg.Role switch
-                {
-                    "user" => "User",
-                    "assistant" => "Assistant",
-                    "system" => "System",
-                    "tool" => "Tool",
-                    _ => msg.Role,
-                };
+                var role = DisplayRole(msg.Role);
 
                 var content = string.Join(" ", msg.Parts);
                 if (string.IsNullOrWhiteSpace(content))
@@ -123,4 +141,67 @@ public static class StoredConversationExtensions
             return sb.ToString();
         }
     }
+
+    /// <summary>
+    /// Appends <c>role: content</c> lines (plus citation context) for the messages in
+    /// <paramref name="startIndex"/>..<paramref name="endIndex"/> inclusive, stopping at
+    /// <paramref name="maxChars"/>. Shared by the whole-conversation and per-range embedding
+    /// renderings so a chunk is embedded in the same shape as a conversation.
+    /// </summary>
+    private static void AppendMessageLines(
+        StringBuilder sb, List<StoredMessage> messages, int startIndex, int endIndex, int maxChars)
+    {
+        var from = Math.Max(0, startIndex);
+        var to = Math.Min(endIndex, messages.Count - 1);
+
+        for (var i = from; i <= to; i++)
+        {
+            var msg = messages[i];
+            if (msg.IsHidden || msg.Weight == 0.0)
+                continue;
+
+            var content = string.Join(" ", msg.Parts);
+            if (string.IsNullOrWhiteSpace(content))
+                continue;
+
+            var line = $"{msg.Role}: {content}\n";
+
+            if (sb.Length + line.Length > maxChars)
+            {
+                // Fit as much as we can.
+                var remaining = maxChars - sb.Length;
+                if (remaining > 20)
+                    sb.Append(line.AsSpan(0, remaining));
+                break;
+            }
+
+            sb.Append(line);
+
+            // Include citation context (file names and web source titles/URLs).
+            if (msg.Citations is { Count: > 0 })
+            {
+                foreach (var citation in msg.Citations)
+                {
+                    var citName = !string.IsNullOrWhiteSpace(citation.Name) ? citation.Name
+                        : citation.Source;
+                    if (citName is not null)
+                    {
+                        var citLine = $"[Cited: {citName}]\n";
+                        if (sb.Length + citLine.Length <= maxChars)
+                            sb.Append(citLine);
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>The label a role is rendered under in a human-readable excerpt.</summary>
+    private static string DisplayRole(string role) => role switch
+    {
+        "user" => "User",
+        "assistant" => "Assistant",
+        "system" => "System",
+        "tool" => "Tool",
+        _ => role,
+    };
 }

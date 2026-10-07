@@ -229,6 +229,80 @@ public class ConversationRepository : IConversationRepository
     }
 
     /// <inheritdoc/>
+    public async Task UpdateEmbeddingStateAsync(
+        string conversationId,
+        ConversationProcessingStatus status,
+        ChunkingStrategy? strategy,
+        int? chunkCount,
+        CancellationToken ct = default)
+    {
+        var filter = Builders<StoredConversation>.Filter.Eq(x => x.ConversationId, conversationId);
+        var update = Builders<StoredConversation>.Update
+            .Set(x => x.ProcessingStatus, status)
+            .Set(x => x.EmbeddedChunkingStrategy, strategy)
+            .Set(x => x.EmbeddedChunkCount, chunkCount);
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<Dictionary<string, long>> GetEmbeddedChunkingStrategyCountsAsync(
+        string? userId = null, string unknownKey = "Unknown", CancellationToken ct = default)
+    {
+        var builder = Builders<StoredConversation>.Filter;
+        var embedded = builder.And(
+            builder.Eq(x => x.ProcessingStatus, ConversationProcessingStatus.Embedded),
+            builder.Eq(x => x.UserId, userId));
+
+        var counts = new Dictionary<string, long>();
+
+        foreach (var strategy in Enum.GetValues<ChunkingStrategy>())
+        {
+            var count = await _collection.CountDocumentsAsync(
+                embedded & builder.Eq(x => x.EmbeddedChunkingStrategy, strategy), cancellationToken: ct);
+            if (count > 0)
+                counts[strategy.ToString()] = count;
+        }
+
+        // Embedded before the strategy was recorded: the vectors exist but nothing says what they are
+        // comparable with, which is exactly the state the caller needs to see.
+        var unknown = await _collection.CountDocumentsAsync(
+            embedded & builder.Eq(x => x.EmbeddedChunkingStrategy, null), cancellationToken: ct);
+        if (unknown > 0)
+            counts[unknownKey] = unknown;
+
+        return counts;
+    }
+
+    /// <inheritdoc/>
+    public async Task<long> ResetEmbeddingStateAsync(string? userId = null, CancellationToken ct = default)
+    {
+        var builder = Builders<StoredConversation>.Filter;
+        var embedded = builder.And(
+            builder.Eq(x => x.ProcessingStatus, ConversationProcessingStatus.Embedded),
+            builder.Eq(x => x.UserId, userId));
+
+        // Two updates rather than one, because the status a conversation returns to depends on whether
+        // it has a digest: that is what keeps the bulk summariser from redoing work the embed run needs.
+        var withDigest = await _collection.UpdateManyAsync(
+            embedded & builder.Ne(x => x.Summary, null),
+            Builders<StoredConversation>.Update
+                .Set(x => x.ProcessingStatus, ConversationProcessingStatus.Summarised)
+                .Set(x => x.EmbeddedChunkingStrategy, null)
+                .Set(x => x.EmbeddedChunkCount, null),
+            cancellationToken: ct);
+
+        var withoutDigest = await _collection.UpdateManyAsync(
+            embedded & builder.Eq(x => x.Summary, null),
+            Builders<StoredConversation>.Update
+                .Set(x => x.ProcessingStatus, ConversationProcessingStatus.Imported)
+                .Set(x => x.EmbeddedChunkingStrategy, null)
+                .Set(x => x.EmbeddedChunkCount, null),
+            cancellationToken: ct);
+
+        return withDigest.ModifiedCount + withoutDigest.ModifiedCount;
+    }
+
+    /// <inheritdoc/>
     public async Task<StoredConversation?> GetByIdAsync(string conversationId, CancellationToken ct = default)
     {
         var filter = Builders<StoredConversation>.Filter.Eq(x => x.ConversationId, conversationId);

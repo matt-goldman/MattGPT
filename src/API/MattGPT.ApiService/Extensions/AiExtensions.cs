@@ -93,7 +93,8 @@ public static class AiExtensions
     }
 
     /// <summary>
-    /// Validates the reranking-related settings across <see cref="RagOptions"/> and <see cref="LlmOptions"/>.
+    /// Validates the retrieval settings across <see cref="RagOptions"/> and <see cref="LlmOptions"/> —
+    /// reranking, chunking and retained breadth.
     /// When <see cref="RagOptions.UseReranking"/> is enabled: a reranking model is required, the provider
     /// (if set) must be a supported format, the endpoint (if set) must be an absolute http(s) URL, and the
     /// candidate count and document length must be positive. <see cref="RagOptions.MaxEmbeddingChars"/>,
@@ -139,6 +140,31 @@ public static class AiExtensions
             errors.Add(
                 $"{RagOptions.SectionName}:{nameof(RagOptions.MaxEmbeddingChars)} must be greater than 0 " +
                 $"(was {ragOptions.MaxEmbeddingChars}). Leave it unset to use the default.");
+
+        if (ragOptions.MaxChunkChars <= 0)
+            errors.Add(
+                $"{RagOptions.SectionName}:{nameof(RagOptions.MaxChunkChars)} must be greater than 0 " +
+                $"(was {ragOptions.MaxChunkChars}).");
+
+        if (ragOptions.ChunkCandidateMultiplier <= 0)
+            errors.Add(
+                $"{RagOptions.SectionName}:{nameof(RagOptions.ChunkCandidateMultiplier)} must be greater than 0 " +
+                $"(was {ragOptions.ChunkCandidateMultiplier}).");
+
+        if (ragOptions.RetainedConversations <= 0)
+            errors.Add(
+                $"{RagOptions.SectionName}:{nameof(RagOptions.RetainedConversations)} must be greater than 0 " +
+                $"(was {ragOptions.RetainedConversations}). Retaining nothing leaves generation with no context.");
+
+        if (ragOptions.RetainedRelativeScore is < 0f or > 1f)
+            errors.Add(
+                $"{RagOptions.SectionName}:{nameof(RagOptions.RetainedRelativeScore)} must be between 0 and 1 " +
+                $"(was {ragOptions.RetainedRelativeScore}); it is a fraction of the best score. Use 0 to retain by count alone.");
+
+        if (ragOptions.NeighbourWindow < 0)
+            errors.Add(
+                $"{RagOptions.SectionName}:{nameof(RagOptions.NeighbourWindow)} cannot be negative " +
+                $"(was {ragOptions.NeighbourWindow}). Use 0 to disable neighbour expansion.");
 
         if (errors.Count > 0)
             throw new InvalidOperationException(

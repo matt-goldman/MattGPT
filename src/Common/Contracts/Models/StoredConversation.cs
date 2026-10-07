@@ -396,6 +396,23 @@ public class StoredConversation
     public string? Record { get; set; }
 
     /// <summary>
+    /// The chunking strategy this conversation's stored vectors were built under, or <c>null</c> when it
+    /// has never been embedded (or was embedded before the strategy was recorded).
+    /// </summary>
+    /// <remarks>
+    /// Makes a corpus embedded under mixed strategies detectable instead of silently inconsistent: the
+    /// vectors of two conversations chunked differently are not comparable, and nothing about the vectors
+    /// themselves says so. Reported by <c>GET /conversations/diagnostics</c>.
+    /// </remarks>
+    public ChunkingStrategy? EmbeddedChunkingStrategy { get; set; }
+
+    /// <summary>
+    /// How many chunks this conversation was split into when it was last embedded, or <c>null</c> when it
+    /// has never been embedded. Zero means it had no embeddable content.
+    /// </summary>
+    public int? EmbeddedChunkCount { get; set; }
+
+    /// <summary>
     /// The Identity user ID of the owner, or <c>null</c> for data imported/created without authentication.
     /// Used to scope data to individual users when auth is enabled.
     /// </summary>

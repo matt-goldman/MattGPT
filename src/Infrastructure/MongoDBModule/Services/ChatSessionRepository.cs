@@ -156,6 +156,16 @@ public class ChatSessionRepository : IChatSessionRepository
     }
 
     /// <inheritdoc/>
+    public async Task<long> ResetEmbeddingStateAsync(CancellationToken ct = default)
+    {
+        var filter = Builders<ChatSession>.Filter.Eq(x => x.EmbeddingStatus, ChatSessionEmbeddingStatus.Embedded);
+        var update = Builders<ChatSession>.Update
+            .Set(x => x.EmbeddingStatus, ChatSessionEmbeddingStatus.Pending);
+        var result = await _collection.UpdateManyAsync(filter, update, cancellationToken: ct);
+        return result.ModifiedCount;
+    }
+
+    /// <inheritdoc/>
     public async Task<List<ChatSession>> ListRecentAsync(int limit = 50, string? userId = null, CancellationToken ct = default)
     {
         // Exclude Messages and the summaries to minimise payload for the list view.

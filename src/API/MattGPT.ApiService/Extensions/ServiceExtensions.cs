@@ -46,6 +46,9 @@ public static class ServiceExtensions
 
             builder.Services.AddSingleton(TimeProvider.System);
 
+            // Chunking is stateless and driven only by configuration, so one instance serves everyone.
+            builder.Services.AddSingleton<ConversationChunker>();
+
             builder.Services.AddScoped<EmbeddingService>();
 
             builder.AddVectorStorage();

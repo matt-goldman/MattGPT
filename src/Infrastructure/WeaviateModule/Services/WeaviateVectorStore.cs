@@ -32,46 +32,94 @@ public class WeaviateVectorStore(
     private readonly string ClassName = CapitalizeFirst(options.Value.IndexName);
 
     /// <inheritdoc/>
-    public async Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
+    public async Task UpsertAsync(
+        StoredConversation conversation, IReadOnlyList<ChunkVector> chunks, CancellationToken ct = default)
     {
-        await EnsureClassAsync(vector.Length, ct);
-
-        var id = ConversationIdToUuid(conversation.ConversationId);
-
-        var payload = new
+        if (chunks.Count == 0)
         {
-            @class = ClassName,
-            id,
-            properties = new Dictionary<string, object?>
-            {
-                ["conversation_id"] = conversation.ConversationId,
-                ["title"] = conversation.Title ?? string.Empty,
-                ["summary"] = conversation.Summary ?? string.Empty,
-                ["create_time"] = conversation.CreateTime ?? 0.0,
-                ["update_time"] = conversation.UpdateTime ?? 0.0,
-                ["default_model_slug"] = conversation.DefaultModelSlug ?? string.Empty,
-                ["gizmo_id"] = conversation.GizmoId ?? string.Empty,
-                ["is_archived"] = conversation.IsArchived ?? false,
-                ["user_id"] = conversation.UserId ?? string.Empty,
-            },
-            vector
-        };
-
-        // Try PUT (update), fall back to POST (create) if 404.
-        var putResponse = await httpClient.PutAsJsonAsync($"v1/objects/{ClassName}/{id}", payload, ct);
-        if (putResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            var postResponse = await httpClient.PostAsJsonAsync("v1/objects", payload, ct);
-            postResponse.EnsureSuccessStatusCode();
+            await DeleteAsync(conversation.ConversationId, ct);
+            return;
         }
-        else
+
+        await EnsureClassAsync(chunks[0].Vector.Length, ct);
+
+        // Replace, not merge: a conversation re-embedded into fewer chunks (or under another strategy)
+        // must not leave the previous objects behind to be matched against.
+        await DeleteAsync(conversation.ConversationId, ct);
+
+        foreach (var chunk in chunks)
         {
-            putResponse.EnsureSuccessStatusCode();
+            var id = ChunkPointId.Uuid(conversation.ConversationId, chunk.Chunk.Ordinal).ToString("D");
+
+            var payload = new
+            {
+                @class = ClassName,
+                id,
+                properties = new Dictionary<string, object?>
+                {
+                    ["conversation_id"] = conversation.ConversationId,
+                    ["title"] = conversation.Title ?? string.Empty,
+                    ["summary"] = conversation.Summary ?? string.Empty,
+                    ["create_time"] = conversation.CreateTime ?? 0.0,
+                    ["update_time"] = conversation.UpdateTime ?? 0.0,
+                    ["default_model_slug"] = conversation.DefaultModelSlug ?? string.Empty,
+                    ["gizmo_id"] = conversation.GizmoId ?? string.Empty,
+                    ["is_archived"] = conversation.IsArchived ?? false,
+                    ["user_id"] = conversation.UserId ?? string.Empty,
+                    ["chunk_ordinal"] = chunk.Chunk.Ordinal,
+                    ["chunk_count"] = chunks.Count,
+                    ["chunk_start_message"] = chunk.Chunk.StartMessageIndex,
+                    ["chunk_end_message"] = chunk.Chunk.EndMessageIndex,
+                    ["chunk_strategy"] = chunk.Chunk.Strategy.ToString(),
+                },
+                vector = chunk.Vector
+            };
+
+            // Try PUT (update), fall back to POST (create) if 404.
+            var putResponse = await httpClient.PutAsJsonAsync($"v1/objects/{ClassName}/{id}", payload, ct);
+            if (putResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                var postResponse = await httpClient.PostAsJsonAsync("v1/objects", payload, ct);
+                postResponse.EnsureSuccessStatusCode();
+            }
+            else
+            {
+                putResponse.EnsureSuccessStatusCode();
+            }
         }
 
         logger.LogDebug(
-            "Upserted conversation {Id} ({Title}) to Weaviate.",
-            conversation.ConversationId, conversation.Title);
+            "Upserted conversation {Id} ({Title}) to Weaviate as {Chunks} chunk(s).",
+            conversation.ConversationId, conversation.Title, chunks.Count);
+    }
+
+    /// <inheritdoc/>
+    public async Task DeleteAsync(string conversationId, CancellationToken ct = default)
+    {
+        // Batch delete by filter: the object ids are derivable from the ordinals, but only if the
+        // previous chunk count is known, and it is not.
+        var request = new HttpRequestMessage(HttpMethod.Delete, "v1/batch/objects")
+        {
+            Content = JsonContent.Create(new
+            {
+                match = new
+                {
+                    @class = ClassName,
+                    where = new
+                    {
+                        path = new[] { "conversation_id" },
+                        @operator = "Equal",
+                        valueText = conversationId,
+                    }
+                }
+            })
+        };
+
+        var response = await httpClient.SendAsync(request, ct);
+
+        // 404 means the class does not exist yet, which is not an error for a delete.
+        if (response.StatusCode != System.Net.HttpStatusCode.NotFound)
+            response.EnsureSuccessStatusCode();
     }
 
     /// <inheritdoc/>
@@ -98,6 +146,11 @@ public class WeaviateVectorStore(
                   conversation_id
                   title
                   summary
+                  chunk_ordinal
+                  chunk_count
+                  chunk_start_message
+                  chunk_end_message
+                  chunk_strategy
                   _additional { id distance }
                 }
               }
@@ -129,7 +182,7 @@ public class WeaviateVectorStore(
                     score = 1f - dist.GetSingle();
                 }
 
-                results.Add(new VectorSearchResult(conversationId, score, title, summary));
+                results.Add(new VectorSearchResult(conversationId, score, title, summary, ReadChunk(item)));
             }
         }
 
@@ -198,17 +251,30 @@ public class WeaviateVectorStore(
             var existsResponse = await httpClient.GetAsync($"v1/schema/{ClassName}", ct);
             if (existsResponse.IsSuccessStatusCode)
             {
-                // Ensure the user_id property exists on pre-existing classes (idempotent).
-                var addPropResponse = await httpClient.PostAsJsonAsync(
-                    $"v1/schema/{ClassName}/properties",
-                    new { name = "user_id", dataType = new[] { "text" } },
-                    ct);
-                // 200 = added, 422 = already exists — both are acceptable.
-                if (!addPropResponse.IsSuccessStatusCode && (int)addPropResponse.StatusCode != 422)
+                // Ensure the properties added after the class was first created exist on pre-existing
+                // classes (idempotent). A missing chunk property would make every hit look like a
+                // pre-chunking vector.
+                foreach (var (name, dataType) in new[]
                 {
-                    logger.LogWarning(
-                        "Could not ensure user_id property on Weaviate class '{Class}': {Status}",
-                        ClassName, addPropResponse.StatusCode);
+                    ("user_id", "text"),
+                    ("chunk_ordinal", "int"),
+                    ("chunk_count", "int"),
+                    ("chunk_start_message", "int"),
+                    ("chunk_end_message", "int"),
+                    ("chunk_strategy", "text"),
+                })
+                {
+                    var addPropResponse = await httpClient.PostAsJsonAsync(
+                        $"v1/schema/{ClassName}/properties",
+                        new { name, dataType = new[] { dataType } },
+                        ct);
+                    // 200 = added, 422 = already exists — both are acceptable.
+                    if (!addPropResponse.IsSuccessStatusCode && (int)addPropResponse.StatusCode != 422)
+                    {
+                        logger.LogWarning(
+                            "Could not ensure {Property} property on Weaviate class '{Class}': {Status}",
+                            name, ClassName, addPropResponse.StatusCode);
+                    }
                 }
 
                 _classEnsured = true;
@@ -231,6 +297,11 @@ public class WeaviateVectorStore(
                     new { name = "gizmo_id", dataType = new[] { "text" } },
                     new { name = "is_archived", dataType = new[] { "boolean" } },
                     new { name = "user_id", dataType = new[] { "text" } },
+                    new { name = "chunk_ordinal", dataType = new[] { "int" } },
+                    new { name = "chunk_count", dataType = new[] { "int" } },
+                    new { name = "chunk_start_message", dataType = new[] { "int" } },
+                    new { name = "chunk_end_message", dataType = new[] { "int" } },
+                    new { name = "chunk_strategy", dataType = new[] { "text" } },
                 }
             };
 
@@ -250,21 +321,31 @@ public class WeaviateVectorStore(
     }
 
     /// <summary>
-    /// Converts a conversation ID string to a deterministic UUID for Weaviate.
-    /// If the ID is already a valid GUID, it's returned as-is; otherwise a deterministic
-    /// GUID is generated from the string using a SHA256 hash.
+    /// The chunk address stored on an object, or null for an object written before chunking existed
+    /// (which is treated as the whole conversation).
     /// </summary>
-    private static string ConversationIdToUuid(string conversationId)
+    private static ChunkHit? ReadChunk(JsonElement item)
     {
-        if (Guid.TryParse(conversationId, out var guid))
-            return guid.ToString("D");
+        if (ReadInt(item, "chunk_ordinal") is not { } ordinal)
+            return null;
 
-        // Generate a deterministic GUID from the conversation ID using SHA256.
-        var hash = System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes(conversationId));
-        // Take the first 16 bytes of the hash to form a GUID.
-        return new Guid(hash.AsSpan(0, 16)).ToString("D");
+        var strategyName = item.TryGetProperty("chunk_strategy", out var s) ? s.GetString() : null;
+        var strategy = Enum.TryParse<ChunkingStrategy>(strategyName, out var parsed)
+            ? parsed
+            : ChunkingStrategy.WholeConversation;
+
+        return new ChunkHit(
+            Ordinal:           ordinal,
+            ChunkCount:        ReadInt(item, "chunk_count") ?? 1,
+            StartMessageIndex: ReadInt(item, "chunk_start_message") ?? 0,
+            EndMessageIndex:   ReadInt(item, "chunk_end_message") ?? -1,
+            Strategy:          strategy);
     }
+
+    private static int? ReadInt(JsonElement item, string property)
+        => item.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number
+            ? value.GetInt32()
+            : null;
 
     /// <summary>Returns the input string with its first character uppercased.</summary>
     private static string CapitalizeFirst(string value) =>

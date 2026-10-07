@@ -60,6 +60,45 @@ public interface IConversationRepository
     /// </summary>
     Task UpdateProcessingStatusAsync(string conversationId, ConversationProcessingStatus status, CancellationToken ct = default);
 
+    /// <summary>
+    /// Record the outcome of embedding a conversation: its processing status, the chunking strategy its
+    /// vectors were built under, and how many chunks it was split into. The vectors themselves live only
+    /// in the <see cref="IVectorStore"/>.
+    /// </summary>
+    /// <remarks>
+    /// Written as one update so a conversation is never marked
+    /// <see cref="ConversationProcessingStatus.Embedded"/> without the provenance that says what its
+    /// vectors are comparable with.
+    /// </remarks>
+    Task UpdateEmbeddingStateAsync(
+        string conversationId,
+        ConversationProcessingStatus status,
+        ChunkingStrategy? strategy,
+        int? chunkCount,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Count embedded conversations grouped by the chunking strategy their vectors were built under,
+    /// keyed by strategy name, with conversations embedded before the strategy was recorded counted
+    /// under <paramref name="unknownKey"/>. More than one key means the corpus is embedded under mixed
+    /// strategies and its scores are not comparable.
+    /// </summary>
+    Task<Dictionary<string, long>> GetEmbeddedChunkingStrategyCountsAsync(
+        string? userId = null, string unknownKey = "Unknown", CancellationToken ct = default);
+
+    /// <summary>
+    /// Mark every embedded conversation as needing embedding again and clear its embedding provenance,
+    /// so a subsequent embed run rebuilds the corpus under the configured chunking strategy. Returns the
+    /// number of conversations reset.
+    /// </summary>
+    /// <remarks>
+    /// Conversations with a digest are returned to <see cref="ConversationProcessingStatus.Summarised"/>
+    /// and the rest to <see cref="ConversationProcessingStatus.Imported"/>, which is what makes them
+    /// eligible again. Stored vectors are left in place until each conversation is re-embedded (which
+    /// replaces them), so retrieval keeps working — under mixed strategies — while the run is in flight.
+    /// </remarks>
+    Task<long> ResetEmbeddingStateAsync(string? userId = null, CancellationToken ct = default);
+
     /// <summary>Return a single conversation by ID, or null if not found.</summary>
     Task<StoredConversation?> GetByIdAsync(string conversationId, CancellationToken ct = default);
 

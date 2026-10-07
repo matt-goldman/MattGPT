@@ -285,6 +285,23 @@ public class PostgresChatSessionRepository(NpgsqlDataSource dataSource, ILogger<
     }
 
     /// <inheritdoc/>
+    public async Task<long> ResetEmbeddingStateAsync(CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(ct);
+
+        await using var cmd = dataSource.CreateCommand(
+            $$"""
+            UPDATE {{TableName}}
+            SET data = jsonb_set(data, '{embeddingStatus}', $1::jsonb)
+            WHERE data->>'embeddingStatus' = $2
+            """);
+        cmd.Parameters.AddWithValue(JsonSerializer.Serialize(ChatSessionEmbeddingStatus.Pending.ToString()));
+        cmd.Parameters.AddWithValue(ChatSessionEmbeddingStatus.Embedded.ToString());
+
+        return await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <inheritdoc/>
     public async Task<List<ChatSession>> ListRecentAsync(int limit = 50, string? userId = null, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);

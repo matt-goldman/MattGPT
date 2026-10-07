@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text;
 using MattGPT.ApiService.Extensions;
 using MattGPT.Contracts;
+using MattGPT.Contracts.Models;
 using MattGPT.Contracts.Services;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -29,6 +30,12 @@ public class SearchMemoriesTool(
     ILogger<SearchMemoriesTool> logger)
 {
     private readonly RagOptions _options = options.Value;
+
+    /// <summary>Maximum characters of a conversation's record included per result.</summary>
+    private const int MaxRecordChars = 2_000;
+
+    /// <summary>Maximum characters of matching-chunk excerpts included per result.</summary>
+    private const int MaxChunkExcerptChars = 3_000;
 
     private readonly List<ChatSource> _sources = [];
 
@@ -112,7 +119,7 @@ public class SearchMemoriesTool(
         try
         {
             // Semantic retrieval, using MinScore (the same threshold as WithPrompt mode).
-            var (relevant, conversationLookup) = await retriever.RetrieveAsync(
+            var (relevant, conversationLookup, matchingChunks) = await retriever.RetrieveAsync(
                 query, limit, _options.MinScore, ExcludeConversationId, cancellationToken);
 
             if (relevant.Count == 0)
@@ -137,8 +144,40 @@ public class SearchMemoriesTool(
                 if (conversationLookup.TryGetValue(r.ConversationId, out var full)
                     && full.LinearisedMessages.Count > 0)
                 {
-                    result.AppendLine("Excerpt:");
-                    result.AppendLine(full.ToExcerpt());
+                    if (!string.IsNullOrWhiteSpace(full.Record))
+                    {
+                        result.AppendLine("Record of the conversation:");
+                        result.AppendLine(full.Record.Length > MaxRecordChars
+                            ? full.Record[..MaxRecordChars] + "…"
+                            : full.Record);
+                    }
+
+                    // The chunks that matched, where the strategy locates them; otherwise the start of
+                    // the conversation, as before.
+                    var located = matchingChunks.TryGetValue(r.ConversationId, out var chunks)
+                        ? chunks.Where(c => c.Strategy != ChunkingStrategy.WholeConversation).ToList()
+                        : [];
+
+                    if (located.Count > 0)
+                    {
+                        var budget = Math.Max(1, MaxChunkExcerptChars / located.Count);
+                        result.AppendLine("Matching excerpts:");
+
+                        foreach (var chunk in located)
+                        {
+                            var excerpt = full.ToRangeExcerpt(chunk.StartMessageIndex, chunk.EndMessageIndex, budget);
+                            if (string.IsNullOrWhiteSpace(excerpt))
+                                continue;
+
+                            result.AppendLine($"[messages {chunk.StartMessageIndex + 1}-{chunk.EndMessageIndex + 1}]");
+                            result.AppendLine(excerpt);
+                        }
+                    }
+                    else
+                    {
+                        result.AppendLine("Excerpt:");
+                        result.AppendLine(full.ToExcerpt());
+                    }
                 }
 
                 result.AppendLine();

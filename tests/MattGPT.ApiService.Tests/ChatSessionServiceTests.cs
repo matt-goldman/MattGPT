@@ -58,6 +58,18 @@ internal sealed class FakeChatSessionRepository : IChatSessionRepository
         return Task.CompletedTask;
     }
 
+    public Task<long> ResetEmbeddingStateAsync(CancellationToken ct = default)
+    {
+        var embedded = _sessions.Values
+            .Where(s => s.EmbeddingStatus == ChatSessionEmbeddingStatus.Embedded)
+            .ToList();
+
+        foreach (var session in embedded)
+            session.EmbeddingStatus = ChatSessionEmbeddingStatus.Pending;
+
+        return Task.FromResult((long)embedded.Count);
+    }
+
     public Task<List<ChatSession>> ListRecentAsync(int limit = 50, string? userId = null, CancellationToken ct = default)
     {
         var items = _sessions.Values

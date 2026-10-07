@@ -8,9 +8,13 @@ namespace MattGPT.QdrantModule.Services;
 
 /// <summary>
 /// Qdrant-backed implementation of <see cref="IVectorStore"/>.
-/// Ensures the collection is created on first use and upserts points idempotently using
-/// the conversation UUID as the point ID.
+/// Ensures the collection is created on first use and stores one point per conversation chunk,
+/// keyed by a deterministic UUID derived from the conversation id and the chunk ordinal.
 /// </summary>
+/// <remarks>
+/// Qdrant returns raw cosine similarity as the score, so values are directly comparable within this
+/// store and not with any other store's scores.
+/// </remarks>
 public class QdrantVectorStore(QdrantClient client, ILogger<QdrantVectorStore> logger) : IVectorStore
 {
     private const string CollectionName = "conversations";
@@ -18,14 +22,25 @@ public class QdrantVectorStore(QdrantClient client, ILogger<QdrantVectorStore> l
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
     /// <inheritdoc/>
-    public async Task UpsertAsync(StoredConversation conversation, float[] vector, CancellationToken ct = default)
+    public async Task UpsertAsync(
+        StoredConversation conversation, IReadOnlyList<ChunkVector> chunks, CancellationToken ct = default)
     {
-        await EnsureCollectionAsync((ulong)vector.Length, ct);
-
-        var point = new PointStruct
+        if (chunks.Count == 0)
         {
-            Id = new PointId { Uuid = conversation.ConversationId },
-            Vectors = vector,
+            await DeleteAsync(conversation.ConversationId, ct);
+            return;
+        }
+
+        await EnsureCollectionAsync((ulong)chunks[0].Vector.Length, ct);
+
+        // Replace, not merge: a conversation re-embedded into fewer chunks (or under another strategy)
+        // must not leave the previous points behind to be matched against.
+        await DeleteAsync(conversation.ConversationId, ct);
+
+        var points = chunks.Select(c => new PointStruct
+        {
+            Id = new PointId { Uuid = ChunkPointId.Uuid(conversation.ConversationId, c.Chunk.Ordinal).ToString("D") },
+            Vectors = c.Vector,
             Payload =
             {
                 ["conversation_id"] = conversation.ConversationId,
@@ -37,14 +52,28 @@ public class QdrantVectorStore(QdrantClient client, ILogger<QdrantVectorStore> l
                 ["gizmo_id"] = conversation.GizmoId ?? string.Empty,
                 ["is_archived"] = conversation.IsArchived ?? false,
                 ["user_id"] = conversation.UserId ?? string.Empty,
+                ["chunk_ordinal"] = c.Chunk.Ordinal,
+                ["chunk_count"] = chunks.Count,
+                ["chunk_start_message"] = c.Chunk.StartMessageIndex,
+                ["chunk_end_message"] = c.Chunk.EndMessageIndex,
+                ["chunk_strategy"] = c.Chunk.Strategy.ToString(),
             }
-        };
+        }).ToList();
 
-        await client.UpsertAsync(CollectionName, [point], cancellationToken: ct);
+        await client.UpsertAsync(CollectionName, points, cancellationToken: ct);
 
         logger.LogDebug(
-            "Upserted conversation {Id} ({Title}) to Qdrant.",
-            conversation.ConversationId, conversation.Title);
+            "Upserted conversation {Id} ({Title}) to Qdrant as {Chunks} chunk(s).",
+            conversation.ConversationId, conversation.Title, points.Count);
+    }
+
+    /// <inheritdoc/>
+    public async Task DeleteAsync(string conversationId, CancellationToken ct = default)
+    {
+        if (!await client.CollectionExistsAsync(CollectionName, ct))
+            return;
+
+        await client.DeleteAsync(CollectionName, ConversationFilter(conversationId), cancellationToken: ct);
     }
 
     /// <inheritdoc/>
@@ -79,14 +108,56 @@ public class QdrantVectorStore(QdrantClient client, ILogger<QdrantVectorStore> l
             ConversationId: GetPayloadString(r.Payload, "conversation_id") ?? string.Empty,
             Score: r.Score,
             Title: GetPayloadString(r.Payload, "title"),
-            Summary: GetPayloadString(r.Payload, "summary")
+            Summary: GetPayloadString(r.Payload, "summary"),
+            Chunk: ReadChunk(r.Payload)
         ))];
+    }
+
+    /// <summary>A filter matching every point of one conversation.</summary>
+    private static Filter ConversationFilter(string conversationId) => new()
+    {
+        Must =
+        {
+            new Condition { Field = new FieldCondition
+            {
+                Key = "conversation_id",
+                Match = new Match { Keyword = conversationId }
+            }}
+        }
+    };
+
+    /// <summary>
+    /// The chunk address stored with a point, or null for a point written before chunking existed
+    /// (which is treated as the whole conversation).
+    /// </summary>
+    private static ChunkHit? ReadChunk(IReadOnlyDictionary<string, Value> payload)
+    {
+        if (GetPayloadInt(payload, "chunk_ordinal") is not { } ordinal)
+            return null;
+
+        var strategy = Enum.TryParse<ChunkingStrategy>(GetPayloadString(payload, "chunk_strategy"), out var parsed)
+            ? parsed
+            : ChunkingStrategy.WholeConversation;
+
+        return new ChunkHit(
+            Ordinal:           (int)ordinal,
+            ChunkCount:        (int)(GetPayloadInt(payload, "chunk_count") ?? 1),
+            StartMessageIndex: (int)(GetPayloadInt(payload, "chunk_start_message") ?? 0),
+            EndMessageIndex:   (int)(GetPayloadInt(payload, "chunk_end_message") ?? -1),
+            Strategy:          strategy);
     }
 
     private static string? GetPayloadString(IReadOnlyDictionary<string, Value> payload, string key)
     {
         return payload.TryGetValue(key, out var value) && value.KindCase == Value.KindOneofCase.StringValue
             ? value.StringValue
+            : null;
+    }
+
+    private static long? GetPayloadInt(IReadOnlyDictionary<string, Value> payload, string key)
+    {
+        return payload.TryGetValue(key, out var value) && value.KindCase == Value.KindOneofCase.IntegerValue
+            ? value.IntegerValue
             : null;
     }
 
