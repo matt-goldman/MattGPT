@@ -17,6 +17,7 @@ Significant architectural decisions made during development of MattGPT.
 | [ADR-013](013-chat-sessions-as-conversation-projections.md) | Chat sessions enter memory as conversation projections |
 | [ADR-014](014-opt-in-digest-generation-on-import.md) | Opt-in digest generation on import (supersedes part of ADR-003) |
 | [ADR-015](015-in-app-notifications-persisted-and-polled.md) | In-app notifications: persisted per user, polled by the web app |
+| [ADR-016](016-the-conversation-is-the-unit-of-retrieval.md) | The conversation is the unit of retrieval, not of answer composition |
 
 To add a new ADR, copy [000-template.md](000-template.md) and fill in all sections.
 

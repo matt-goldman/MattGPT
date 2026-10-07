@@ -154,7 +154,11 @@ The `RAG` section controls retrieval behaviour.
     "MinScore": 0.5,
     "AutoTopK": 2,
     "AutoMinScore": 0.65,
-    "ToolMaxResults": 5
+    "ToolMaxResults": 5,
+    "ChunkingStrategy": "WholeConversation",
+    "RetainedConversations": 4,
+    "RetainedRelativeScore": 0.6,
+    "NeighbourWindow": 1
   }
 }
 ```
@@ -181,7 +185,32 @@ The `RAG` section controls retrieval behaviour.
 | `UseReranking` | Rerank vector-search candidates with a reranking model (see [Reranking](#reranking)). When on, `MinScore`/`AutoMinScore` are ignored and long-context embedding is enabled. Requires `LLM:RerankingModelId` | `false` |
 | `RerankCandidateCount` | Vector-search candidates sent to the reranker; it returns `TopK`/`AutoTopK`/the tool's limit from these | `30` |
 | `RerankDocumentChars` | Maximum characters of each candidate conversation sent to the reranker. Reranker context windows are small, and all candidates go in one request | `4000` |
-| `MaxEmbeddingChars` | Maximum characters of each conversation sent to the embedding model | `32000` with reranking, `8000` without |
+| `MaxEmbeddingChars` | Maximum characters of each conversation sent to the embedding model (`WholeConversation` chunking only) | `32000` with reranking, `8000` without |
+| `ChunkingStrategy` | How conversations are split into the chunks that are embedded and matched: `WholeConversation`, `Message` or `Exchange` (see [Chunking](#chunking)) | `WholeConversation` |
+| `MaxChunkChars` | Maximum characters in one chunk under `Message`/`Exchange`. A longer unit is split, and the parts record the unit they came from | `2000` |
+| `ChunkCandidateMultiplier` | Chunk hits requested from the vector store per conversation wanted. Above 1 so one many-chunk conversation cannot fill the candidate set | `4` |
+| `RetainedConversations` | Conversations kept for generation after ranking. A caller asking for fewer still gets up to this many | `4` |
+| `RetainedRelativeScore` | Fraction of the best score a conversation must reach to be retained (0 to retain by count alone) | `0.6` |
+| `NeighbourWindow` | Neighbouring chunks either side of a match included in the generation context (0 disables) | `1` |
+
+### Chunking
+
+A conversation is embedded as one or more **chunks**, and each chunk gets its own vector. Chunk scores pool to their conversation by **maximum**, the reranker then orders conversations (never chunks), and the conversation is what is returned and cited. See [ADR-016](../Decisions/016-the-conversation-is-the-unit-of-retrieval.md).
+
+| Strategy | Chunk unit | Notes |
+|----------|-----------|-------|
+| `WholeConversation` | The whole conversation | One vector per conversation. The chunk and the conversation are the same object, so pooling and neighbour expansion do nothing and the reranker has only the conversation-level signal. |
+| `Message` | One visible message | The most discriminative, and the least self-describing: a user turn alone is often uninterpretable. |
+| `Exchange` | A user turn plus the turns that follow it, up to the next user turn | Self-describing, because the question travels with its answer. No claim that an exchange contains a complete decision. |
+
+Which unit retrieves best is an open question, measured in issue 051 phase 3 — the default stays `WholeConversation` until it is answered, because switching it silently would invalidate an existing corpus.
+
+**Changing the strategy requires a full re-embed.** Chunks built under different strategies are not comparable, and nothing about a vector says which strategy produced it, so every conversation records its own:
+
+- `GET /conversations/diagnostics` reports the configured strategy, the strategies the corpus is actually embedded under, and warns when there is more than one or when it does not match the configuration. The Settings → Diagnostics tab shows the same, per conversation in the drill-down table.
+- `POST /conversations/reembed` (Settings → Diagnostics → "Re-embed everything…") marks every embedded conversation and chat session as needing embedding again and queues an embedding run. Existing vectors stay until each conversation is rewritten, so search keeps working — with mixed strategies — while the run is in flight.
+
+Chunks are stored **without overlap**, which is only safe because of read-time neighbour expansion: `NeighbourWindow` chunks either side of a match are added to the generation context, so a thought spanning several turns survives chunking. Overlapping windows are merged, so a conversation with two nearby matches contributes each message once. Setting `NeighbourWindow` to 0 removes that cover.
 
 ### Tuning Tips
 
@@ -191,6 +220,8 @@ The `RAG` section controls retrieval behaviour.
 - For `Auto` mode, the light pass provides baseline context while the tool enables deeper retrieval on demand.
 - With reranking on, raise `RerankCandidateCount` to give the reranker more to choose from (slower, larger requests), or lower `RerankDocumentChars` if the rerank service rejects long inputs.
 - Changing `UseReranking` changes the default `MaxEmbeddingChars`, so re-run embeddings afterwards for consistent vectors.
+- Answers that miss things spread across several conversations are a breadth problem: raise `RetainedConversations`, or lower `RetainedRelativeScore` so near misses are not cut. Answers polluted by irrelevant conversations are the opposite: raise `RetainedRelativeScore`.
+- Under `Message`/`Exchange`, raise `ChunkCandidateMultiplier` if a single long conversation is crowding others out of the results.
 
 ## Chat Settings
 

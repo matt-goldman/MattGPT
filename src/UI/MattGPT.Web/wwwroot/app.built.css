@@ -680,6 +680,9 @@
   .col-auto {
     grid-column: auto;
   }
+  .col-span-2 {
+    grid-column: span 2 / span 2;
+  }
   .float-end {
     float: inline-end;
   }
@@ -5946,6 +5949,11 @@
   .sm\:top-1\/2 {
     @media (width >= 40rem) {
       top: calc(1 / 2 * 100%);
+    }
+  }
+  .sm\:col-span-3 {
+    @media (width >= 40rem) {
+      grid-column: span 3 / span 3;
     }
   }
   .sm\:max-w-lg {

@@ -409,13 +409,18 @@ public class ConversationRepository : IConversationRepository
             .SortByDescending(x => x.UpdateTime)
             .Skip((page - 1) * pageSize)
             .Limit(pageSize)
-            .Project(x => new { x.ConversationId, x.Title, x.ProcessingStatus, x.Summary, x.UpdateTime, x.ImportTimestamp })
+            .Project(x => new
+            {
+                x.ConversationId, x.Title, x.ProcessingStatus, x.Summary, x.UpdateTime, x.ImportTimestamp,
+                x.EmbeddedChunkingStrategy, x.EmbeddedChunkCount,
+            })
             .ToListAsync(ct);
 
         var items = projected
             .Select(p => new ConversationDiagnosticRow(
                 p.ConversationId, p.Title, p.ProcessingStatus,
-                !string.IsNullOrWhiteSpace(p.Summary), p.UpdateTime, p.ImportTimestamp))
+                !string.IsNullOrWhiteSpace(p.Summary), p.UpdateTime, p.ImportTimestamp,
+                p.EmbeddedChunkingStrategy, p.EmbeddedChunkCount))
             .ToList();
 
         return (items, total);

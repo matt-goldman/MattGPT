@@ -476,7 +476,9 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
                    processing_status,
                    COALESCE(jsonb_typeof(data->'summary') = 'string', false),
                    update_time,
-                   data->>'importTimestamp'
+                   data->>'importTimestamp',
+                   data->>'embeddedChunkingStrategy',
+                   data->>'embeddedChunkCount'
             FROM {TableName}
             {filter}
             ORDER BY update_time DESC NULLS LAST
@@ -499,13 +501,24 @@ public class PostgresConversationRepository(NpgsqlDataSource dataSource, ILogger
             if (!reader.IsDBNull(5) && DateTimeOffset.TryParse(reader.GetString(5), out var ts))
                 importTs = ts;
 
+            ChunkingStrategy? strategy = !reader.IsDBNull(6)
+                && Enum.TryParse<ChunkingStrategy>(reader.GetString(6), out var parsedStrategy)
+                    ? parsedStrategy
+                    : null;
+
+            int? chunkCount = !reader.IsDBNull(7) && int.TryParse(reader.GetString(7), out var parsedCount)
+                ? parsedCount
+                : null;
+
             items.Add(new ConversationDiagnosticRow(
                 reader.GetString(0),
                 reader.IsDBNull(1) ? null : reader.GetString(1),
                 parsedStatus,
                 !reader.IsDBNull(3) && reader.GetBoolean(3),
                 reader.IsDBNull(4) ? null : reader.GetDouble(4),
-                importTs));
+                importTs,
+                strategy,
+                chunkCount));
         }
 
         return (items, total);

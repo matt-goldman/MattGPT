@@ -230,6 +230,27 @@
                                     @(_summary.EmbeddingModelId ?? _summary.LlmModelId ?? "")
                                 </div>
                             </div>
+                            <div class="border border-default-200 rounded-lg p-3 col-span-2 sm:col-span-3">
+                                <div class="text-sm font-medium">Chunking: @(_summary.ChunkingStrategy ?? "—")</div>
+                                <div class="text-xs text-default-400">
+                                    @if (_summary.ByChunkingStrategy is { Count: > 0 } strategies)
+                                    {
+                                        @("Embedded under " + string.Join(", ", strategies.Select(kv => $"{kv.Key} ({kv.Value})")))
+                                    }
+                                    else
+                                    {
+                                        @("Nothing embedded yet")
+                                    }
+                                </div>
+                                <button class="mt-2 text-xs text-default-400 hover:text-primary underline disabled:opacity-40"
+                                        disabled="@_reembedding" @onclick="ReembedAllAsync">
+                                    Re-embed everything under @(_summary.ChunkingStrategy ?? "the configured strategy")
+                                </button>
+                                @if (_reembedMessage is not null)
+                                {
+                                    <div class="text-xs text-success-600 mt-1">@_reembedMessage</div>
+                                }
+                            </div>
                         </div>
 
                         @* Status breakdown *@
@@ -282,6 +303,7 @@
                                             <th class="text-left font-medium px-3 py-2">Title</th>
                                             <th class="text-left font-medium px-3 py-2">Status</th>
                                             <th class="text-center font-medium px-3 py-2">Summary</th>
+                                            <th class="text-left font-medium px-3 py-2">Chunks</th>
                                             <th class="text-left font-medium px-3 py-2">Updated</th>
                                         </tr>
                                     </thead>
@@ -296,6 +318,9 @@
                                                     <span class="text-xs px-2 py-0.5 rounded-full @StatusClass(row.Status)">@row.Status</span>
                                                 </td>
                                                 <td class="px-3 py-2 text-center">@(row.HasSummary ? "✓" : "–")</td>
+                                                <td class="px-3 py-2 text-default-500" title="@(row.ChunkingStrategy ?? "No chunking strategy recorded")">
+                                                    @(row.ChunkingStrategy is null ? "–" : $"{row.ChunkCount ?? 0} × {row.ChunkingStrategy}")
+                                                </td>
                                                 <td class="px-3 py-2 text-default-500">@FormatUnixDate(row.UpdateTime)</td>
                                             </tr>
                                         }
@@ -634,6 +659,36 @@
     {
         _page = 1;
         await LoadDiagnosticsAsync();
+    }
+
+    private bool _reembedding;
+    private string? _reembedMessage;
+
+    /// <summary>
+    /// Rebuilds the whole corpus under the configured chunking strategy. The run itself happens in the
+    /// background; this returns as soon as it is queued, and the diagnostics are reloaded so the strategy
+    /// counts reflect the reset.
+    /// </summary>
+    private async Task ReembedAllAsync()
+    {
+        _reembedding = true;
+        _reembedMessage = null;
+        try
+        {
+            var queued = await ConversationService.ReembedAllAsync();
+            _reembedMessage = queued is null
+                ? null
+                : $"Re-embedding {queued.ConversationsReset} conversation(s) and {queued.SessionsReset} session(s).";
+            await LoadDiagnosticsAsync();
+        }
+        catch (Exception ex)
+        {
+            _diagError = ex.Message;
+        }
+        finally
+        {
+            _reembedding = false;
+        }
     }
 
     private async Task ApplyFilterAsync()

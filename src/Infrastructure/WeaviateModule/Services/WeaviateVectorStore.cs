@@ -126,6 +126,10 @@ public class WeaviateVectorStore(
     public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
         float[] queryVector, int limit = 5, string? userId = null, CancellationToken ct = default)
     {
+        // The query asks for the chunk properties by name, and a class created before chunking does not
+        // have them, which fails the whole GraphQL query rather than returning them empty.
+        await EnsureClassAsync(queryVector.Length, ct);
+
         var vectorStr = string.Join(", ", queryVector.Select(v => v.ToString("G", CultureInfo.InvariantCulture)));
 
         // Build the optional user_id filter. Escape backslashes and double-quotes to prevent injection.

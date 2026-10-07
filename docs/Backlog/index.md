@@ -82,6 +82,7 @@ This document is the **system of record** for project planning and issue trackin
 | 48 | 048-export-summary-and-notifications.md | Export conversation summary and in-app notifications | Done | Done/ | Depends on 8, 22. Digest/record split; BuildPrompt head+tail fixes; opt-in import digests (ADR-014); on-demand Markdown record export; persisted, polled notifications with bell + toasts (ADR-015). |
 | 49 | 049-defect-chat-sessions-never-completed-or-embedded.md | Defect: chat sessions are never completed or embedded | Done | Done/ | Defect against 19. Sessions complete on new chat / idle sweep, are summarised, projected into the conversation store and embedded (ADR-013); self-excluded from retrieval; backfilled automatically. |
 | 50 | 050-remove-legacy-embeddings-in-conversations.md | Remove legacy embedding storage from the document database | Done | Done/ | Drops `StoredConversation.Embedding` and its writes; startup migration for Mongo and Postgres; vector-store upsert failure now marks `EmbeddingError`. |
+| 51 | 051-chunking-and-retrieval-strategy.md | Chunking and retrieval strategy: reconcile chunking with reranking | In Progress | TODO/ | Depends on 9, 47, 48. Implements ADR-016. Phases 1–2 done: chunking strategies (whole-conversation/message/exchange), max pooling, conversation-level reranking, configurable retained breadth, record + matching chunks at generation, read-time neighbour expansion, re-embed path. Phase 0 (eval set) and Phase 3 (measurement) not started; Phase 0 gates Phase 3. |
 
 ---
 

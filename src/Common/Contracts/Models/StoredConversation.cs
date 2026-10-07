@@ -15,7 +15,9 @@ public record ConversationDiagnosticRow(
     ConversationProcessingStatus Status,
     bool HasSummary,
     double? UpdateTime,
-    DateTimeOffset? ImportTimestamp);
+    DateTimeOffset? ImportTimestamp,
+    ChunkingStrategy? EmbeddedChunkingStrategy = null,
+    int? EmbeddedChunkCount = null);
 
 /// <summary>Processing status of a stored conversation.</summary>
 /// <remarks>

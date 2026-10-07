@@ -175,6 +175,28 @@ public sealed class ConversationService(IHttpClientFactory factory, IAuthFailure
     }
 
     /// <inheritdoc/>
+    public async Task<ReembedJobResponse?> ReembedAllAsync(CancellationToken cancellationToken = default)
+    {
+        var client = CreateClient();
+
+        using var response = await client.PostAsync("/conversations/reembed", null, cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await authFailureHandler.HandleAsync(cancellationToken))
+            {
+                using var retryResponse = await client.PostAsync("/conversations/reembed", null, cancellationToken);
+                retryResponse.EnsureSuccessStatusCode();
+                return await retryResponse.Content.ReadFromJsonAsync<ReembedJobResponse>(JsonOptions, cancellationToken);
+            }
+            return default;
+        }
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<ReembedJobResponse>(JsonOptions, cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task<JobStatusResponse?> GetLatestEmbedJobAsync(CancellationToken cancellationToken = default)
     {
         var client = CreateClient();

@@ -343,6 +343,8 @@ public static class ConversationsEndpoints
                     hasSummary      = r.HasSummary,
                     updateTime      = r.UpdateTime,
                     importTimestamp = r.ImportTimestamp,
+                    chunkingStrategy = r.EmbeddedChunkingStrategy?.ToString(),
+                    chunkCount      = r.EmbeddedChunkCount,
                 }),
             });
         })

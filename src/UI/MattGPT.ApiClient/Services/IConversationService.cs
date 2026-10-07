@@ -41,6 +41,13 @@ public interface IConversationService
     /// <summary>Queues a background embedding run and returns its job id for polling.</summary>
     Task<EmbedJobResponse?> RunEmbeddingsAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Marks every embedded conversation and chat session as needing embedding again, then queues an
+    /// embedding run, so the whole corpus is rebuilt under the configured chunking strategy. This is
+    /// what reconciles a corpus embedded under more than one strategy.
+    /// </summary>
+    Task<ReembedJobResponse?> ReembedAllAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Returns the status of the most recent embedding run, or null if none has run.</summary>
     Task<JobStatusResponse?> GetLatestEmbedJobAsync(CancellationToken cancellationToken = default);
 

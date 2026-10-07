@@ -9,6 +9,10 @@ public record SummariseQueuedResponse(bool Queued, bool AlreadyRunning);
 /// <summary>Response from the embeddings endpoint identifying the queued background run.</summary>
 public record EmbedJobResponse(string JobId);
 
+/// <summary>The queued full re-embed, and what it reset.</summary>
+public record ReembedJobResponse(
+    string JobId, long ConversationsReset, long SessionsReset, string? ChunkingStrategy);
+
 /// <summary>A conversation whose embedding failed and will be retried on the next run.</summary>
 public record FailedEmbeddingItem(string ConversationId, string? Title);
 
@@ -58,7 +62,9 @@ public record DiagnosticsSummary(
     string? LlmModelId,
     string? EmbeddingModelId,
     List<string> Issues,
-    long DigestsAwaitingEmbedding = 0);
+    long DigestsAwaitingEmbedding = 0,
+    string? ChunkingStrategy = null,
+    Dictionary<string, long>? ByChunkingStrategy = null);
 
 /// <summary>A single conversation's pipeline state in the diagnostics drill-down table.</summary>
 public record ConversationDiagnostic(
@@ -67,7 +73,9 @@ public record ConversationDiagnostic(
     string Status,
     bool HasSummary,
     double? UpdateTime,
-    DateTimeOffset? ImportTimestamp);
+    DateTimeOffset? ImportTimestamp,
+    string? ChunkingStrategy = null,
+    int? ChunkCount = null);
 
 /// <summary>A paged list of diagnostic conversation rows.</summary>
 public record DiagnosticConversationsResponse(int Page, int PageSize, long Total, List<ConversationDiagnostic> Items);

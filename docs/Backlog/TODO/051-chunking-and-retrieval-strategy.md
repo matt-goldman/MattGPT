@@ -1,15 +1,15 @@
 # 051 — Chunking and Retrieval Strategy: Reconcile Chunking with Reranking
 
-**Status:** TODO
+**Status:** In Progress — Phases 1 and 2 are done; Phase 0 and Phase 3 remain (see [Progress](#progress))
 **Sequence:** 50
 **Dependencies:** 009 (embeddings), 047 (reranking), 048 (digest on import — fixes digest coverage)
-**Decisions:** [ADR-014](../Decisions/014-the-conversation-is-the-unit-of-retrieval.md)
+**Decisions:** [ADR-016](../Decisions/016-the-conversation-is-the-unit-of-retrieval.md)
 
 ---
 
 ## Summary
 
-Implement ADR-016. Whole-conversation chunks and a conversation-level reranker currently discriminate on the same signal, and reranking's narrow cut-off has removed the cross-conversation breadth that produced the best results observed so far. This issue resolves that conflict structurally, makes chunking strategy configurable and benchmarkable alongside the existing provider and store configuration, and builds the evidence infrastructure that every remaining chunking parameter depends on.
+Implement [ADR-016](../Decisions/016-the-conversation-is-the-unit-of-retrieval.md). Whole-conversation chunks and a conversation-level reranker currently discriminate on the same signal, and reranking's narrow cut-off has removed the cross-conversation breadth that produced the best results observed so far. This issue resolves that conflict structurally, makes chunking strategy configurable and benchmarkable alongside the existing provider and store configuration, and builds the evidence infrastructure that every remaining chunking parameter depends on.
 
 The architectural decisions come from the ADR and are not benchmarked. The parameter choices are benchmarked, in a fixed order, and cannot begin until Phase 0 is complete.
 
@@ -22,7 +22,7 @@ Chunk size was moved to whole-conversation during retrieval accuracy work, and a
 - Whole-conversation chunks make the chunk and the conversation the same object, so a conversation-level reranker has nothing left to separate.
 - Reranking then narrows to the best-matching conversation, so context no longer spans conversations, and answers to multi-conversation questions have become thinner — missing details that the pre-reranking configuration captured.
 
-ADR-014's resolution: the conversation is the unit of *retrieval, ranking and citation*, but not of *answer composition*. Chunks become small, discriminative evidence; scores pool to the conversation by maximum; the reranker orders conversations and retains several; generation receives the retained conversations' records plus their matching exchanges.
+ADR-016's resolution: the conversation is the unit of *retrieval, ranking and citation*, but not of *answer composition*. Chunks become small, discriminative evidence; scores pool to the conversation by maximum; the reranker orders conversations and retains several; generation receives the retained conversations' records plus their matching exchanges.
 
 ### Why no measurement exists yet
 
@@ -51,7 +51,7 @@ MattGPT's purpose includes being a testbed for techniques that port to other pro
 5. **Digest provenance** recorded on the conversation: whether the digest was derived from messages or from the record. `GenerateSummaryAsync` prefers the record when one exists, so provenance currently depends on the order the user clicked things, and an eval run would silently measure a mixture of two pipelines.
 6. **Verify source persistence** captures everything needed to reproduce a result: which conversations were retrieved, their scores pre- and post-rerank, and which were retained for generation.
 
-### Phase 1 — Architecture (derived from ADR-014, not benchmarked)
+### Phase 1 — Architecture (derived from ADR-016, not benchmarked)
 
 7. **Pool chunk scores to the conversation by maximum.** Not sum — sum rewards length, and this corpus has a wide length distribution in which the longest conversations are substantive working sessions that would dominate unrelated queries.
 8. **Rerank at conversation level only.** Remove chunk-level reranking where it exists. The candidate document for a conversation is, in order of availability: its record, its digest, or a stitched window of its matching chunks.
@@ -63,7 +63,7 @@ MattGPT's purpose includes being a testbed for techniques that port to other pro
 ### Phase 2 — Read-time neighbour expansion (gates the overlap decision)
 
 13. **Expand a retrieved chunk to its neighbours at read time** before passing it to generation, configurable by window size.
-14. Zero overlap is only defensible if this exists. ADR-014 records zero overlap as **conditional on this mechanism**; without it, nothing covers a thought spanning several turns, and overlap must be reconsidered instead.
+14. Zero overlap is only defensible if this exists. ADR-016 records zero overlap as **conditional on this mechanism**; without it, nothing covers a thought spanning several turns, and overlap must be reconsidered instead.
 15. Expansion must not duplicate content when two retained chunks from the same conversation have overlapping windows.
 
 ### Phase 3 — Measurement (requires Phase 0; strictly ordered)
@@ -89,14 +89,62 @@ Measure in this order. The space is multiplicative, and later variables are chea
 - [ ] Each store's score semantics are documented, and the configured store's scores are explained rather than assumed.
 - [ ] Digest provenance is recorded and queryable; an eval run can be restricted to one provenance.
 - [ ] A retrieval result can be fully reproduced from persisted data: retrieved conversations, pre- and post-rerank scores, and what was retained.
-- [ ] Chunk scores pool to conversation by maximum; no chunk-level reranking remains.
+- [x] Chunk scores pool to conversation by maximum; no chunk-level reranking remains.
 - [ ] Retained breadth is configurable as count plus relative threshold, and a multi-conversation eval question is answered using several conversations.
-- [ ] Generation context contains, per retained conversation, its record where one exists plus its matching chunks.
-- [ ] Chunking strategy is selectable, and every conversation records the strategy its vectors were built under.
-- [ ] A corpus embedded under mixed strategies is detectable, and a full re-embed under one strategy is available.
-- [ ] Read-time neighbour expansion works, is window-configurable, and does not duplicate content across overlapping windows.
+- [x] Generation context contains, per retained conversation, its record where one exists plus its matching chunks.
+- [x] Chunking strategy is selectable, and every conversation records the strategy its vectors were built under.
+- [x] A corpus embedded under mixed strategies is detectable, and a full re-embed under one strategy is available.
+- [x] Read-time neighbour expansion works, is window-configurable, and does not duplicate content across overlapping windows.
 - [ ] Each Phase 3 measurement is recorded with its configuration and its result, including the measurements that changed nothing.
 - [ ] The previously-good cross-conversation query (power brick / handheld) is in the eval set and scores at least as well as the pre-reranking configuration did.
+
+## Progress
+
+### Phases 1 and 2 — done
+
+Commit: *Chunked retrieval: pooling, conversation-level reranking, retained breadth*.
+
+| Requirement | Where |
+|---|---|
+| 7. Max pooling | `MemoryRetriever.PoolByConversation` |
+| 8. Conversation-level reranking only; record → digest → stitched chunks | `MemoryRetriever.BuildRerankDocument` |
+| 9. Retained breadth as count cap + relative threshold | `RagOptions.RetainedConversations` / `RetainedRelativeScore`, `MemoryRetriever.ApplyRetainedBreadth` |
+| 10. Generation gets the record plus matching chunks | `RagService.AppendMemoryBody`, `SearchMemoriesTool` |
+| 11. Named chunking strategies | `ChunkingStrategy`, `ConversationChunker`, `RagOptions.ChunkingStrategy` |
+| 12. Re-embed path; strategy visible per conversation; mixed corpus detectable | `POST /conversations/reembed`, `StoredConversation.EmbeddedChunkingStrategy`, `GET /conversations/diagnostics`, Settings → Diagnostics |
+| 13–15. Read-time neighbour expansion, windowed, deduplicated | `RagOptions.NeighbourWindow`, `ConversationChunker.Expand` |
+| 23. Split points carry the claim pipeline's address model | `ConversationChunk` (source, ordinal, parent ordinal, actor, timestamp) |
+
+Vectors are now one point per chunk in all five stores, and an upsert replaces a conversation's
+points rather than merging, so a re-embed cannot leave chunks of a previous strategy behind to be
+matched against.
+
+### Decisions taken while implementing
+
+- **The default strategy stays `WholeConversation`.** The chunk unit is requirement 17, a Phase 3
+  measurement; switching the default here would invalidate the existing corpus *and* pre-empt the
+  measurement. Phase 1 makes the choice configurable and the corpus re-buildable, which is what it
+  was asked to do. `Message` and `Exchange` are implemented and tested, ready for Phase 3.
+- **Chunk augmentation is not yet a configuration surface.** Per-unit chunks carry a title + digest
+  prefix, capped at half the chunk budget — the ADR's provisional default. The `none` and
+  `per-chunk situating line` variants are requirement 19, in Phase 3.
+- **Retained breadth is a floor on the cap, not a ceiling on the caller.** A caller asking for fewer
+  conversations than `RetainedConversations` gets the configured breadth, because the regression this
+  fixes is exactly a small top-k narrowing the context; a caller asking for more still gets more.
+- **Score semantics are documented per store in `IVectorStore`**, but the configured store's scores
+  are not yet *explained* (requirement 4) — that needs Phase 0's measurement against the live corpus.
+
+### Watch during Phase 3
+
+Requirement 8's candidate document is now the record when one exists, which means a reranker that
+used to see title + digest + message content may now see only a generated Markdown account. That is
+what ADR-016 asks for, and it is plausibly thinner for ranking than what it replaced. Measure it
+(it is cheap to flip) rather than assuming the ADR got it right.
+
+### Phase 0 and Phase 3 — not started
+
+Phase 0 is the eval set and the evidence infrastructure, and gates Phase 3. Nothing in Phase 3 has
+been measured, so every parameter above is at its reasoned default, not a measured one.
 
 ## Non-goals
 
